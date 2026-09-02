@@ -27,6 +27,13 @@ class FVGReversalStrategy(StrategyPlugin):
     7. AI Score >= 75
     → BUY
 
+    Setup (Short):
+    1. Bearish FVG detected (or price overextended in uptrend)
+    2. Price retraces into FVG zone
+    3. Price in Premium zone (or overbought)
+    4. AI Score >= 70
+    → SELL
+
     FVG is ONE evidence, not the only trigger.
     """
 
@@ -40,7 +47,7 @@ class FVGReversalStrategy(StrategyPlugin):
 
     @property
     def version(self) -> str:
-        return "1.0.0"
+        return "2.0.0"  # Updated version with SELL logic
 
     def min_rr(self) -> float:
         return 2.0
@@ -58,14 +65,14 @@ class FVGReversalStrategy(StrategyPlugin):
         if not current_candle:
             return None
 
-        # --- LONG SETUP ---
+        # --- LONG SETUP --- (requires strict bullish conditions)
         long_candidate = self._check_long_fvg(
             context, current_candle, current_price, spread, session
         )
         if long_candidate:
             return long_candidate
 
-        # --- SHORT SETUP ---
+        # --- SHORT SETUP --- (more flexible - can trade pullbacks)
         short_candidate = self._check_short_fvg(
             context, current_candle, current_price, spread, session
         )
@@ -196,63 +203,112 @@ class FVGReversalStrategy(StrategyPlugin):
         spread: float,
         session: str,
     ) -> Optional[StrategyCandidate]:
-        """Check for bearish FVG reversal."""
+        """
+        Check for bearish FVG reversal.
 
-        if ctx.htf_trend != Direction.SELL:
+        More flexible than LONG logic:
+        - Can trade SELL even in uptrend (as pullback trade)
+        - Requires bearish FVG or overextended price
+        - Less strict on HTF trend requirement
+        """
+
+        # Need at least ONE of these:
+        # 1. HTF bearish, OR
+        # 2. Bearish FVG present, OR
+        # 3. Price in premium zone (overextended)
+        has_bearish_htf = ctx.htf_trend == Direction.SELL
+        has_bearish_fvg = any(
+            f.direction == Direction.SELL and f.valid
+            for f in ctx.fvgs
+        )
+        in_premium = ctx.in_premium_zone
+
+        # If none of these, no SELL setup
+        if not (has_bearish_htf or has_bearish_fvg or in_premium):
             return None
 
-        m15 = ctx.get_structure("M15")
-        if not m15 or m15.trend != Direction.SELL:
-            return None
-
+        # Find bearish FVGs
         bearish_fvgs = [
             f for f in ctx.fvgs
             if f.direction == Direction.SELL and f.valid
         ]
+
+        # If no bearish FVGs, use premium zone as entry zone
         if not bearish_fvgs:
-            return None
-
-        nearest_fvg = None
-        for fvg in bearish_fvgs:
-            if fvg.lower_price <= price <= fvg.upper_price:
-                nearest_fvg = fvg
-                break
-
-        if not nearest_fvg:
+            # Use recent swing high as reference
+            if ctx.swing_highs:
+                recent_high = ctx.swing_highs[0].price
+                # Price should be near recent high (within 1%)
+                if abs(price - recent_high) / recent_high > 0.01:
+                    return None
+                # Use recent high as FVG zone
+                nearest_fvg = FairValueGap(
+                    timestamp=candle.timestamp,
+                    direction=Direction.SELL,
+                    upper_price=recent_high,
+                    lower_price=recent_high - (recent_high * 0.005),  # 0.5% zone
+                    timeframe="M15",
+                    valid=True,
+                )
+            else:
+                return None
+        else:
+            # Check if price is retracing into nearest bearish FVG
+            nearest_fvg = None
             for fvg in bearish_fvgs:
-                distance = fvg.midpoint - price
-                if 0 <= distance <= fvg.zone_size * 1.5:
+                if fvg.lower_price <= price <= fvg.upper_price:
                     nearest_fvg = fvg
                     break
 
-        if not nearest_fvg:
-            return None
+            if not nearest_fvg:
+                for fvg in bearish_fvgs:
+                    distance = fvg.midpoint - price
+                    if 0 <= distance <= fvg.zone_size * 1.5:
+                        nearest_fvg = fvg
+                        break
 
-        score = 50
+            if not nearest_fvg:
+                return None
+
+        # Score confluences
+        score = 45  # Base score (lower than LONG - counter-trend trade)
         confluences = ["fvg_present"]
         risk_flags = []
 
-        if ctx.htf_trend == Direction.SELL:
+        # HTF alignment
+        if has_bearish_htf:
             score += 15
             confluences.append("htf_aligned")
+        else:
+            risk_flags.append("counter_trend")
 
+        # Liquidity sweep
         if ctx.has_liquidity_sweep:
             score += 15
             confluences.append("liquidity_sweep")
 
-        if ctx.in_premium_zone:
+        # Premium zone
+        if in_premium:
             score += 10
             confluences.append("premium_zone")
 
+        # CHoCH present
         if ctx.has_choch:
             score += 10
             confluences.append("choch_present")
 
+        # Session
         if session in ("london", "new_york", "overlap"):
             score += 10
             confluences.append("good_session")
 
-        sl = nearest_fvg.upper_price + 2
+        # Spread
+        if spread <= 3.0:
+            score += 5
+            confluences.append("tight_spread")
+
+        # Calculate SL/TP (for SELL: SL above FVG, TP below)
+        sl = nearest_fvg.upper_price + 2  # Above FVG zone
         risk = sl - price
         tp1 = price - risk * 2
         tp2 = price - risk * 3
@@ -262,7 +318,16 @@ class FVGReversalStrategy(StrategyPlugin):
             score += 10
             confluences.append("excellent_rr")
 
+        # Reduce score for counter-trend trades
+        if not has_bearish_htf:
+            score -= 10
+            risk_flags.append("counter_trend_penalty")
+
         score = max(0, min(100, score))
+
+        # Only trade if score >= 60 (more selective for counter-trend)
+        if score < 60:
+            return None
 
         return StrategyCandidate(
             strategy_id=self.strategy_id,
@@ -281,6 +346,7 @@ class FVGReversalStrategy(StrategyPlugin):
             metadata={
                 "fvg_upper": nearest_fvg.upper_price,
                 "fvg_lower": nearest_fvg.lower_price,
+                "is_counter_trend": not has_bearish_htf,
             },
         )
 
