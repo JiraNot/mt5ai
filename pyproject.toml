@@ -1,41 +1,72 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "freebuff"
 version = "0.1.0"
-description = "AI-powered Trading Decision Platform for MT5"
-authors = ["Freebuff Team"]
+description = "AI-powered Trading Decision Platform for MetaTrader 5"
 readme = "README.md"
-packages = [{include = "src"}]
+license = {text = "Proprietary"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Freebuff Team", email = "Dullahan34@hotmail.com"}
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-metatrader5 = ">=5.0.45"
-sqlalchemy = {version = "^2.0", extras = ["asyncio"]}
-alembic = "^1.13"
-asyncpg = ">=0.29"
-pydantic = "^2.5"
-pydantic-settings = "^2.1"
-pyyaml = ">=6.0"
-redis = {version = "^5.0", extras = ["hiredis"]}
-numpy = ">=1.26"
-pandas = ">=2.1"
-structlog = "^24.1"
-httpx = ">=0.26"
-python-dotenv = ">=1.0"
-streamlit = ">=1.30"
-plotly = ">=5.18"
-aiosqlite = ">=0.19"
+dependencies = [
+    # Core
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+    "python-dotenv>=1.0",
+    "httpx>=0.26",
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4"
-pytest-asyncio = "^0.23"
-pytest-cov = "^4.1"
-ruff = ">=0.1"
-mypy = ">=1.8"
+    # Database
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.19",
+    "alembic>=1.13",
 
-[tool.poetry.group.ml.dependencies]
-scikit-learn = ">=1.4"
-xgboost = ">=2.0"
-shap = ">=0.44"
+    # Data
+    "numpy>=1.26",
+    "pandas>=2.1",
+
+    # Dashboard
+    "streamlit>=1.30",
+    "plotly>=5.18",
+
+    # MT5 (Windows only)
+    # "metatrader5>=5.0.45",
+
+    # Redis (optional)
+    # "redis[hiredis]>=5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+]
+ml = [
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "shap>=0.44",
+]
+mt5 = [
+    "metatrader5>=5.0.45",
+]
+
+[project.scripts]
+freebuff = "src.app:main"
+
+[project.urls]
+Homepage = "https://github.com/JiraNot/mt5ai"
+Repository = "https://github.com/JiraNot/mt5ai"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [tool.ruff]
 target-version = "py311"

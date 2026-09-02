@@ -8,212 +8,219 @@ AI-powered Trading Decision Platform for MetaTrader 5.
 
 ## English
 
-### Architecture
+### ⚡ Quick Install (One Command)
+
+**Windows:**
+```cmd
+setup.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+**Or manually:**
+```bash
+pip install -e .
+```
+
+### 🚀 Run
+
+```bash
+# Run trading platform
+python -m src.app
+
+# Run dashboard
+streamlit run src/dashboard/app.py
+
+# Or use Makefile
+make run          # Run platform
+make dashboard    # Run dashboard
+make test         # Run tests
+make help         # See all commands
+```
+
+### 📋 What You Get
+
+| Feature | Description |
+|---------|-------------|
+| **3 Strategies** | CHoCH+OB, FVG Reversal, Breakout Retest |
+| **Risk Engine** | Circuit breaker, filters, position sizing |
+| **AI Scoring** | Rule-based context analysis |
+| **Dashboard** | Interactive Streamlit UI |
+| **166 Tests** | Unit + integration tests |
+| **Demo Data** | Pre-seeded 100 trades |
+
+### 🏗️ Architecture
 
 ```
 MT5 Data → Market Structure → Strategy Plugins → AI Scorer → Risk Engine → MT5 Execution
-                                    ↑                                ↓
-                              Multi-strategy                   Trade Journal
-                              voting                          & Analytics
 ```
 
-### Quick Start
-
-```bash
-# 1. Clone and setup
-cp .env.example .env
-# Edit .env with your MT5 credentials
-
-# 2. Install dependencies
-pip install -e .
-
-# 3. Start infrastructure (optional — SQLite works without Docker)
-docker-compose up -d
-
-# 4. Run the platform
-python -m src.app
-
-# 5. Check status
-python -m src.app --status
-```
-
-### Project Structure
+### 📁 Project Structure
 
 ```
 src/
 ├── core/           # Types, config, events, logging
-├── market/         # MT5 connection, data feed, sessions
-├── structure/      # Market structure analysis (BOS, CHoCH, FVG, OB)
-├── strategies/     # Strategy plugin system (3 strategies)
-├── ai/             # AI decision layer (rule-based scoring)
-├── risk/           # Risk engine (filters, limits, circuit breaker)
+├── market/         # MT5 connection, data feed
+├── structure/      # Market structure (BOS, CHoCH, FVG, OB)
+├── strategies/     # 3 strategy plugins
+├── ai/             # AI scoring layer
+├── risk/           # Risk engine (supreme authority)
 ├── execution/      # Order management
-├── storage/        # Database models + repository
-├── analytics/      # Backtesting engine
-└── dashboard/      # Streamlit interactive dashboard
+├── storage/        # Database models
+├── analytics/      # Backtesting
+└── dashboard/      # Streamlit UI
 ```
 
-### Strategies
-
-| Strategy | Description | Status |
-|----------|-------------|--------|
-| **CHoCH + Order Block** | Highest-probability setup: CHoCH reversal + OB/FVG overlap | ✅ |
-| **FVG Reversal** | Fair Value Gap with HTF alignment + liquidity sweep | ✅ |
-| **Breakout Retest** | Breakout + retest of key level with confirmation | ✅ |
-
-### Risk Engine
+### ⚠️ Risk Engine
 
 The Risk Engine is the **supreme authority** — AI cannot override it.
 
-- **Position Sizing**: Fixed risk % per trade (default 1%)
-- **Max Daily Loss**: 3% of account balance
-- **Circuit Breaker**: Emergency stop at 5% drawdown
-- **Spread Filter**: Max 5 pips
-- **Session Filter**: London, New York, Overlap only
-- **Consecutive Loss Limit**: Max 3 in a row
+- Position sizing: 1% risk per trade
+- Max daily loss: 3%
+- Circuit breaker: 5% drawdown → emergency stop
+- Spread filter: max 5 pips
+- Session filter: London, New York, Overlap only
 
-### Testing
+### 🧪 Testing
 
 ```bash
-# Run all tests (166 tests)
-python -m pytest tests/ -q
-
-# Run unit tests only
-python -m pytest tests/unit/ -q
-
-# Run integration tests
-python -m pytest tests/integration/ -q
-
-# Generate demo data
-python scripts/seed_demo_data.py --trades 100
-
-# Generate HTML dashboard
-python scripts/dashboard.py
+make test           # All tests
+make test-unit      # Unit tests only
+make test-integration  # Integration tests
+python -m pytest tests/ -q  # Direct
 ```
 
-### Dashboard
+### 📊 Dashboard
 
 ```bash
-# Start Streamlit interactive dashboard
-streamlit run src/dashboard/app.py
+make dashboard      # Start Streamlit
 # Open http://localhost:8501
 ```
 
-### Trading Mode
+Features:
+- Equity curve
+- Strategy performance comparison
+- Trade journal with filters
+- Setup analysis (traded/skipped/rejected)
+- Risk management view
+
+### 🎯 Trading Mode
 
 **Default: Paper Trading**
 
-The platform starts in paper mode. Real money trading requires explicit configuration.
+Real money trading requires explicit configuration.
 
 ---
 
 ## ภาษาไทย
 
-### สถาปัตยกรรม (Architecture)
+### ⚡ ติดตั้งง่าย (คำสั่งเดียว)
+
+**Windows:**
+```cmd
+setup.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+**หรือติดตั้งเอง:**
+```bash
+pip install -e .
+```
+
+### 🚀 วิธีรัน
+
+```bash
+# รันระบบเทรด
+python -m src.app
+
+# รัน dashboard
+streamlit run src/dashboard/app.py
+
+# หรือใช้ Makefile
+make run          # รันระบบ
+make dashboard    # รัน dashboard
+make test         # รัน tests
+make help         # ดูคำสั่งทั้งหมด
+```
+
+### 📋 สิ่งที่ได้
+
+| ฟีเจอร์ | รายละเอียด |
+|---------|------------|
+| **3 กลยุทธ์** | CHoCH+OB, FVG Reversal, Breakout Retest |
+| **Risk Engine** | Circuit breaker, filters, คำนวณขนาด position |
+| **AI Scoring** | วิเคราะห์บริบทแบบ rule-based |
+| **Dashboard** | Streamlit UI แบบ interactive |
+| **166 Tests** | Unit + integration tests |
+| **ข้อมูล Demo** | มีข้อมูลเทรด 100 รายการให้ลอง |
+
+### 🏗️ สถาปัตยกรรม
 
 ```
 ข้อมูล MT5 → โครงสร้างตลาด → Strategy Plugins → AI Scorer → Risk Engine → MT5 Execution
-                                    ↑                                ↓
-                              Multi-strategy                   Trade Journal
-                              voting                          & Analytics
 ```
 
-### เริ่มต้นใช้งาน (Quick Start)
-
-```bash
-# 1. คัดลอกและตั้งค่า
-cp .env.example .env
-# แก้ไข .env ด้วยข้อมูล MT5 ของคุณ
-
-# 2. ติดตั้ง dependencies
-pip install -e .
-
-# 3. เริ่ม infrastructure (ไม่จำเป็น — SQLite ทำงานได้โดยไม่ต้อง Docker)
-docker-compose up -d
-
-# 4. รันระบบ
-python -m src.app
-
-# 5. ตรวจสอบสถานะ
-python -m src.app --status
-```
-
-### โครงสร้างโปรเจกต์ (Project Structure)
+### 📁 โครงสร้างโปรเจกต์
 
 ```
 src/
 ├── core/           # _types, config, events, logging_
-├── market/         # _เชื่อมต่อ MT5, ดึงข้อมูล, sessions_
-├── structure/      # _วิเคราะห์โครงสร้างตลาด (BOS, CHoCH, FVG, OB)_
-├── strategies/     # _ระบบ Strategy Plugin (3 strategies)_
-├://ai/             # _ชั้น AI ตัดสินใจ (rule-based scoring)_
-├── risk/           # _Risk Engine (filters, limits, circuit breaker)_
+├── market/         # _เชื่อมต่อ MT5, ดึงข้อมูล_
+├── structure/      # _โครงสร้างตลาด (BOS, CHoCH, FVG, OB)_
+├── strategies/     # _3 strategy plugins_
+├://ai/             # _ชั้น AI scoring_
+├── risk/           # _Risk Engine (ผู้มีอำนาจสูงสุด)_
 ├── execution/      # _จัดการคำสั่งซื้อขาย_
-├── storage:        # _โมเดลฐานข้อมูล + repository_
-├── analytics/      # _Backtesting engine_
-└── dashboard/      # _Streamlit dashboard แบบ interactive_
+├── storage:        # _โมเดลฐานข้อมูล_
+├── analytics/      # _Backtesting_
+└── dashboard/      # _Streamlit UI_
 ```
 
-### กลยุทธ์การเทรด (Strategies)
-
-| กลยุทธ์ | รายละเอียด | สถานะ |
-|---------|------------|-------|
-| **CHoCH + Order Block** | Setup ที่มีโอกาสสำเร็จสูงสุด: CHoCH reversal + OB/FVG overlap | ✅ |
-| **FVG Reversal** | Fair Value Gap กับ HTF alignment + liquidity sweep | ✅ |
-| **Breakout Retest** | Breakout + retest ของระดับสำคัญพร้อม confirmation | ✅ |
-
-### ระบบจัดการความเสี่ยง (Risk Engine)
+### ⚠️ ระบบจัดการความเสี่ยง
 
 Risk Engine เป็น **ผู้มีอำนาจสูงสุด** — AI ไม่สามารถ override ได้
 
-- **การคำนวณขนาด Position**: Fixed risk % ต่อเทรด (ค่าเริ่มต้น 1%)
-- **ขาดทุนสูงสุดต่อวัน**: 3% ของยอดเงินในบัญชี
-- **Circuit Breaker**: หยุดฉุกเฉินเมื่อขาดทุน 5%
-- **ตัวกรอง Spread**: สูงสุด 5 pips
-- **ตัวกรอง Session**: เทรดได้เฉพาะ London, New York, Overlap
-- **จำกัดการขาดทุนติดต่อกัน**: สูงสุด 3 ครั้ง
+- ขนาด Position: ความเสี่ยง 1% ต่อเทรด
+- ขาดทุนสูงสุดต่อวัน: 3%
+- Circuit Breaker: ขาดทุน 5% → หยุดฉุกเฉิน
+- ตัวกรอง Spread: สูงสุด 5 pips
+- ตัวกรอง Session: เทรดได้เฉพาะ London, New York, Overlap
 
-### การทดสอบ (Testing)
+### 🧪 การทดสอบ
 
 ```bash
-# รัน tests ทั้งหมด (166 tests)
-python -m pytest tests/ -q
-
-# รัน unit tests เท่านั้น
-python -m pytest tests/unit/ -q
-
-# รัน integration tests
-python -m pytest tests/integration/ -q
-
-# สร้างข้อมูล demo
-python scripts/seed_demo_data.py --trades 100
-
-# สร้าง HTML dashboard
-python scripts/dashboard.py
+make test           # ทดสอบทั้งหมด
+make test-unit      # Unit tests เท่านั้น
+make test-integration  # Integration tests
+python -m pytest tests/ -q  # รันตรงๆ
 ```
 
-### Dashboard
+### 📊 Dashboard
 
 ```bash
-# เริ่ม Streamlit dashboard แบบ interactive
-streamlit run src/dashboard/app.py
+make dashboard      # เริ่ม Streamlit
 # เปิดที่ http://localhost:8501
 ```
 
-### โหมดการเทรด (Trading Mode)
+ฟีเจอร์:
+- Equity curve
+- เปรียบเทียบประสิทธิภาพกลยุทธ์
+- Trade journal พร้อม filters
+- วิเคราะห์ setups (traded/skipped/rejected)
+- มุมมอง Risk Management
+
+### 🎯 โหมดการเทรด
 
 **ค่าเริ่มต้น: Paper Trading**
 
-ระบบเริ่มต้นในโหมด Paper Trading การเทรดด้วยเงินจริงต้องมีการตั้งค่าโดยเฉพาะ
-
-### ค่าผลลัพธ์ (Demo Data)
-
-```
-จำนวนเทรด: 100 (Win Rate 53%, P&L $2,452)
-จำนวน Setups: 133 (traded + skipped + rejected)
-กลยุทธ์: choch_orderblock, fvg_reversal, breakout_retest
-ช่วงวันที่: 2024-06-01 ถึง 2024-07-15
-```
+การเทรดด้วยเงินจริงต้องมีการตั้งค่าโดยเฉพาะ
 
 ---
 
