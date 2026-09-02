@@ -1,0 +1,17 @@
+XAUUSD:
+  name: "Gold"
+  digits: 2
+  point: 0.01
+  pip_value: 0.1
+  normal_spread: 2.5
+  max_spread: 8.0
+  contract_size: 100
+  min_volume: 0.01
+  max_volume: 100.0
+  volume_step: 0.01
+  margin_requirement: 0.01  # 1% margin
+  swap_long: -2.5
+  swap_short: 0.5
+  trading_sessions:
+    - london
+    - new_york

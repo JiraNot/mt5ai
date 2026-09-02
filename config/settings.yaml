@@ -1,0 +1,69 @@
+app:
+  name: "Freebuff Trading Platform"
+  version: "0.1.0"
+  mode: "paper"  # paper / live
+
+mt5:
+  timeout: 10000
+  magic: 20240101
+  deviation: 10
+
+symbols:
+  - XAUUSD
+
+primary_symbol: XAUUSD
+
+data:
+  timeframes:
+    execution: "M5"
+    structure: ["H4", "H1", "M15", "M5"]
+    context: ["D1", "H4", "H1"]
+  candle_count: 500
+  tick_mode: false
+
+risk:
+  risk_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_trades_per_day: 5
+  max_consecutive_losses: 3
+  min_rr: 2.0
+  max_spread_pips: 5.0
+  max_slippage_pips: 3.0
+  max_exposure_pct: 0.10
+  emergency_stop_loss_pct: 0.05
+  news_filter_enabled: true
+  news_minutes_before: 30
+  news_minutes_after: 15
+
+sessions:
+  london_start: "07:00"
+  london_end: "16:00"
+  new_york_start: "12:00"
+  new_york_end: "21:00"
+  preferred_sessions:
+    - london
+    - new_york
+    - overlap
+
+ai:
+  min_combined_score: 70
+  scoring_weights:
+    htf_aligned: 15
+    strong_breakout: 15
+    retest_quality: 20
+    fvg_confluence: 15
+    liquidity_sweep: 15
+    ob_fvg_overlap: 20
+    session_london_ny: 10
+    spread_normal: 5
+    rr_excellent: 10
+    htf_conflict: -20
+    spread_high: -30
+    low_volume: -10
+    asian_session: -5
+    near_news: -25
+
+logging:
+  level: "INFO"
+  format: "json"
+  file: "logs/freebuff.log"
