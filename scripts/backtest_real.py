@@ -35,6 +35,7 @@ from src.strategies.choch_orderblock import CHOCHOrderBlockStrategy
 from src.strategies.fvg_reversal import FVGReversalStrategy
 from src.strategies.breakout_retest import BreakoutRetestStrategy
 from src.strategies.fvg_optimized import FVGOptimizedStrategy
+from src.strategies.fvg_final import FVGFinalStrategy
 from src.ai.scorer import RuleBasedScorer
 
 
@@ -329,6 +330,7 @@ def main():
         "choch_orderblock": CHOCHOrderBlockStrategy(),
         "fvg_reversal": FVGReversalStrategy(),
         "fvg_optimized": FVGOptimizedStrategy(),
+        "fvg_final": FVGFinalStrategy(),
         "breakout_retest": BreakoutRetestStrategy(),
     }
 

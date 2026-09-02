@@ -1,6 +1,6 @@
 [
   {
-    "strategy": "fvg_optimized",
+    "strategy": "fvg_final",
     "total_trades": 23,
     "winners": 19,
     "losers": 4,
