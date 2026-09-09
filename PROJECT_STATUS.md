@@ -20,6 +20,7 @@ DISABLED
 
 - [x] Core types, config, events, logging (Phase 00)
 - [x] MT5 connection (mock mode) (Phase 01)
+- [x] MT5 Bridge mode — remote MT5 via standalone mt5-bridge server, E2E-proven under Wine (2026-09-09)
 - [x] Market Data Engine (Phase 02)
 - [x] Swing Detection (Phase 03)
 - [x] BOS/CHoCH Detection (Phase 03)
@@ -44,14 +45,14 @@ DISABLED
 - [x] Live Monitor MTF (Phase 09)
 - [x] Paper Trader (Phase 09)
 - [x] Dashboard (Streamlit) (Phase 08)
-- [x] 166 Tests passing
+- [x] 181 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
 
 ## In Progress
 
-- [ ] Real MT5 connection (needs Windows + MT5)
+- [ ] Real MT5 connection in production (bridge code done — needs the Windows host machine set up)
 - [ ] Walk-forward backtesting (Phase 07)
 - [ ] Paper trading full loop (Phase 09)
 
@@ -72,8 +73,8 @@ DISABLED
 
 ## Known Issues
 
-- MT5 module not installed on this machine (needs Windows)
-- Mock mode only for MT5 connection
+- Native `MetaTrader5` package unavailable on Linux — solved by bridge mode (proven E2E via Wine); awaiting Windows host for production
+- Wine-based MT5 is dev/fallback only — not recommended for live money flow
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)
@@ -99,8 +100,8 @@ DISABLED
 
 ```
 Source files: 50+
-Test files: 10
-Total tests: 166 (all passing)
+Test files: 11
+Total tests: 181 (all passing)
 Documentation files: 40+
 Task files: 13
 ```
@@ -134,4 +135,4 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-02
+2026-09-09

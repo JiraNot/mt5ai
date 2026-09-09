@@ -111,10 +111,20 @@ class Settings(BaseSettings):
     mt5_login: int = 0
     mt5_password: str = ""
     mt5_server: str = ""
+
+    # MT5 connection mode: "local" (MetaTrader5 pkg / Wine) or "bridge" (remote Windows bridge)
+    mt5_mode: str = "local"
+    bridge_url: str = "http://127.0.0.1:8900"
+    bridge_token: str = ""
+    bridge_timeout: float = 10.0
+
     database_url: str = "sqlite+aiosqlite:///freebuff.db"
     redis_url: str = "redis://localhost:6379/0"
     trading_mode: str = "paper"
     log_level: str = "INFO"
+
+    # Primary trading symbol (env override: PRIMARY_SYMBOL)
+    primary_symbol: str = "XAUUSD"
 
     # Loaded from YAML
     app: AppConfig = Field(default_factory=AppConfig)
@@ -174,10 +184,19 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         mt5_login=mt5_config.login,
         mt5_password=mt5_config.password,
         mt5_server=mt5_config.server,
+        mt5_mode=os.getenv("MT5_MODE", "local"),
+        bridge_url=os.getenv("BRIDGE_URL", "http://127.0.0.1:8900"),
+        bridge_token=os.getenv("BRIDGE_TOKEN", ""),
+        bridge_timeout=float(os.getenv("BRIDGE_TIMEOUT", "10")),
         database_url=db_url or "sqlite+aiosqlite:///freebuff.db",
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         trading_mode=os.getenv("TRADING_MODE", settings_yaml.get("app", {}).get("mode", "paper")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        primary_symbol=os.getenv(
+            "PRIMARY_SYMBOL",
+            settings_yaml.get("app", {}).get("primary_symbol")
+            or (next(iter(symbols_config), "XAUUSD")),
+        ),
         app=AppConfig(**settings_yaml.get("app", {})),
         mt5=mt5_config,
         data=DataConfig(**settings_yaml.get("data", {})),

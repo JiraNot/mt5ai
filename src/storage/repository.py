@@ -248,4 +248,20 @@ class Repository:
 
     async def get_equity_curve(self, days: int = 30) -> list[dict]:
         """Get equity curve for the last N days."""
-        since = datetime.utcnow() -
+        since = datetime.utcnow() - timedelta(days=days)
+
+        result = await self._session.execute(
+            select(AccountSnapshot)
+            .where(AccountSnapshot.ts >= since)
+            .order_by(AccountSnapshot.ts.asc())
+        )
+        snapshots = result.scalars().all()
+        return [
+            {
+                "ts": s.ts,
+                "balance": float(s.balance),
+                "equity": float(s.equity),
+                "daily_pnl": float(s.daily_pnl),
+            }
+            for s in snapshots
+        ]

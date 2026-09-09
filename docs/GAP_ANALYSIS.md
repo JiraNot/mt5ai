@@ -1,11 +1,15 @@
 # Gap Analysis: Current State vs Master Plan
 
+> ⚠️ Snapshot from 2026-09-02 (v0.5.0). Since then: bridge mode for real MT5
+> over HTTP added (v0.6.0), 181 tests passing. See PROJECT_STATUS.md for the
+> current state.
+
 ## ✅ COMPLETED (Phases 0-8 partial)
 
 | Module | Status | Notes |
 |--------|--------|-------|
 | Core types, config, events | ✅ Done | 30+ Pydantic models |
-| MT5 connection | ⚠️ Mock | Works in mock mode, needs real MT5 |
+| MT5 connection | ⚠️ Mock | Works in mock mode + bridge mode ready (needs Windows host) |
 | Market Structure (Swing/BOS/CHoCH) | ✅ Done | Tested with golden data |
 | FVG Detection | ✅ Done | With mitigation tracking |
 | Order Block Detection | ✅ Done | With strength scoring |
@@ -20,7 +24,7 @@
 | Backtester | ✅ Done | Basic version |
 | Live Monitor | ✅ Done | With MTF support |
 | Dashboard | ✅ Done | Streamlit interactive |
-| Tests | ✅ Done | 166 tests passing |
+| Tests | ✅ Done | 181 tests passing |
 
 ## ❌ MISSING (Critical for production)
 
@@ -44,7 +48,7 @@
 ```
 src/
 ├── core/           ✅ Types, config, events, logger
-├── market/         ⚠️ MT5 connection (mock), data feed
+├── market/         ✅ MT5 connection (mock + bridge mode), data feed
 ├── structure/      ✅ Swing, BOS/CHoCH, FVG, OB, Liquidity, Regime
 ├── strategies/     ✅ Plugin system + 4 strategies
 ├── ai/             ⚠️ Rule-based scoring only

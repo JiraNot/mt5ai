@@ -191,6 +191,12 @@ MT5_PASSWORD=your_password
 MT5_SERVER=your_server
 MT5_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
 
+# MT5 connection mode: local (package on this machine / Wine) or bridge (remote Windows host)
+MT5_MODE=local
+BRIDGE_URL=http://100.x.y.z:8900
+BRIDGE_TOKEN=your-shared-secret
+BRIDGE_TIMEOUT=10
+
 # AI
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...

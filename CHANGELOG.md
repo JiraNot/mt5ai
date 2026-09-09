@@ -2,6 +2,39 @@
 
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
 
+## [0.6.0] - 2026-09-09
+
+### Added
+
+- **MT5 Bridge mode** (`MT5_MODE=bridge`) — connect the Linux bot to a real MT5
+  terminal hosted on a separate Windows machine over HTTP
+- **`src/market/bridge_gateway.py`** — `MT5Connection`-compatible adapter
+  (connect, get_ohlcv, get_current_price, get_account_info, send_order,
+  modify/close position, get_positions) with injectable HTTP transport for tests
+- **Bridge settings** — `mt5_mode`, `bridge_url`, `bridge_token`, `bridge_timeout`
+- **`settings.primary_symbol`** — new config field (env `PRIMARY_SYMBOL`, default from `symbols.yaml`)
+- **CLI flags in `src/app.py`** — `--status` (mode, strategies, session) and `--backtest`
+- **Bridge deployment guide** — `docs/bridge_deployment.md`
+- **Unit tests for the bridge gateway** — 15 tests via `httpx.MockTransport`
+
+### Changed
+
+- **Bridge server moved to a standalone project** —
+  [JiraNot/mt5-bridge](https://github.com/JiraNot/mt5-bridge) (private).
+  This repo keeps only the client adapter; server lives with the MT5 host.
+
+### Fixed
+
+- Truncated `src/app.py` (rebuilt `TradingPlatform` pipeline, event handlers, DB wiring, CLI)
+- Truncated `src/storage/repository.py#get_equity_curve()`
+- Thai text corruption in README project-structure block
+
+### Tests
+
+- 181 tests passing (166 existing + 15 bridge gateway)
+- Bridge mode proven end-to-end under Wine: bridge server → `BridgeGateway` →
+  account, OHLCV, and live XAUUSD tick
+
 ## [0.5.0] - 2026-09-02
 
 ### Added

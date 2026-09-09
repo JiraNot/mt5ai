@@ -31,6 +31,12 @@ pip install -e .
 # Run trading platform
 python -m src.app
 
+# System status (mode, strategies, session)
+python -m src.app --status
+
+# Backtest
+python -m src.app --backtest
+
 # Run dashboard
 streamlit run src/dashboard/app.py
 
@@ -49,8 +55,26 @@ make help         # See all commands
 | **Risk Engine** | Circuit breaker, filters, position sizing |
 | **AI Scoring** | Rule-based context analysis |
 | **Dashboard** | Interactive Streamlit UI |
-| **166 Tests** | Unit + integration tests |
+| **MT5 Bridge Mode** | Real MT5 on a separate Windows machine, over HTTP |
+| **181 Tests** | Unit + integration tests |
 | **Demo Data** | Pre-seeded 100 trades |
+
+### 🔌 MT5 Connection Modes
+
+Set `MT5_MODE` in `.env`:
+
+| Mode | Behavior |
+|------|----------|
+| `local` (default) | `MetaTrader5` package directly — Windows (or Wine). Without it, MT5 features are mocked (safe paper mode). |
+| `bridge` | Connects to a standalone [mt5-bridge](https://github.com/JiraNot/mt5-bridge) server on the Windows machine hosting the real MT5 terminal — real data and order execution from a Linux server. |
+
+```ini
+MT5_MODE=bridge
+BRIDGE_URL=http://100.x.y.z:8900   # Tailscale/WireGuard IP recommended
+BRIDGE_TOKEN=your-shared-secret
+```
+
+Full setup guide: [docs/bridge_deployment.md](docs/bridge_deployment.md).
 
 ### 🏗️ Architecture
 
@@ -140,6 +164,9 @@ pip install -e .
 # รันระบบเทรด
 python -m src.app
 
+# ดูสถานะระบบ (โหมด, กลยุทธ์, session)
+python -m src.app --status
+
 # รัน dashboard
 streamlit run src/dashboard/app.py
 
@@ -158,7 +185,8 @@ make help         # ดูคำสั่งทั้งหมด
 | **Risk Engine** | Circuit breaker, filters, คำนวณขนาด position |
 | **AI Scoring** | วิเคราะห์บริบทแบบ rule-based |
 | **Dashboard** | Streamlit UI แบบ interactive |
-| **166 Tests** | Unit + integration tests |
+| **MT5 Bridge Mode** | ต่อ MT5 จริงบนเครื่อง Windows แยก ผ่าน HTTP |
+| **181 Tests** | Unit + integration tests |
 | **ข้อมูล Demo** | มีข้อมูลเทรด 100 รายการให้ลอง |
 
 ### 🏗️ สถาปัตยกรรม
@@ -171,16 +199,16 @@ make help         # ดูคำสั่งทั้งหมด
 
 ```
 src/
-├── core/           # _types, config, events, logging_
-├── market/         # _เชื่อมต่อ MT5, ดึงข้อมูล_
-├── structure/      # _โครงสร้างตลาด (BOS, CHoCH, FVG, OB)_
-├── strategies/     # _3 strategy plugins_
-├://ai/             # _ชั้น AI scoring_
-├── risk/           # _Risk Engine (ผู้มีอำนาจสูงสุด)_
-├── execution/      # _จัดการคำสั่งซื้อขาย_
-├── storage:        # _โมเดลฐานข้อมูล_
-├── analytics/      # _Backtesting_
-└── dashboard/      # _Streamlit UI_
+├── core/           # Types, config, events, logging
+├── market/         # เชื่อมต่อ MT5 (local/bridge), ดึงข้อมูล
+├── structure/      # โครงสร้างตลาด (BOS, CHoCH, FVG, OB)
+├── strategies/     # 3 strategy plugins
+├── ai/             # ชั้น AI scoring
+├── risk/           # Risk Engine (ผู้มีอำนาจสูงสุด)
+├── execution/      # จัดการคำสั่งซื้อขาย
+├── storage/        # โมเดลฐานข้อมูล
+├── analytics/      # Backtesting
+└── dashboard/      # Streamlit UI
 ```
 
 ### ⚠️ ระบบจัดการความเสี่ยง
@@ -221,6 +249,12 @@ make dashboard      # เริ่ม Streamlit
 **ค่าเริ่มต้น: Paper Trading**
 
 การเทรดด้วยเงินจริงต้องมีการตั้งค่าโดยเฉพาะ
+
+### 🔌 โหมดการเชื่อมต่อ MT5
+
+ตั้ง `MT5_MODE` ใน `.env`: `local` (MT5 บนเครื่องนี้/Wine, ไม่มีจริง = mock) หรือ `bridge`
+(ต่อ MT5 จริงบน Windows ผ่านโปรเจกต์แยก [mt5-bridge](https://github.com/JiraNot/mt5-bridge)) —
+ดูคู่มือที่ [docs/bridge_deployment.md](docs/bridge_deployment.md)
 
 ---
 
