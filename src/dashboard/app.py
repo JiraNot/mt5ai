@@ -538,10 +538,11 @@ def check_mt5_bridge_status() -> dict:
         with urllib.request.urlopen(req, timeout=2.5) as resp:
             data = json.loads(resp.read().decode())
             latency_ms = int((time.time() - start_time) * 1000)
+            is_connected = bool(data.get("mt5_connected") or data.get("mt5_initialized") or data.get("account"))
             return {
                 "online": True,
                 "latency_ms": latency_ms,
-                "mt5_connected": bool(data.get("mt5_connected")),
+                "mt5_connected": is_connected,
                 "terminal": data.get("terminal") or "MetaTrader 5",
                 "account": data.get("account"),
                 "server": data.get("server"),
@@ -595,16 +596,29 @@ def check_ai_status() -> dict:
 
 # ─── Security & Authentication Gate ──────────────────────────────────────────
 
+def _auth_token(password: str) -> str:
+    import hashlib
+    return hashlib.sha256(f"freebuff_auth:{password}".encode()).hexdigest()[:20]
+
 def check_dashboard_auth() -> bool:
-    """Password protection gate for dashboard."""
-    # Hide from search engines
+    """Password protection gate with session persistence across page refreshes."""
     st.markdown('<meta name="robots" content="noindex, nofollow">', unsafe_allow_html=True)
 
     expected_password = os.getenv("DASHBOARD_PASSWORD", "freebuff2026").strip()
     if not expected_password:
         return True  # If empty, no password required
 
+    expected_token = _auth_token(expected_password)
+
+    # 1. Check if token already in URL query parameters (survives refresh!)
+    current_token = st.query_params.get("auth")
+    if current_token == expected_token:
+        st.session_state["authenticated"] = True
+        return True
+
+    # 2. Check in-memory session
     if st.session_state.get("authenticated", False):
+        st.query_params["auth"] = expected_token
         return True
 
     # Render clean, premium dark login card
@@ -627,10 +641,11 @@ def check_dashboard_auth() -> bool:
             if submit:
                 if input_pass == expected_password:
                     st.session_state["authenticated"] = True
+                    st.query_params["auth"] = expected_token
                     st.rerun()
                 else:
                     st.error("❌ Access Denied: Invalid Password")
-        st.caption("🔒 Protected with session auth & robots no-index policy.")
+        st.caption("🔒 Protected with persistent auth token & robots no-index policy.")
     return False
 
 
@@ -676,6 +691,7 @@ def main():
     st.sidebar.markdown("---")
     if st.sidebar.button("🔒 Logout", use_container_width=True):
         st.session_state["authenticated"] = False
+        st.query_params.clear()
         st.rerun()
 
     # Database connection
