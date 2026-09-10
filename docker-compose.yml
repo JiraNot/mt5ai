@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 
 services:
   mt5-node:
@@ -16,8 +16,8 @@ services:
     volumes:
       - mt5_config:/config
     labels:
-      - "coolify.managed=true"
       - "traefik.enable=true"
+      - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
       - "traefik.http.routers.mt5.rule=Host(`mt5.onetapweb.com`)"
       - "traefik.http.routers.mt5.entrypoints=http,https"
       - "traefik.http.routers.mt5.tls=true"
@@ -41,8 +41,8 @@ services:
     volumes:
       - mt5ai_data:/app/data
     labels:
-      - "coolify.managed=true"
       - "traefik.enable=true"
+      - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
       - "traefik.http.routers.bot.rule=Host(`trade.onetapweb.com`)"
       - "traefik.http.routers.bot.entrypoints=http,https"
       - "traefik.http.routers.bot.tls=true"

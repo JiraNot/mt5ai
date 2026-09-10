@@ -118,21 +118,26 @@ class TradingPlatform:
         self._setup_logger = SetupLogger(self._db_session)
         logger.info(f"Database connected: {settings.database_url}")
 
-        # Connect to MT5
-        connected = await self._mt5.connect()
-        if not connected:
+        # Connect to MT5 (retry loop so the process stays alive)
+        logger.info("Connecting to MT5...")
+        while True:
+            connected = await self._mt5.connect()
+            if connected:
+                logger.info("✅ MT5 Connected successfully!")
+                break
             if settings.mt5_mode == "bridge":
-                logger.error(
-                    f"❌ Failed to connect to MT5 Bridge at {settings.bridge_url}. "
-                    "Please make sure mt5-bridge is running on the Windows machine and MT5 is logged in. Exiting."
+                logger.warning(
+                    f"⏳ Waiting for MT5 Bridge at {settings.bridge_url}... "
+                    "Ensure MT5 terminal is running and logged in. Retrying in 10s..."
                 )
             else:
-                logger.error(
-                    "❌ Failed to connect to local MT5. "
-                    "Please ensure MetaTrader5 is installed and MT5 terminal is running. "
-                    "(Or set MT5_MODE=bridge to connect via mt5-bridge). Exiting."
+                logger.warning(
+                    "⏳ Waiting for MT5 terminal to start and log in. Retrying in 10s..."
                 )
-            return
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                return
 
         self._running = True
 

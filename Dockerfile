@@ -24,8 +24,9 @@ ENV PYTHONUNBUFFERED=1
 ENV MT5_MODE=bridge
 ENV BRIDGE_URL=http://mt5-node:8900
 ENV DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
+ENV DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
 
 EXPOSE 8501
 
-# Run both Streamlit dashboard on port 8501 and the main trading loop
-CMD ["bash", "-c", "mkdir -p /app/data && streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true & python -m src.app"]
+# Run background trading loop and foreground Streamlit dashboard
+CMD ["bash", "-c", "mkdir -p /app/data && python -m src.app & exec streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true"]

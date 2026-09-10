@@ -1,3 +1,4 @@
+import os
 """Freebuff Trading Dashboard — Interactive Streamlit App.
 
 Usage:
@@ -75,63 +76,94 @@ st.markdown("""
 # ─── Database Connection ──────────────────────────────────────────────────────
 
 @st.cache_resource
-def get_engine(db_url: str = "sqlite:///freebuff.db"):
+def get_engine(db_url: str | None = None):
     """Create synchronous SQLite engine for Streamlit."""
-    return create_engine(db_url, echo=False)
+    if not db_url:
+        db_url = os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")
+    engine = create_engine(db_url, echo=False)
+    try:
+        Base.metadata.create_all(engine)
+    except Exception:
+        pass
+    return engine
 
 
 def load_trades(engine) -> pd.DataFrame:
-    """Load all trades into DataFrame."""
-    query = text("""
-        SELECT
-            t.id, t.symbol, t.direction, t.volume,
-            t.entry_price, t.sl, t.tp1, t.tp2,
-            t.exit_price, t.exit_time, t.open_time,
-            t.profit, t.commission, t.net_profit,
-            t.outcome_r, t.outcome_pips, t.status,
-            t.comment as strategy_id
-        FROM trades t
-        ORDER BY t.open_time DESC
-    """)
-    return pd.read_sql(query, engine)
+    """Load all trades into DataFrame safely."""
+    try:
+        query = text("""
+            SELECT
+                t.id, t.symbol, t.direction, t.volume,
+                t.entry_price, t.sl, t.tp1, t.tp2,
+                t.exit_price, t.exit_time, t.open_time,
+                t.profit, t.commission, t.net_profit,
+                t.outcome_r, t.outcome_pips, t.status,
+                t.comment as strategy_id
+            FROM trades t
+            ORDER BY t.open_time DESC
+        """)
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=[
+            "id", "symbol", "direction", "volume", "entry_price", "sl", "tp1", "tp2",
+            "exit_price", "exit_time", "open_time", "profit", "commission", "net_profit",
+            "outcome_r", "outcome_pips", "status", "strategy_id"
+        ])
 
 
 def load_setups(engine) -> pd.DataFrame:
-    """Load all setup logs into DataFrame."""
-    query = text("""
-        SELECT
-            s.id, s.symbol, s.timeframe, s.strategy_id,
-            s.direction, s.rule_score, s.ai_score, s.combined_score,
-            s.decision, s.entry_price, s.stop_loss,
-            s.take_profit_1, s.rr_ratio,
-            s.confluences, s.risk_flags, s.rejection_reason,
-            s.outcome_r, s.outcome_pips, s.created_at
-        FROM setup_log s
-        ORDER BY s.created_at DESC
-    """)
-    return pd.read_sql(query, engine)
+    """Load all setup logs into DataFrame safely."""
+    try:
+        query = text("""
+            SELECT
+                s.id, s.symbol, s.timeframe, s.strategy_id,
+                s.direction, s.rule_score, s.ai_score, s.combined_score,
+                s.decision, s.entry_price, s.stop_loss,
+                s.take_profit_1, s.rr_ratio,
+                s.confluences, s.risk_flags, s.rejection_reason,
+                s.outcome_r, s.outcome_pips, s.created_at
+            FROM setup_log s
+            ORDER BY s.created_at DESC
+        """)
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=[
+            "id", "symbol", "timeframe", "strategy_id", "direction", "rule_score",
+            "ai_score", "combined_score", "decision", "entry_price", "stop_loss",
+            "take_profit_1", "rr_ratio", "confluences", "risk_flags",
+            "rejection_reason", "outcome_r", "outcome_pips", "created_at"
+        ])
 
 
 def load_equity_curve(engine) -> pd.DataFrame:
-    """Load account snapshots for equity curve."""
-    query = text("""
-        SELECT ts, equity, balance
-        FROM account_snapshots
-        ORDER BY ts
-    """)
-    return pd.read_sql(query, engine)
+    """Load account snapshots for equity curve safely."""
+    try:
+        query = text("""
+            SELECT ts, equity, balance
+            FROM account_snapshots
+            ORDER BY ts
+        """)
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=["ts", "equity", "balance"])
 
 
 def load_daily_risk(engine) -> pd.DataFrame:
-    """Load daily risk data."""
-    query = text("""
-        SELECT
-            trade_date, total_pnl, total_trades,
-            winning_trades, losing_trades, circuit_breaker
-        FROM daily_risk
-        ORDER BY trade_date
-    """)
-    return pd.read_sql(query, engine)
+    """Load daily risk data safely."""
+    try:
+        query = text("""
+            SELECT
+                trade_date, total_pnl, total_trades,
+                winning_trades, losing_trades, circuit_breaker
+            FROM daily_risk
+            ORDER BY trade_date
+        """)
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=[
+            "trade_date", "total_pnl", "total_trades",
+            "winning_trades", "losing_trades", "circuit_breaker"
+        ])
 
 
 # ─── Metrics Calculation ──────────────────────────────────────────────────────
@@ -469,7 +501,7 @@ def main():
     st.sidebar.markdown("---")
 
     # Database connection
-    db_url = "sqlite:///freebuff.db"
+    db_url = os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")
     engine = get_engine(db_url)
 
     # Load data
