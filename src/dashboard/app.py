@@ -592,7 +592,51 @@ def check_ai_status() -> dict:
     }
 
 
+
+# ─── Security & Authentication Gate ──────────────────────────────────────────
+
+def check_dashboard_auth() -> bool:
+    """Password protection gate for dashboard."""
+    # Hide from search engines
+    st.markdown('<meta name="robots" content="noindex, nofollow">', unsafe_allow_html=True)
+
+    expected_password = os.getenv("DASHBOARD_PASSWORD", "freebuff2026").strip()
+    if not expected_password:
+        return True  # If empty, no password required
+
+    if st.session_state.get("authenticated", False):
+        return True
+
+    # Render clean, premium dark login card
+    col1, col2, col3 = st.columns([1, 1.4, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="background-color: #1e293b; padding: 2.5rem; border-radius: 12px; border: 1px solid #334155; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                <h2 style="color: #f8fafc; margin-bottom: 0.5rem;">🔒 Freebuff Trading Portal</h2>
+                <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 1.5rem;">Private Algorithmic Execution System · Authorized Only</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.form("login_form", clear_on_submit=False):
+            input_pass = st.text_input("Enter Access Password", type="password", placeholder="••••••••••••")
+            submit = st.form_submit_button("🔓 Access System", use_container_width=True)
+            if submit:
+                if input_pass == expected_password:
+                    st.session_state["authenticated"] = True
+                    st.rerun()
+                else:
+                    st.error("❌ Access Denied: Invalid Password")
+        st.caption("🔒 Protected with session auth & robots no-index policy.")
+    return False
+
+
 def main():
+    if not check_dashboard_auth():
+        return
     # Sidebar
     st.sidebar.title("🏦 Freebuff Trading")
     st.sidebar.markdown("---")
@@ -630,6 +674,9 @@ def main():
 
     st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")
+    if st.sidebar.button("🔒 Logout", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.rerun()
 
     # Database connection
     db_url = os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")
