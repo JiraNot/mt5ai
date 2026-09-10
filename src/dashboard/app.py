@@ -11,6 +11,9 @@ import os
 import argparse
 import json
 import sys
+import time
+import shutil
+import urllib.request
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -520,9 +523,112 @@ def plot_r_distribution(trades_df: pd.DataFrame) -> go.Figure:
 
 # ─── Main App ─────────────────────────────────────────────────────────────────
 
+
+# ─── Live Health Checks ───────────────────────────────────────────────────────
+
+def check_mt5_bridge_status() -> dict:
+    """Check live connectivity to MT5 Bridge server and get account details."""
+    bridge_url = os.getenv("BRIDGE_URL", "http://mt5-node:8900").rstrip("/")
+    token = os.getenv("BRIDGE_TOKEN", "")
+    headers = {"X-Bridge-Token": token} if token else {}
+    
+    start_time = time.time()
+    try:
+        req = urllib.request.Request(f"{bridge_url}/health", headers=headers)
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            data = json.loads(resp.read().decode())
+            latency_ms = int((time.time() - start_time) * 1000)
+            return {
+                "online": True,
+                "latency_ms": latency_ms,
+                "mt5_connected": bool(data.get("mt5_connected")),
+                "terminal": data.get("terminal") or "MetaTrader 5",
+                "account": data.get("account"),
+                "server": data.get("server"),
+                "balance": data.get("balance"),
+                "bridge_url": bridge_url,
+            }
+    except Exception as e:
+        return {
+            "online": False,
+            "latency_ms": None,
+            "mt5_connected": False,
+            "error": str(e),
+            "bridge_url": bridge_url,
+        }
+
+
+def check_ai_status() -> dict:
+    """Check live status of AI Council (Codex ChatGPT & Google Gemini ADC)."""
+    codex_auth_files = [
+        os.path.expanduser("~/.codex/auth.json"),
+        "/root/.codex/auth.json",
+        "/mnt/c/Users/Dulla/.codex/auth.json",
+        r"C:\Users\Dulla\.codex\auth.json",
+    ]
+    codex_auth_ok = any(os.path.exists(p) for p in codex_auth_files) or bool(os.getenv("CODEX_AUTH_JSON"))
+    codex_cli_ok = bool(shutil.which("codex")) or any(
+        os.path.exists(p) for p in [
+            "/usr/local/bin/codex",
+            "/usr/bin/codex",
+            os.path.expanduser("~/.local/bin/codex"),
+            "/mnt/c/Users/Dulla/.codex/plugins/.plugin-appserver/codex.exe",
+            r"C:\Users\Dulla\.codex\plugins\.plugin-appserver\codex.exe",
+        ]
+    )
+
+    adc_files = [
+        os.path.expanduser("~/.config/gcloud/application_default_credentials.json"),
+        "/root/.config/gcloud/application_default_credentials.json",
+        "/home/dulla/.config/gcloud/application_default_credentials.json",
+    ]
+    gemini_auth_ok = any(os.path.exists(p) for p in adc_files) or bool(os.getenv("GOOGLE_ADC_JSON")) or bool(os.getenv("GEMINI_API_KEY"))
+
+    return {
+        "chatgpt_auth": codex_auth_ok,
+        "chatgpt_cli": codex_cli_ok,
+        "gemini_auth": gemini_auth_ok,
+        "council_ready": (codex_auth_ok or codex_cli_ok) and gemini_auth_ok,
+    }
+
+
 def main():
     # Sidebar
     st.sidebar.title("🏦 Freebuff Trading")
+    st.sidebar.markdown("---")
+
+    # Check live connections
+    mt5_status = check_mt5_bridge_status()
+    ai_status = check_ai_status()
+
+    # Sidebar: Live Connection Status
+    st.sidebar.markdown("### 🔌 Live Connection Status")
+    if mt5_status["online"] and mt5_status["mt5_connected"]:
+        st.sidebar.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
+        if mt5_status.get("account"):
+            st.sidebar.caption(f"📌 Account: `{mt5_status['account']}` | `{mt5_status.get('server', '')}`")
+        if mt5_status.get("balance") is not None:
+            st.sidebar.caption(f"💰 Balance: `${mt5_status['balance']:,.2f}`")
+    elif mt5_status["online"]:
+        st.sidebar.warning("🟡 **Bridge UP / Waiting MT5**")
+        st.sidebar.caption(f"Bridge responsive at `{mt5_status['bridge_url']}`")
+    else:
+        st.sidebar.error("🔴 **MT5 Disconnected**")
+        st.sidebar.caption(f"Bridge `{mt5_status['bridge_url']}` not reachable")
+
+    # AI Council in Sidebar
+    st.sidebar.markdown("**AI Council (Debate):**")
+    if ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]:
+        st.sidebar.markdown("🟢 `ChatGPT (Codex)`: Auth Ready (Bear)")
+    else:
+        st.sidebar.markdown("🟡 `ChatGPT (Codex)`: Waiting Session")
+
+    if ai_status["gemini_auth"]:
+        st.sidebar.markdown("🟢 `Gemini (Google)`: ADC Ready (Bull)")
+    else:
+        st.sidebar.markdown("🟡 `Gemini (Google)`: Waiting ADC Auth")
+
+    st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")
 
     # Database connection
@@ -591,6 +697,46 @@ def main():
 
     # ─── Overview Tab ─────────────────────────────────────────────────────────
     with tab_overview:
+        # System Live Status Banner
+        s_col1, s_col2, s_col3 = st.columns([1.2, 1.4, 1.0])
+        with s_col1:
+            if mt5_status["online"] and mt5_status["mt5_connected"]:
+                st.success(
+                    f"🟢 **MT5 Trader Online**\n\n"
+                    f"Server: `{mt5_status.get('server', 'MT5')}` · Login: `{mt5_status.get('account', 'N/A')}` · Latency: `{mt5_status['latency_ms']}ms`"
+                )
+            elif mt5_status["online"]:
+                st.warning(
+                    f"🟡 **Bridge Waiting MT5**\n\n"
+                    f"Bridge `{mt5_status['bridge_url']}` is UP, waiting for MT5 terminal connection."
+                )
+            else:
+                st.error(
+                    f"🔴 **MT5 Trader Offline**\n\n"
+                    f"Cannot reach Bridge at `{mt5_status['bridge_url']}`"
+                )
+
+        with s_col2:
+            cg_tag = "🟢 ChatGPT" if (ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]) else "🟡 ChatGPT"
+            gm_tag = "🟢 Gemini" if ai_status["gemini_auth"] else "🟡 Gemini"
+            if ai_status["council_ready"]:
+                st.success(
+                    f"🧠 **AI Council Debate: Online**\n\n"
+                    f"{cg_tag} (Bear Trap) · {gm_tag} (Bull Confluence) · Auth Ready"
+                )
+            else:
+                st.info(
+                    f"🧠 **AI Council Status**\n\n"
+                    f"{cg_tag} · {gm_tag} · Rule Scorer Active"
+                )
+
+        with s_col3:
+            symbol = os.getenv("TRADING_SYMBOL", "XAUUSD")
+            st.info(
+                f"⚡ **Active Market & Engine**\n\n"
+                f"Symbol: `{symbol}` · 15 Multi-Timeframe SMC Models"
+            )
+
         st.markdown("## 📊 Trading Overview")
 
         # Summary cards
