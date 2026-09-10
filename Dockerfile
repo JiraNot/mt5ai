@@ -7,8 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package files
+# Copy dependency definition first for optimal Docker layer caching
 COPY pyproject.toml README.md ./
+RUN mkdir src && touch src/__init__.py && \
+    pip install --no-cache-dir ".[ml]" && \
+    rm -rf src
+
+# Copy application source code
 COPY src/ src/
 COPY config/ config/
 COPY scripts/ scripts/
@@ -16,8 +21,8 @@ COPY alembic.ini .
 COPY alembic/ alembic/
 COPY gold_1h.csv .
 
-# Install dependencies (core + ML packages)
-RUN pip install --no-cache-dir ".[ml]"
+# Re-install package in editable/local mode without re-downloading dependencies
+RUN pip install --no-deps -e .
 
 # Set environment
 ENV PYTHONUNBUFFERED=1
