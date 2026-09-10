@@ -8,58 +8,52 @@ from datetime import datetime
 from typing import Any, Optional
 
 from src.core.config import settings
-from src.core.exceptions import MT5ConnectionError, MT5OrderError
+from src.core.exceptions import MT5ConnectionError
 from src.core.types import (
     AccountInfo,
     Candle,
     Direction,
     OrderRequest,
     OrderResult,
-    OrderType,
     Position,
     Tick,
-    TradingMode,
 )
 
 logger = logging.getLogger(__name__)
 
-# Try to import MetaTrader5 — may not be available on non-Windows
+# Try to import MetaTrader5 — available natively on Windows (or Wine)
 try:
     import MetaTrader5 as mt5
 
     MT5_AVAILABLE = True
 except ImportError:
     MT5_AVAILABLE = False
-    logger.warning("MetaTrader5 package not available. MT5 features will be mocked.")
+    mt5 = None  # type: ignore[assignment]
+    logger.warning(
+        "MetaTrader5 package not installed. On Linux/WSL, set MT5_MODE=bridge to connect to mt5-bridge on Windows."
+    )
 
 
 class MT5Connection:
     """
-    Manages connection to MetaTrader 5 terminal.
+    Manages direct connection to a local MetaTrader 5 terminal.
 
     Features:
-    - Auto-connect / reconnect
-    - OHLCV data fetching
-    - Tick data
-    - Order execution
+    - Direct connection to terminal64.exe via MetaTrader5 Python package
+    - Real-time OHLCV data fetching
+    - Live tick data
+    - Order execution (Live & Demo accounts)
     - Position management
     - Account info
-
-    When MT5 is not available (e.g., non-Windows), operates in mock mode.
     """
 
     def __init__(self) -> None:
         self._connected = False
-        self._mock_mode = not MT5_AVAILABLE
         self._last_error: Optional[str] = None
 
     @property
     def connected(self) -> bool:
         return self._connected
-
-    @property
-    def mock_mode(self) -> bool:
-        return self._mock_mode
 
     async def connect(self) -> bool:
         """
@@ -67,18 +61,25 @@ class MT5Connection:
 
         Returns True if successful, False otherwise.
         """
-        if self._mock_mode:
-            logger.info("MT5 running in mock mode (package not available)")
-            self._connected = True
-            return True
+        if not MT5_AVAILABLE:
+            logger.error(
+                "MetaTrader5 package is not available on this environment. "
+                "If running on Linux/WSL/Cloud, set MT5_MODE=bridge to connect to mt5-bridge on Windows."
+            )
+            return False
 
         try:
-            if not mt5.initialize(
-                login=settings.mt5.login,
-                password=settings.mt5.password,
-                server=settings.mt5.server,
-                timeout=settings.mt5.timeout,
-            ):
+            init_kwargs: dict[str, Any] = {}
+            if settings.mt5.login:
+                init_kwargs["login"] = settings.mt5.login
+            if settings.mt5.password:
+                init_kwargs["password"] = settings.mt5.password
+            if settings.mt5.server:
+                init_kwargs["server"] = settings.mt5.server
+            if settings.mt5.timeout:
+                init_kwargs["timeout"] = settings.mt5.timeout
+
+            if not mt5.initialize(**init_kwargs):
                 error = mt5.last_error()
                 self._last_error = str(error)
                 logger.error(f"MT5 initialization failed: {error}")
@@ -100,7 +101,7 @@ class MT5Connection:
 
     async def disconnect(self) -> None:
         """Shutdown MT5 connection."""
-        if self._mock_mode:
+        if not self._connected or not MT5_AVAILABLE:
             self._connected = False
             return
 
@@ -116,9 +117,9 @@ class MT5Connection:
         return await self.connect()
 
     def _ensure_connected(self) -> None:
-        """Raise if not connected."""
-        if not self._connected:
-            raise MT5ConnectionError("Not connected to MT5")
+        """Raise MT5ConnectionError if not connected."""
+        if not self._connected or not MT5_AVAILABLE:
+            raise MT5ConnectionError("Not connected to MT5 terminal")
 
     # ─── Market Data ──────────────────────────────────────────────────────────
 
@@ -126,7 +127,7 @@ class MT5Connection:
         self, symbol: str, timeframe: str, count: int = 500, start: datetime | None = None
     ) -> list[Candle]:
         """
-        Fetch OHLCV data from MT5.
+        Fetch real OHLCV data from MT5.
 
         Args:
             symbol: Trading symbol (e.g., "XAUUSD")
@@ -137,9 +138,6 @@ class MT5Connection:
         Returns:
             List of Candle objects
         """
-        if self._mock_mode:
-            return self._mock_ohlcv(symbol, timeframe, count)
-
         self._ensure_connected()
 
         tf_map = {
@@ -174,14 +172,7 @@ class MT5Connection:
         return candles
 
     async def get_current_price(self, symbol: str) -> Tick:
-        """Get current bid/ask tick."""
-        if self._mock_mode:
-            return Tick(
-                timestamp=datetime.utcnow(),
-                bid=2350.00,
-                ask=2350.25,
-            )
-
+        """Get current real bid/ask tick from MT5."""
         self._ensure_connected()
 
         tick = mt5.symbol_info_tick(symbol)
@@ -197,17 +188,7 @@ class MT5Connection:
         )
 
     async def get_symbol_info(self, symbol: str) -> dict[str, Any]:
-        """Get symbol trading conditions."""
-        if self._mock_mode:
-            return {
-                "digits": 2,
-                "point": 0.01,
-                "spread": 25,
-                "volume_min": 0.01,
-                "volume_max": 100.0,
-                "volume_step": 0.01,
-            }
-
+        """Get real symbol trading conditions from MT5."""
         self._ensure_connected()
 
         info = mt5.symbol_info(symbol)
@@ -228,23 +209,7 @@ class MT5Connection:
     # ─── Account ──────────────────────────────────────────────────────────────
 
     async def get_account_info(self) -> AccountInfo:
-        """Get current account information."""
-        if self._mock_mode:
-            return AccountInfo(
-                login=99999,
-                name="Mock Account",
-                server="MockServer",
-                balance=10000.00,
-                equity=10000.00,
-                margin=0.0,
-                free_margin=10000.00,
-                margin_level=0.0,
-                profit=0.0,
-                currency="USD",
-                leverage=100,
-                mode=TradingMode.PAPER,
-            )
-
+        """Get current real account information from MT5."""
         self._ensure_connected()
 
         info = mt5.account_info()
@@ -277,14 +242,6 @@ class MT5Connection:
         Returns:
             OrderResult with success status and details
         """
-        if self._mock_mode:
-            return OrderResult(
-                success=True,
-                ticket=12345678,
-                price=request.price or 2350.00,
-                volume=request.volume,
-            )
-
         self._ensure_connected()
 
         # Get current price if not specified
@@ -339,10 +296,7 @@ class MT5Connection:
     async def modify_position(
         self, ticket: int, sl: float | None = None, tp: float | None = None
     ) -> OrderResult:
-        """Modify SL/TP of an existing position."""
-        if self._mock_mode:
-            return OrderResult(success=True, ticket=ticket)
-
+        """Modify SL/TP of an existing position in MT5."""
         self._ensure_connected()
 
         position = mt5.positions_get(ticket=ticket)
@@ -368,10 +322,7 @@ class MT5Connection:
         return OrderResult(success=True, ticket=ticket)
 
     async def close_position(self, ticket: int) -> OrderResult:
-        """Close a specific position."""
-        if self._mock_mode:
-            return OrderResult(success=True, ticket=ticket)
-
+        """Close a specific position in MT5."""
         self._ensure_connected()
 
         position = mt5.positions_get(ticket=ticket)
@@ -411,10 +362,7 @@ class MT5Connection:
         return OrderResult(success=True, ticket=ticket, price=result.price)
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
-        """Get all open positions, optionally filtered by symbol."""
-        if self._mock_mode:
-            return []
-
+        """Get all real open positions from MT5, optionally filtered by symbol."""
         self._ensure_connected()
 
         if symbol:
@@ -449,31 +397,3 @@ class MT5Connection:
             )
 
         return positions
-
-    def _mock_ohlcv(self, symbol: str, timeframe: str, count: int) -> list[Candle]:
-        """Generate mock OHLCV data for testing."""
-        import random
-
-        base_price = 2350.0 if "XAU" in symbol else 1.10000
-        candles = []
-        now = datetime.utcnow()
-
-        for i in range(count):
-            open_price = base_price + random.uniform(-5, 5)
-            close_price = open_price + random.uniform(-3, 3)
-            high_price = max(open_price, close_price) + random.uniform(0, 2)
-            low_price = min(open_price, close_price) - random.uniform(0, 2)
-
-            candles.append(
-                Candle(
-                    timestamp=now,
-                    open=round(open_price, 2),
-                    high=round(high_price, 2),
-                    low=round(low_price, 2),
-                    close=round(close_price, 2),
-                    volume=random.randint(100, 1000),
-                )
-            )
-            base_price = close_price
-
-        return candles

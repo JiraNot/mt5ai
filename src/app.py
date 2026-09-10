@@ -2,7 +2,7 @@
 Freebuff Trading Platform — Main Entry Point
 
 Usage:
-    python -m src.app              # Start the platform (paper mode)
+    python -m src.app              # Start the platform
     python -m src.app --backtest   # Run backtesting mode
     python -m src.app --status     # Show system status
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from typing import Any
 
 from src.core.config import settings
 from src.core.events import EventType, event_bus
@@ -30,7 +31,7 @@ from src.structure.context import ContextBuilder, MultiTimeframeContext
 
 # Phase 3: Strategy Engine
 from src.strategies.meta_engine import MetaDecisionEngine
-from src.strategies.registry import auto_discover
+from src.strategies.registry import auto_discover, get_strategy_ids
 
 # Phase 5: AI Scorer
 from src.ai.scorer import RuleBasedScorer
@@ -102,7 +103,7 @@ class TradingPlatform:
             f"Starting Freebuff Trading Platform v{settings.app.version} "
             f"(mode={settings.trading_mode})"
         )
-        logger.info(f"Strategies loaded: {list(self._meta_engine._min_score)}")
+        logger.info(f"Strategies loaded: {get_strategy_ids()}")
 
         # Setup event handlers
         self._setup_event_handlers()
@@ -120,7 +121,17 @@ class TradingPlatform:
         # Connect to MT5
         connected = await self._mt5.connect()
         if not connected:
-            logger.error("Failed to connect to MT5. Exiting.")
+            if settings.mt5_mode == "bridge":
+                logger.error(
+                    f"❌ Failed to connect to MT5 Bridge at {settings.bridge_url}. "
+                    "Please make sure mt5-bridge is running on the Windows machine and MT5 is logged in. Exiting."
+                )
+            else:
+                logger.error(
+                    "❌ Failed to connect to local MT5. "
+                    "Please ensure MetaTrader5 is installed and MT5 terminal is running. "
+                    "(Or set MT5_MODE=bridge to connect via mt5-bridge). Exiting."
+                )
             return
 
         self._running = True
@@ -148,55 +159,54 @@ class TradingPlatform:
         self._running = False
         logger.info("Stopping platform...")
         await self._data_feed.stop_polling()
+        if self._db_session:
+            self._db_session.close()
         await self._mt5.disconnect()
-        if self._db_session is not None:
-            await self._db_session.close()
-            self._db_session = None
-        logger.info("Platform stopped")
+        logger.info("Platform stopped cleanly")
 
     def _setup_event_handlers(self) -> None:
-        """Subscribe platform-level event handlers for observability."""
+        """Wire event bus subscriptions."""
 
-        async def on_order_failed(payload: dict) -> None:
-            result = payload.get("result")
-            logger.error(f"EVENT order_failed: {result}")
+        async def on_circuit_breaker(data: Any) -> None:
+            reason = data.get("reason") if isinstance(data, dict) else str(data)
+            logger.critical(
+                f"🚨 EMERGENCY: Circuit breaker triggered! "
+                f"Reason: {reason}. Halting trading."
+            )
+            await self.stop()
 
-        async def on_position_opened(payload: dict) -> None:
-            position = payload.get("position")
-            logger.info(f"EVENT position_opened: {position}")
+        async def on_order_filled(data: Any) -> None:
+            if isinstance(data, dict):
+                logger.info(
+                    f"💰 Order filled: {data.get('symbol')} "
+                    f"{data.get('volume')} lots @ {data.get('price')}"
+                )
 
-        async def on_position_closed(payload: dict) -> None:
-            position = payload.get("position")
-            logger.info(f"EVENT position_closed: {position}")
-
-        event_bus.subscribe(EventType.ORDER_FAILED, on_order_failed)
-        event_bus.subscribe(EventType.POSITION_OPENED, on_position_opened)
-        event_bus.subscribe(EventType.POSITION_CLOSED, on_position_closed)
+        event_bus.subscribe(EventType.CIRCUIT_BREAKER, on_circuit_breaker)
+        event_bus.subscribe(EventType.ORDER_FILLED, on_order_filled)
 
     async def _main_loop(self, symbol: str) -> None:
-        """Main trading loop — processes each tick/candle."""
-        logger.info("Entering main loop...")
+        """Main evaluation loop: runs on each polling cycle."""
+        logger.info(f"Main trading loop started for {symbol}")
 
         while self._running:
             try:
-                # Get current tick
-                tick = await self._mt5.get_current_price(symbol)
-                spread_pips = tick.spread / 0.1  # Convert to pips for XAUUSD
-                self._spread_monitor.update(spread_pips)
+                # Check session
                 session = get_current_session()
 
-                logger.debug(
-                    f"Session={session} | Spread={spread_pips:.1f} "
-                    f"({self._spread_monitor.get_spread_status(spread_pips)}) "
-                    f"| Bid={tick.bid:.2f}"
+                # Get current tick & spread
+                tick = await self._mt5.get_current_price(symbol)
+                spread_pips = self._spread_monitor.get_spread_pips(
+                    tick.bid, tick.ask
                 )
 
-                # Build context from cached data
-                candles_by_tf = {}
-                for tf in settings.data.timeframes.get("structure", ["H4", "H1", "M15", "M5"]):
-                    candles = self._data_feed.get_candles(symbol, tf)
-                    if candles:
-                        candles_by_tf[tf] = candles
+                # Build multi-timeframe context
+                candles_by_tf = {
+                    "M5": self._data_feed.get_cached_candles("M5"),
+                    "M15": self._data_feed.get_cached_candles("M15"),
+                    "H1": self._data_feed.get_cached_candles("H1"),
+                    "H4": self._data_feed.get_cached_candles("H4"),
+                }
 
                 if not candles_by_tf:
                     await asyncio.sleep(5)
@@ -346,8 +356,6 @@ class TradingPlatform:
 async def _run_status() -> None:
     """Print system status and exit."""
     auto_discover()
-    from src.strategies.registry import get_strategy_ids  # noqa: PLC0415
-
     print("🏦 Freebuff Trading Platform — Status")
     print("=====================================")
     print(f"Version:        {settings.app.version}")
