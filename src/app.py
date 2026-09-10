@@ -51,6 +51,35 @@ from src.storage.setup_logger import SetupLogger
 logger = get_logger(__name__)
 
 
+
+def setup_auth_credentials() -> None:
+    """Setup Auth Login credentials on remote server from environment variables."""
+    codex_auth = os.getenv("CODEX_AUTH_JSON", "").strip()
+    if codex_auth:
+        target_dir = os.path.expanduser("~/.codex")
+        os.makedirs(target_dir, exist_ok=True)
+        target_file = os.path.join(target_dir, "auth.json")
+        try:
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write(codex_auth)
+            logger.info("✅ CODEX_AUTH_JSON successfully initialized in %s", target_file)
+        except Exception as e:
+            logger.error("Failed writing CODEX_AUTH_JSON: %s", e)
+
+    adc_json = os.getenv("GOOGLE_ADC_JSON", "").strip()
+    if adc_json:
+        target_dir = os.path.expanduser("~/.config/gcloud")
+        os.makedirs(target_dir, exist_ok=True)
+        target_file = os.path.join(target_dir, "application_default_credentials.json")
+        try:
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write(adc_json)
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = target_file
+            logger.info("✅ GOOGLE_ADC_JSON successfully initialized in %s", target_file)
+        except Exception as e:
+            logger.error("Failed writing GOOGLE_ADC_JSON: %s", e)
+
+
 class TradingPlatform:
     """
     Main orchestrator — wires all components together.
@@ -99,6 +128,7 @@ class TradingPlatform:
 
     async def start(self) -> None:
         """Start the trading platform."""
+        setup_auth_credentials()
         logger.info(
             f"Starting Freebuff Trading Platform v{settings.app.version} "
             f"(mode={settings.trading_mode})"

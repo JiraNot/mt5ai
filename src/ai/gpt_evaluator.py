@@ -22,10 +22,12 @@ logger = logging.getLogger(__name__)
 
 # รายการ path ที่อาจพบ codex executable
 CODEX_CANDIDATE_PATHS = [
+    shutil.which("codex") or "",
+    "/usr/local/bin/codex",
+    "/usr/bin/codex",
+    os.path.expanduser("~/.local/bin/codex"),
     "/mnt/c/Users/Dulla/.codex/plugins/.plugin-appserver/codex.exe",
     r"C:\Users\Dulla\.codex\plugins\.plugin-appserver\codex.exe",
-    os.path.expanduser("~/.local/bin/codex"),
-    shutil.which("codex") or "",
 ]
 
 

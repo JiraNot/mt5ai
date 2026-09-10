@@ -2,9 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system utilities
+# Install system utilities, Node.js and Codex CLI for Auth Login
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    nodejs \
+    npm \
+    && npm install -g @openai/codex \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency definition first for optimal Docker layer caching
