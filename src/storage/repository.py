@@ -42,6 +42,14 @@ class Repository:
         ai_score: Optional[int] = None,
         combined_score: Optional[int] = None,
         rejection_reason: Optional[str] = None,
+        gemini_verdict: Optional[str] = None,
+        gemini_score: Optional[int] = None,
+        gemini_narrative: Optional[str] = None,
+        gpt_verdict: Optional[str] = None,
+        gpt_score: Optional[int] = None,
+        gpt_narrative: Optional[str] = None,
+        debate_summary: Optional[str] = None,
+        eql_summary: Optional[str] = None,
     ) -> int:
         """
         Log a candidate setup (traded, skipped, or rejected).
@@ -65,6 +73,14 @@ class Repository:
             confluences=json.dumps(candidate.confluences),
             risk_flags=json.dumps(candidate.risk_flags),
             rejection_reason=rejection_reason,
+            gemini_verdict=gemini_verdict,
+            gemini_score=gemini_score,
+            gemini_narrative=gemini_narrative,
+            gpt_verdict=gpt_verdict,
+            gpt_score=gpt_score,
+            gpt_narrative=gpt_narrative,
+            debate_summary=debate_summary,
+            eql_summary=eql_summary,
         )
 
         self._session.add(setup)

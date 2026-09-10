@@ -80,6 +80,15 @@ class SetupLog(Base):
     confluences = Column(Text, default="[]")
     risk_flags = Column(Text, default="[]")
     rejection_reason = Column(Text)
+    # AI Council columns
+    gemini_verdict = Column(String(10))           # APPROVE / REJECT
+    gemini_score = Column(Integer)                # 0-100
+    gemini_narrative = Column(Text)               # บทวิเคราะห์ Gemini
+    gpt_verdict = Column(String(10))              # APPROVE / REJECT
+    gpt_score = Column(Integer)                   # 0-100
+    gpt_narrative = Column(Text)                  # บทวิเคราะห์ GPT
+    debate_summary = Column(Text)                 # สรุปการเถียงกัน
+    eql_summary = Column(Text)                    # EQH/EQL info
     outcome_r = Column(Numeric(5, 2))
     outcome_pips = Column(Numeric(8, 2))
     created_at = Column(DateTime, default=datetime.utcnow)

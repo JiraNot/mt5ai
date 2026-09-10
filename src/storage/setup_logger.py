@@ -44,6 +44,14 @@ class SetupLogger:
         risk_decision: RiskDecision | None = None,
         decision: SetupDecision = SetupDecision.SKIPPED,
         rejection_reason: str | None = None,
+        gemini_verdict: str | None = None,
+        gemini_score: int | None = None,
+        gemini_narrative: str | None = None,
+        gpt_verdict: str | None = None,
+        gpt_score: int | None = None,
+        gpt_narrative: str | None = None,
+        debate_summary: str | None = None,
+        eql_summary: str | None = None,
     ) -> int:
         """
         Log a candidate setup.
@@ -63,6 +71,14 @@ class SetupLogger:
             ai_score=ai_score,
             combined_score=combined_score,
             rejection_reason=rejection_reason,
+            gemini_verdict=gemini_verdict,
+            gemini_score=gemini_score,
+            gemini_narrative=gemini_narrative,
+            gpt_verdict=gpt_verdict,
+            gpt_score=gpt_score,
+            gpt_narrative=gpt_narrative,
+            debate_summary=debate_summary,
+            eql_summary=eql_summary,
         )
 
         logger.info(
@@ -78,6 +94,14 @@ class SetupLogger:
         candidate: StrategyCandidate,
         ai_decision: AIDecision,
         risk_decision: RiskDecision,
+        gemini_verdict: str | None = None,
+        gemini_score: int | None = None,
+        gemini_narrative: str | None = None,
+        gpt_verdict: str | None = None,
+        gpt_score: int | None = None,
+        gpt_narrative: str | None = None,
+        debate_summary: str | None = None,
+        eql_summary: str | None = None,
     ) -> int:
         """Log a setup that was approved and traded."""
         return await self.log_candidate(
@@ -85,18 +109,42 @@ class SetupLogger:
             ai_decision=ai_decision,
             risk_decision=risk_decision,
             decision=SetupDecision.TRADED,
+            gemini_verdict=gemini_verdict,
+            gemini_score=gemini_score,
+            gemini_narrative=gemini_narrative,
+            gpt_verdict=gpt_verdict,
+            gpt_score=gpt_score,
+            gpt_narrative=gpt_narrative,
+            debate_summary=debate_summary,
+            eql_summary=eql_summary,
         )
 
     async def log_skipped(
         self,
         candidate: StrategyCandidate,
         reason: str = "AI score below threshold",
+        gemini_verdict: str | None = None,
+        gemini_score: int | None = None,
+        gemini_narrative: str | None = None,
+        gpt_verdict: str | None = None,
+        gpt_score: int | None = None,
+        gpt_narrative: str | None = None,
+        debate_summary: str | None = None,
+        eql_summary: str | None = None,
     ) -> int:
         """Log a setup that was skipped by AI."""
         return await self.log_candidate(
             candidate=candidate,
             decision=SetupDecision.SKIPPED,
             rejection_reason=reason,
+            gemini_verdict=gemini_verdict,
+            gemini_score=gemini_score,
+            gemini_narrative=gemini_narrative,
+            gpt_verdict=gpt_verdict,
+            gpt_score=gpt_score,
+            gpt_narrative=gpt_narrative,
+            debate_summary=debate_summary,
+            eql_summary=eql_summary,
         )
 
     async def log_rejected(
@@ -104,6 +152,14 @@ class SetupLogger:
         candidate: StrategyCandidate,
         ai_decision: AIDecision,
         risk_decision: RiskDecision,
+        gemini_verdict: str | None = None,
+        gemini_score: int | None = None,
+        gemini_narrative: str | None = None,
+        gpt_verdict: str | None = None,
+        gpt_score: int | None = None,
+        gpt_narrative: str | None = None,
+        debate_summary: str | None = None,
+        eql_summary: str | None = None,
     ) -> int:
         """Log a setup that was rejected by risk engine."""
         return await self.log_candidate(
@@ -111,4 +167,12 @@ class SetupLogger:
             ai_decision=ai_decision,
             risk_decision=risk_decision,
             decision=SetupDecision.REJECTED,
+            gemini_verdict=gemini_verdict,
+            gemini_score=gemini_score,
+            gemini_narrative=gemini_narrative,
+            gpt_verdict=gpt_verdict,
+            gpt_score=gpt_score,
+            gpt_narrative=gpt_narrative,
+            debate_summary=debate_summary,
+            eql_summary=eql_summary,
         )

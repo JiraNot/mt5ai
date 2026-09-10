@@ -83,6 +83,25 @@ def get_engine(db_url: str | None = None):
     engine = create_engine(db_url, echo=False)
     try:
         Base.metadata.create_all(engine)
+        with engine.connect() as conn:
+            existing_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(setup_log)")).fetchall()]
+            new_cols = {
+                "gemini_verdict": "VARCHAR(10)",
+                "gemini_score": "INTEGER",
+                "gemini_narrative": "TEXT",
+                "gpt_verdict": "VARCHAR(10)",
+                "gpt_score": "INTEGER",
+                "gpt_narrative": "TEXT",
+                "debate_summary": "TEXT",
+                "eql_summary": "TEXT",
+            }
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE setup_log ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+                    except Exception:
+                        pass
     except Exception:
         pass
     return engine
@@ -121,7 +140,10 @@ def load_setups(engine) -> pd.DataFrame:
                 s.decision, s.entry_price, s.stop_loss,
                 s.take_profit_1, s.rr_ratio,
                 s.confluences, s.risk_flags, s.rejection_reason,
-                s.outcome_r, s.outcome_pips, s.created_at
+                s.outcome_r, s.outcome_pips, s.created_at,
+                s.gemini_verdict, s.gemini_score, s.gemini_narrative,
+                s.gpt_verdict, s.gpt_score, s.gpt_narrative,
+                s.debate_summary, s.eql_summary
             FROM setup_log s
             ORDER BY s.created_at DESC
         """)
@@ -131,7 +153,10 @@ def load_setups(engine) -> pd.DataFrame:
             "id", "symbol", "timeframe", "strategy_id", "direction", "rule_score",
             "ai_score", "combined_score", "decision", "entry_price", "stop_loss",
             "take_profit_1", "rr_ratio", "confluences", "risk_flags",
-            "rejection_reason", "outcome_r", "outcome_pips", "created_at"
+            "rejection_reason", "outcome_r", "outcome_pips", "created_at",
+            "gemini_verdict", "gemini_score", "gemini_narrative",
+            "gpt_verdict", "gpt_score", "gpt_narrative",
+            "debate_summary", "eql_summary"
         ])
 
 
@@ -834,6 +859,26 @@ def main():
                     margin=dict(l=0, r=0, t=0, b=0),
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+            # AI Council Debate Feed (Gemini vs GPT)
+            has_debates = "gemini_verdict" in setups_df.columns and setups_df["gemini_verdict"].notna().any()
+            if has_debates:
+                st.markdown("### 🤖 AI Council Debate Feed (Gemini 🟢 vs GPT 🔴)")
+                recent_debates = setups_df[setups_df["gemini_verdict"].notna()].head(10)
+                for _, row in recent_debates.iterrows():
+                    d_icon = "🟢" if row.get("decision") == "TRADED" else ("🟡" if row.get("decision") == "SKIPPED" else "🔴")
+                    with st.expander(f"{d_icon} {row.get('created_at')} — {row.get('symbol')} {row.get('direction')} | Verdict: {row.get('decision')} (Rule: {row.get('rule_score')}, Combined: {row.get('combined_score')})"):
+                        d_c1, d_c2 = st.columns(2)
+                        with d_c1:
+                            st.markdown(f"**Gemini (Bull Analyst):** `{row.get('gemini_verdict')}` ({row.get('gemini_score')}/100)")
+                            st.info(row.get("gemini_narrative") or "No narrative")
+                        with d_c2:
+                            st.markdown(f"**GPT/Codex (Bear Analyst):** `{row.get('gpt_verdict')}` ({row.get('gpt_score')}/100)")
+                            st.warning(row.get("gpt_narrative") or "No narrative")
+                        if row.get("debate_summary"):
+                            st.markdown(f"**⚖️ Council Summary:** {row.get('debate_summary')}")
+                        if row.get("eql_summary"):
+                            st.caption(f"**💧 Liquidity Pools:** {row.get('eql_summary')}")
 
     # ─── Risk Management Tab ──────────────────────────────────────────────────
     with tab_risk:

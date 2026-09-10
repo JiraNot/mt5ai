@@ -45,7 +45,7 @@ from src.execution.order_manager import OrderManager
 from src.execution.position_tracker import PositionTracker
 
 # Phase 6: Setup Logger
-from src.storage.models import get_engine, get_session_factory
+from src.storage.models import get_engine, get_session_factory, Base
 from src.storage.setup_logger import SetupLogger
 
 logger = get_logger(__name__)
@@ -110,6 +110,8 @@ class TradingPlatform:
 
         # Initialize database (risk engine + setup logger)
         engine = get_engine(settings.database_url)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         self._session_factory = get_session_factory(engine)
         self._db_session = self._session_factory()
         self._risk_engine = RiskEngine(
@@ -273,7 +275,7 @@ class TradingPlatform:
     ) -> None:
         """Process a single candidate through AI → Risk → Execute."""
 
-        # Step 2: AI Scoring
+        # Step 2a: Rule-based AI Scoring (fast, no API call)
         ai_decision = self._ai_scorer.score(
             candidate=candidate,
             context=ctx,
@@ -294,6 +296,64 @@ class TradingPlatform:
                         f"< {settings.ai.min_combined_score}"
                     ),
                 )
+            return
+
+        # Step 2b: EQH/EQL Detection (ตรวจ Liquidity Pools)
+        h1_candles = ctx.candles_by_tf.get("H1", [])
+        eql_result = self._eql_detector.detect(h1_candles)
+        logger.info(f"EQL: {eql_result.summary}")
+
+        # Step 2c: AI Council Debate (Gemini Bull vs GPT Bear)
+        setup_context = {
+            "symbol": candidate.symbol,
+            "direction": candidate.direction.value,
+            "entry_price": float(candidate.entry_price or current_price),
+            "stop_loss": float(candidate.stop_loss or 0),
+            "take_profit": float(candidate.take_profit_1 or 0),
+            "rr_ratio": float(candidate.rr_ratio or 0),
+            "rule_score": ai_decision.rule_score,
+            "confluences": candidate.confluences or [],
+            "h4_bias": str(ctx.htf_bias) if hasattr(ctx, "htf_bias") else "N/A",
+            "h1_structure": str(ctx.primary_structure) if hasattr(ctx, "primary_structure") else "N/A",
+            "m5_entry": candidate.strategy_id,
+            "eql_summary": eql_result.summary,
+            "displacement_detected": bool(getattr(candidate, "displacement", False)),
+        }
+
+        council = await self._ai_council.evaluate(setup_context)
+
+        logger.info(
+            f"AI Council: {council.final_verdict} "
+            f"(Gemini={council.gemini_verdict.verdict}, "
+            f"GPT={council.gpt_verdict.verdict}, "
+            f"Score={council.combined_score})"
+        )
+
+        # Council said SKIP or HARD_SKIP
+        if not council.should_execute:
+            logger.info(f"Council SKIP: {council.debate_summary_th}")
+            if self._setup_logger:
+                await self._setup_logger.log_skipped(
+                    candidate,
+                    reason=council.recommendation,
+                    gemini_verdict=council.gemini_verdict.verdict,
+                    gemini_score=council.gemini_verdict.confidence,
+                    gemini_narrative=council.gemini_verdict.narrative_th,
+                    gpt_verdict=council.gpt_verdict.verdict,
+                    gpt_score=council.gpt_verdict.confidence,
+                    gpt_narrative=council.gpt_verdict.narrative_th,
+                    debate_summary=council.debate_summary_th,
+                    eql_summary=eql_result.summary,
+                )
+            # Telegram alert for disagreement
+            if council.final_verdict == "SKIP":  # Disagreement
+                import asyncio
+                asyncio.create_task(alert_trade_skipped(
+                    symbol=candidate.symbol,
+                    reason=council.recommendation,
+                    gemini_say=council.gemini_verdict.narrative_th,
+                    gpt_say=council.gpt_verdict.narrative_th,
+                ))
             return
 
         # Step 3: Risk Engine Evaluation
@@ -336,13 +396,39 @@ class TradingPlatform:
             if result.success:
                 if self._setup_logger:
                     await self._setup_logger.log_traded(
-                        candidate, ai_decision, risk_decision
+                        candidate=candidate,
+                        ai_decision=ai_decision,
+                        risk_decision=risk_decision,
+                        gemini_verdict=council.gemini_verdict.verdict,
+                        gemini_score=council.gemini_verdict.confidence,
+                        gemini_narrative=council.gemini_verdict.narrative_th,
+                        gpt_verdict=council.gpt_verdict.verdict,
+                        gpt_score=council.gpt_verdict.confidence,
+                        gpt_narrative=council.gpt_verdict.narrative_th,
+                        debate_summary=council.debate_summary_th,
+                        eql_summary=eql_result.summary,
                     )
                 logger.info(
                     f"✅ TRADE EXECUTED: ticket={result.ticket} "
                     f"price={result.price} volume={result.volume} "
                     f"SL={request.sl:.2f} TP={request.tp:.2f}"
                 )
+                # Telegram alert
+                import asyncio as _asyncio
+                _asyncio.create_task(alert_trade_opened(TradeAlert(
+                    symbol=candidate.symbol,
+                    direction=candidate.direction.value,
+                    entry_price=float(result.price or current_price),
+                    stop_loss=float(request.sl),
+                    take_profit=float(request.tp),
+                    rule_score=ai_decision.rule_score,
+                    gemini_score=council.gemini_verdict.confidence,
+                    gpt_score=council.gpt_verdict.confidence,
+                    gemini_verdict=council.gemini_verdict.verdict,
+                    gpt_verdict=council.gpt_verdict.verdict,
+                    combined_verdict=council.final_verdict,
+                    narrative_th=council.debate_summary_th,
+                )))
             else:
                 logger.error(
                     f"❌ ORDER FAILED: {candidate.strategy_id} — "
@@ -355,7 +441,17 @@ class TradingPlatform:
             )
             if self._setup_logger:
                 await self._setup_logger.log_rejected(
-                    candidate, ai_decision, risk_decision
+                    candidate=candidate,
+                    ai_decision=ai_decision,
+                    risk_decision=risk_decision,
+                    gemini_verdict=council.gemini_verdict.verdict,
+                    gemini_score=council.gemini_verdict.confidence,
+                    gemini_narrative=council.gemini_verdict.narrative_th,
+                    gpt_verdict=council.gpt_verdict.verdict,
+                    gpt_score=council.gpt_verdict.confidence,
+                    gpt_narrative=council.gpt_verdict.narrative_th,
+                    debate_summary=council.debate_summary_th,
+                    eql_summary=eql_result.summary,
                 )
 
 
