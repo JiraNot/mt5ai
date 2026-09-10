@@ -1,4 +1,4 @@
-FROM gmag11/metatrader5:latest
+FROM gmag11/metatrader5_vnc:latest
 
 USER root
 
