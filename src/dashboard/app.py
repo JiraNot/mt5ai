@@ -1,4 +1,3 @@
-import os
 """Freebuff Trading Dashboard — Interactive Streamlit App.
 
 Usage:
@@ -7,6 +6,7 @@ Usage:
 """
 
 from __future__ import annotations
+import os
 
 import argparse
 import json
