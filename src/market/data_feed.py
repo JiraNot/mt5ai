@@ -96,6 +96,10 @@ class DataFeed:
                 # First candle
                 self._cache.setdefault(symbol, {})[tf] = [latest]
 
+    def get_cached_candles(self, timeframe: str, symbol: Optional[str] = None) -> list[Candle]:
+        sym = symbol or settings.primary_symbol
+        return self.get_candles(sym, timeframe)
+
     def get_candles(
         self, symbol: str, timeframe: str, count: Optional[int] = None
     ) -> list[Candle]:

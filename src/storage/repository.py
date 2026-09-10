@@ -68,7 +68,7 @@ class Repository:
         )
 
         self._session.add(setup)
-        await self._session.flush()
+        await self._session.commit()
         logger.debug(f"Setup logged: {setup.id} {candidate.strategy_id} {decision.value}")
         return setup.id
 
@@ -132,7 +132,7 @@ class Repository:
         )
 
         self._session.add(db_trade)
-        await self._session.flush()
+        await self._session.commit()
         logger.info(f"Trade logged: {db_trade.id} {trade.direction.value} {trade.symbol}")
         return db_trade.id
 

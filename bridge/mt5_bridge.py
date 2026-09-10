@@ -403,4 +403,4 @@ if __name__ == "__main__":
     if not initialize_mt5():
         logger.error("MT5 failed to initialize — bridge starting anyway, /health will report status")
     logger.info(f"Bridge listening on 0.0.0.0:{PORT}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

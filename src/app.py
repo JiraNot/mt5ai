@@ -145,6 +145,7 @@ class TradingPlatform:
         symbol = settings.primary_symbol
         logger.info(f"Initializing data feed for {symbol}...")
         await self._data_feed.initialize(symbol)
+        asyncio.create_task(self._data_feed.start_polling(symbol))
 
         # Start main loop
         session = get_current_session()
