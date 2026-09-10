@@ -146,6 +146,8 @@ class GPTEvaluator:
         m5_entry = ctx.get("m5_entry", "N/A")
         eql_info = ctx.get("eql_summary", "ไม่มีข้อมูล")
         rr = ctx.get("rr_ratio", 0)
+        past_lessons = ctx.get("past_lessons", [])
+        lessons_text = "\n".join(f"- {l}" for l in past_lessons) if past_lessons else "- ยังไม่มีประวัติความผิดพลาดในระบบ"
 
         return f"""ตรวจสอบความเสี่ยง Setup นี้ใน {symbol} จากมุมมอง Bear Analyst:
 
@@ -165,6 +167,10 @@ class GPTEvaluator:
 
 **ระดับสภาพคล่อง (Liquidity Warning):**
 {eql_info}
+
+**🧠 บทเรียนความผิดพลาดในอดีตที่ระบบเคยเจอ (Past Mistakes to Challenge):**
+{lessons_text}
+*(ในฐานะ Bear Analyst ให้จับตาดูว่า Setup นี้กำลังทำผิดซ้ำรอยบทเรียนในอดีตหรือไม่ ถ้าใช่ให้ REJECT ทันที)*
 
 วิเคราะห์และตอบเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น:"""
 

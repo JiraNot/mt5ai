@@ -22,6 +22,7 @@ from src.storage.models import (
     DailyRisk,
     SetupLog,
     Trade,
+    TradeMemory,
 )
 
 logger = logging.getLogger(__name__)
@@ -281,3 +282,62 @@ class Repository:
             }
             for s in snapshots
         ]
+
+    # ─── Continuous Learning (Trade Memory) ──────────────────────────────────
+
+    async def add_trade_memory(
+        self,
+        symbol: str,
+        strategy_id: str,
+        direction: str,
+        outcome: str,
+        lesson_learned_th: str,
+        ticket: Optional[int] = None,
+        profit: float = 0.0,
+        pips: float = 0.0,
+        rr_achieved: Optional[float] = None,
+        root_cause: Optional[str] = None,
+        rule_recommendation: Optional[str] = None,
+        setup_snapshot: Optional[str] = None,
+    ) -> int:
+        """Save a post-mortem trade lesson into memory bank."""
+        memory = TradeMemory(
+            ticket=ticket,
+            symbol=symbol,
+            strategy_id=strategy_id,
+            direction=direction,
+            outcome=outcome,
+            profit=profit,
+            pips=pips,
+            rr_achieved=rr_achieved,
+            root_cause=root_cause,
+            lesson_learned_th=lesson_learned_th,
+            rule_recommendation=rule_recommendation,
+            setup_snapshot=setup_snapshot or "{}",
+        )
+        self._session.add(memory)
+        await self._session.commit()
+        logger.info(f"🧠 Trade Memory recorded: ID={memory.id} [{outcome}] {strategy_id}: {lesson_learned_th[:60]}...")
+        return memory.id
+
+    async def get_recent_lessons(
+        self,
+        symbol: Optional[str] = None,
+        strategy_id: Optional[str] = None,
+        limit: int = 4,
+    ) -> list[TradeMemory]:
+        """Get recent trade lessons for AI Council prompt injection."""
+        query = select(TradeMemory).order_by(TradeMemory.created_at.desc())
+        if symbol:
+            query = query.where(TradeMemory.symbol == symbol)
+        if strategy_id:
+            query = query.where(TradeMemory.strategy_id == strategy_id)
+        query = query.limit(limit)
+        result = await self._session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_all_memories(self, limit: int = 100) -> list[TradeMemory]:
+        """Get all memories for dashboard inspection."""
+        query = select(TradeMemory).order_by(TradeMemory.created_at.desc()).limit(limit)
+        result = await self._session.execute(query)
+        return list(result.scalars().all())

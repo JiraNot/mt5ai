@@ -149,3 +149,30 @@ async def alert_daily_review(
         summary_th[:300],
     ]
     await send_message(nl.join(lines))
+
+
+async def alert_trade_lesson(
+    symbol: str,
+    direction: str,
+    outcome: str,
+    profit: float,
+    root_cause: str,
+    lesson_th: str,
+) -> None:
+    """แจ้งเตือนเมื่อ AI Council สรุปบทเรียนจากไม้ที่ปิด (Continuous Learning)."""
+    icon = "💡 [AI COUNCIL BIBLE — LESSON LEARNED]" if outcome == "LOSS" else "🎯 [AI COUNCIL REINFORCEMENT]"
+    sign = "+" if profit >= 0 else ""
+    nl = "\n"
+    lines = [
+        icon,
+        "",
+        "ไม้: " + symbol + " " + direction + " | ผลลัพธ์: " + outcome + " (" + sign + "$" + str(round(profit, 2)) + ")",
+        "🔍 สาเหตุ: " + root_cause,
+        "",
+        "📝 บทเรียนที่ได้:",
+        "\"" + lesson_th + "\"",
+        "",
+        "🧠 บันทึกลง AI Memory Bank เรียบร้อยแล้ว เพื่อใช้เตือนสติในการเทรดไม้ถัดไป",
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    ]
+    await send_message(nl.join(lines))

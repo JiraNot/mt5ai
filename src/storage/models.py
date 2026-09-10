@@ -157,6 +157,27 @@ class AccountSnapshot(Base):
     daily_pnl = Column(Numeric(12, 2), default=0)
 
 
+
+class TradeMemory(Base):
+    """Continuous learning memory bank — lessons extracted from past trades."""
+    __tablename__ = "trade_memories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticket = Column(Integer, nullable=True, index=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    strategy_id = Column(String(50), nullable=False, index=True)
+    direction = Column(String(5), nullable=False)
+    outcome = Column(String(15), nullable=False, index=True)  # WIN, LOSS, BREAKEVEN
+    profit = Column(Numeric(12, 2), default=0)
+    pips = Column(Numeric(8, 2), default=0)
+    rr_achieved = Column(Numeric(5, 2))
+    root_cause = Column(String(50), index=True)  # e.g. COUNTER_HTF_MOMENTUM, LIQUIDITY_SWEPT_EQL, PRE_NEWS_VOLATILITY, EARLY_ENTRY_NO_CONFIRM, FAKEOUT
+    lesson_learned_th = Column(Text, nullable=False)
+    rule_recommendation = Column(Text)
+    setup_snapshot = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class ModelVersion(Base):
     """ML model versions (Phase5+)."""
     __tablename__ = "model_versions"

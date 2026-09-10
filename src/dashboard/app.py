@@ -176,6 +176,27 @@ def load_equity_curve(engine) -> pd.DataFrame:
         return pd.DataFrame(columns=["ts", "equity", "balance"])
 
 
+
+def load_memories(engine) -> pd.DataFrame:
+    """Load trade memories / continuous learning lessons safely."""
+    try:
+        query = text("""
+            SELECT
+                id, ticket, symbol, strategy_id, direction,
+                outcome, profit, pips, rr_achieved, root_cause,
+                lesson_learned_th, rule_recommendation, created_at
+            FROM trade_memories
+            ORDER BY created_at DESC
+        """)
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame(columns=[
+            "id", "ticket", "symbol", "strategy_id", "direction",
+            "outcome", "profit", "pips", "rr_achieved", "root_cause",
+            "lesson_learned_th", "rule_recommendation", "created_at"
+        ])
+
+
 def load_daily_risk(engine) -> pd.DataFrame:
     """Load daily risk data safely."""
     try:
@@ -750,9 +771,10 @@ def main():
     filtered_metrics = calculate_metrics(filtered_trades)
 
     # Tabs
-    tab_overview, tab_journal, tab_strategy, tab_analysis, tab_risk = st.tabs([
+    tab_overview, tab_journal, tab_learning, tab_strategy, tab_analysis, tab_risk = st.tabs([
         "📊 Overview",
         "📋 Trade Journal",
+        "🧠 AI Learning & Memory",
         "🎯 Strategy Performance",
         "🔍 Setup Analysis",
         "⚠️ Risk Management",
@@ -939,6 +961,104 @@ def main():
                 st.metric("Avg P&L", f"${filtered_metrics['total_pnl'] / filtered_metrics['total']:,.2f}" if filtered_metrics['total'] > 0 else "$0")
             with col4:
                 st.metric("Total Volume", f"{filtered_trades['volume'].sum():.2f} lots")
+
+
+    # ─── AI Learning & Memory Bank Tab ───────────────────────────────────────
+    with tab_learning:
+        st.markdown("## 🧠 AI Brain & Continuous Learning Memory Bank")
+        st.caption("ระบบเรียนรู้และปรับกลยุทธ์อัตโนมัติจากประสบการณ์จริง: ทุกไม้ที่ปิด (โดยเฉพาะไม้ที่ชน SL) จะถูก AI Post-Mortem ชันสูตรหาสาเหตุ สกัดเป็นบทเรียน และ Feed กลับเข้า AI Council เพื่อไม่ให้พลาดท่าเดิมซ้ำสอง")
+
+        memories_df = load_memories(engine)
+
+        if memories_df.empty:
+            st.info("🧠 ยังไม่มีบทเรียนในคลังความจำ ระบบจะทำการวิเคราะห์และบันทึกอัตโนมัติทันทีที่มีออเดอร์ปิด (SL หรือ TP)")
+        else:
+            # Summary Metrics
+            total_lessons = len(memories_df)
+            losses_analyzed = len(memories_df[memories_df["outcome"] == "LOSS"])
+            wins_recorded = len(memories_df[memories_df["outcome"] == "WIN"])
+            
+            top_causes = memories_df["root_cause"].value_counts()
+            top_cause_str = top_causes.index[0] if not top_causes.empty else "N/A"
+
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("Total Memories", total_lessons)
+            with m2:
+                st.metric("Losses Reflected (ชน SL)", losses_analyzed, delta="-Learning" if losses_analyzed > 0 else None, delta_color="inverse")
+            with m3:
+                st.metric("Wins Reinforced", wins_recorded, delta="+Good Pattern" if wins_recorded > 0 else None)
+            with m4:
+                st.metric("Top Failure Cause", top_cause_str)
+
+            st.markdown("---")
+
+            # Two columns: Chart & Recent Lessons Feed
+            col_chart, col_feed = st.columns([1, 1.4])
+
+            with col_chart:
+                st.markdown("### 📊 Failure Root Cause Distribution")
+                if losses_analyzed > 0:
+                    loss_df = memories_df[memories_df["outcome"] == "LOSS"]
+                    cause_counts = loss_df["root_cause"].value_counts().reset_index()
+                    cause_counts.columns = ["Root Cause", "Count"]
+                    fig = px.pie(
+                        cause_counts,
+                        names="Root Cause",
+                        values="Count",
+                        hole=0.4,
+                        color_discrete_sequence=["#ef4444", "#f97316", "#eab308", "#8b5cf6", "#06b6d4"],
+                    )
+                    fig.update_layout(
+                        template="plotly_dark",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        margin=dict(l=10, r=10, t=20, b=10),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.success("🎉 ยังไม่มีประวัติการขาดทุนในระบบ!")
+
+                st.markdown("### ⚙️ How It Feeds the Council")
+                st.info(
+                    "📌 **Experience Injection:** ก่อนที่ Gemini Bull และ GPT Bear จะตัดสินใจ Setup ใดๆ "
+                    "ระบบจะค้นหาบทเรียนที่ตรงกับกลยุทธ์นั้นๆ 3 ข้อล่าสุด และแนบเข้าไปใน Prompt โดยตรง "
+                    "ทำให้ GPT Bear สามารถยกเคสอดีตมาคัดค้าน และ Gemini ต้องตรวจสอบว่าแก้จุดบกพร่องเดิมหรือยัง"
+                )
+
+            with col_feed:
+                st.markdown("### 💡 Latest Lessons Learned (คลังบทเรียนล่าสุด)")
+                for _, row in memories_df.head(15).iterrows():
+                    is_loss = row["outcome"] == "LOSS"
+                    box_color = "#ef4444" if is_loss else "#22c55e"
+                    badge_bg = "rgba(239, 68, 68, 0.15)" if is_loss else "rgba(34, 197, 94, 0.15)"
+                    icon = "⚠️" if is_loss else "✅"
+
+                    pnl_val = float(row["profit"] or 0)
+                    pnl_str = f"+${pnl_val:.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):.2f}"
+
+                    st.markdown(
+                        f"""
+                        <div style="background: rgba(255,255,255,0.03); border-left: 4px solid {box_color}; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-weight: bold; font-size: 0.95rem; color: #f1f5f9;">
+                                    {icon} {row['symbol']} {row['direction']} — {row['strategy_id']}
+                                </span>
+                                <span style="background: {badge_bg}; color: {box_color}; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">
+                                    {row['outcome']} ({pnl_str})
+                                </span>
+                            </div>
+                            <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 6px;">
+                                <b>Root Cause:</b> <code>{row['root_cause']}</code> | <b>Time:</b> {str(row['created_at'])[:19]}
+                            </div>
+                            <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.4; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 4px;">
+                                💬 <b>บทเรียน:</b> {row['lesson_learned_th']}
+                            </div>
+                            {f'<div style="font-size: 0.82rem; color: #38bdf8; margin-top: 6px;">🔧 <b>คำแนะนำปรับปรุง:</b> {row["rule_recommendation"]}</div>' if row.get("rule_recommendation") else ""}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
     # ─── Strategy Performance Tab ─────────────────────────────────────────────
     with tab_strategy:

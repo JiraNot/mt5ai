@@ -120,6 +120,8 @@ Format การตอบ (JSON):
         m5_entry = ctx.get("m5_entry", "N/A")
         eql_info = ctx.get("eql_summary", "ไม่มีข้อมูล EQH/EQL")
         displacement = ctx.get("displacement_detected", False)
+        past_lessons = ctx.get("past_lessons", [])
+        lessons_text = "\n".join(f"- {l}" for l in past_lessons) if past_lessons else "- ยังไม่มีประวัติความผิดพลาดในระบบ (เปิดรับ Setup ปกติ)"
 
         return f"""วิเคราะห์ Setup นี้ใน {symbol}:
 
@@ -142,6 +144,10 @@ Format การตอบ (JSON):
 {eql_info}
 
 **Displacement:** {"ตรวจพบ" if displacement else "ไม่พบ"}
+
+**🧠 บทเรียนจากความทรงจำในอดีต (Continuous Learning Memory):**
+{lessons_text}
+*(พิจารณาว่า Setup นี้มีความเสี่ยงจะซ้ำรอยบทเรียนความผิดพลาดในอดีตหรือไม่)*
 
 ในฐานะ Bull Analyst กรุณาวิเคราะห์ว่า Setup นี้ควร APPROVE หรือ REJECT
 ตรวจหา Liquidity Trap และ Fair Value Gap ที่อาจทำให้ราคากลับตัวก่อนถึง TP"""

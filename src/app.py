@@ -121,6 +121,8 @@ class TradingPlatform:
         self._setup_logger: SetupLogger | None = None
 
         # Database
+        self._trade_learner: TradeLearner | None = None
+        self._last_evaluated_bar: dict[str, datetime] = {}
         self._db_session = None
         self._session_factory = None
 
@@ -148,6 +150,11 @@ class TradingPlatform:
             self._db_session, spread_monitor=self._spread_monitor
         )
         self._setup_logger = SetupLogger(self._db_session)
+        self._trade_learner = TradeLearner(
+            repository_factory=self._session_factory,
+            gemini_evaluator=self._ai_council.gemini,
+            gpt_evaluator=self._ai_council.gpt,
+        )
         logger.info(f"Database connected: {settings.database_url}")
 
         # Connect to MT5 (retry loop so the process stays alive)
@@ -222,6 +229,15 @@ class TradingPlatform:
 
         event_bus.subscribe(EventType.CIRCUIT_BREAKER, on_circuit_breaker)
         event_bus.subscribe(EventType.ORDER_FILLED, on_order_filled)
+
+        async def on_position_closed(data: dict) -> None:
+            pos = data.get("position")
+            if pos:
+                outcome = "WIN" if (pos.profit or 0) > 0 else "LOSS"
+                strategy_id = pos.comment or "smc_strategy"
+                self._meta_engine.adjust_strategy(strategy_id, outcome, reason=f"PnL: ${pos.profit:.2f}")
+
+        event_bus.subscribe(EventType.POSITION_CLOSED, on_position_closed)
 
     async def _main_loop(self, symbol: str) -> None:
         """Main evaluation loop: runs on each polling cycle."""
@@ -328,12 +344,30 @@ class TradingPlatform:
                 )
             return
 
-        # Step 2b: EQH/EQL Detection (ตรวจ Liquidity Pools)
+        # Step 2b: Candle Deduplication (ป้องกันเรียก AI ซ้ำในแท่งเดิม)
+        current_bar_ts = ctx.primary_candle.timestamp if ctx.primary_candle else None
+        bar_key = f"{candidate.symbol}_{candidate.strategy_id}"
+        if current_bar_ts and self._last_evaluated_bar.get(bar_key) == current_bar_ts:
+            logger.debug(f"Candidate {bar_key} already evaluated on bar {current_bar_ts} — skipping AI repeat")
+            return
+        if current_bar_ts:
+            self._last_evaluated_bar[bar_key] = current_bar_ts
+
+        # Step 2c: EQH/EQL Detection (ตรวจ Liquidity Pools)
         h1_candles = ctx.candles_by_tf.get("H1", [])
         eql_result = self._eql_detector.detect(h1_candles)
         logger.info(f"EQL: {eql_result.summary}")
 
-        # Step 2c: AI Council Debate (Gemini Bull vs GPT Bear)
+        # Step 2d: Retrieve Past Experience / Lessons Learned (Continuous Learning)
+        past_lessons = []
+        if self._trade_learner:
+            past_lessons = await self._trade_learner.get_lessons_for_prompt(
+                symbol=candidate.symbol,
+                strategy_id=candidate.strategy_id,
+                limit=3,
+            )
+
+        # Step 2e: AI Council Debate (Gemini Bull vs GPT Bear)
         setup_context = {
             "symbol": candidate.symbol,
             "direction": candidate.direction.value,
@@ -348,6 +382,7 @@ class TradingPlatform:
             "m5_entry": candidate.strategy_id,
             "eql_summary": eql_result.summary,
             "displacement_detected": bool(getattr(candidate, "displacement", False)),
+            "past_lessons": past_lessons,
         }
 
         council = await self._ai_council.evaluate(setup_context)
