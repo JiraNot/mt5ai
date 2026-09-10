@@ -1,30 +1,40 @@
 """GPT/Codex Trade Evaluator — Bear Analyst.
 
-ใช้ OpenAI Codex CLI OAuth ที่ login ไว้แล้วใน ~/.codex/
-ไม่ต้องใส่ API Key ในโค้ด — อ่าน session token จาก Codex CLI state
+ใช้ OpenAI Codex CLI Auth Login (ChatGPT OAuth ที่ล็อกอินไว้แล้ว)
+ไม่ต้องใช้ API Key / API Token ใดๆ!
+อ่านเซสชันโดยตรงจาก ~/.codex/auth.json ผ่าน Codex CLI
 
-Role: GPT = Bear Analyst — หาเหตุผลว่า "ทำไมไม่ควรเข้าไม้"
+Role: GPT = Bear Analyst — หาเหตุผลว่า "ทำไมไม่ควรเข้าไม้ / มีกับดักอะไรซ่อนอยู่"
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
+import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-try:
-    from openai import AsyncOpenAI
-    _OPENAI_AVAILABLE = True
-except ImportError:
-    _OPENAI_AVAILABLE = False
-    logger.warning("openai ยังไม่ได้ติดตั้ง: pip install openai")
+# รายการ path ที่อาจพบ codex executable
+CODEX_CANDIDATE_PATHS = [
+    "/mnt/c/Users/Dulla/.codex/plugins/.plugin-appserver/codex.exe",
+    r"C:\Users\Dulla\.codex\plugins\.plugin-appserver\codex.exe",
+    os.path.expanduser("~/.local/bin/codex"),
+    shutil.which("codex") or "",
+]
 
-# อ่าน API Key จาก env (Codex OAuth จะถูก inject เป็น OPENAI_API_KEY โดย codex CLI)
-# หรือ mount ผ่าน Docker secret
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")  # fallback จาก gpt-5.6-sol
+
+def find_codex_bin() -> str | None:
+    """ค้นหา Codex CLI executable สำหรับรัน auth login session."""
+    for p in CODEX_CANDIDATE_PATHS:
+        if p and os.path.exists(p):
+            return p
+    return None
 
 
 @dataclass
@@ -39,11 +49,7 @@ class GPTVerdict:
 
 
 class GPTEvaluator:
-    """GPT Bear Analyst — หากับดักและเหตุผล NOT to trade.
-
-    Auth: ใช้ OPENAI_API_KEY จาก env
-    (Codex CLI inject ให้อัตโนมัติเมื่อรันผ่าน codex subprocess)
-    """
+    """GPT Bear Analyst — ใช้ ChatGPT Auth Login ผ่าน Codex CLI (Zero Token)."""
 
     SYSTEM_PROMPT = """คุณคือ AI Trade Risk Analyst ผู้เชี่ยวชาญด้าน Smart Money Concepts (SMC)
 คุณรับบท "Bear Analyst" หน้าที่ของคุณคือ:
@@ -53,9 +59,7 @@ class GPTEvaluator:
 4. ให้ Verdict: APPROVE (ยอมรับ risk) หรือ REJECT (risk สูงเกินไป)
 
 คุณเป็น devil's advocate — สงสัยทุกอย่างก่อน
-ตอบเป็นภาษาไทยเท่านั้น ใช้ภาษากระชับ
-
-Format (JSON):
+ตอบเป็น JSON เท่านั้น (ห้ามมีคำอธิบายอื่นนอกเหนือจาก JSON):
 {
   "verdict": "APPROVE" หรือ "REJECT",
   "confidence": 0-100,
@@ -66,42 +70,67 @@ Format (JSON):
 }"""
 
     def __init__(self) -> None:
-        self._client: Any = None
-        self._init_client()
-
-    def _init_client(self) -> None:
-        if not _OPENAI_AVAILABLE:
-            return
-        if not OPENAI_API_KEY:
-            logger.warning("OPENAI_API_KEY ไม่ได้ตั้งค่า — GPT Evaluator ไม่พร้อม")
-            return
-        try:
-            self._client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-            logger.info("GPT Evaluator: เชื่อมต่อ OpenAI สำเร็จ (model: %s)", OPENAI_MODEL)
-        except Exception as exc:
-            logger.error("GPT init failed: %s", exc)
+        self._codex_bin = find_codex_bin()
+        if self._codex_bin:
+            logger.info("GPT Evaluator: ใช้ Codex CLI Auth Login (Path: %s)", self._codex_bin)
+        else:
+            logger.warning("Codex CLI executable ไม่พบใน path ที่ระบุ")
 
     async def evaluate(self, setup_context: dict) -> GPTVerdict:
-        """ส่ง Setup context ให้ GPT วิเคราะห์."""
-        if not _OPENAI_AVAILABLE or self._client is None:
-            return self._fallback_verdict("GPT ไม่พร้อมใช้งาน")
-
+        """ส่ง Setup context ให้ GPT/Codex วิเคราะห์ผ่าน Auth Login."""
         prompt = self._build_prompt(setup_context)
-        try:
-            response = await self._client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=800,
-                temperature=0.3,
-            )
-            raw = response.choices[0].message.content or ""
-            return self._parse_response(raw)
-        except Exception as exc:
-            logger.error("GPT evaluate error: %s", exc)
-            return self._fallback_verdict(f"Error: {exc}")
+
+        # 1. รันผ่าน Codex CLI (Auth Login / OAuth - ไม่ต้องใช้ API Token)
+        if self._codex_bin:
+            try:
+                full_prompt = f"{self.SYSTEM_PROMPT}\n\n{prompt}"
+                cmd = [
+                    self._codex_bin,
+                    "exec",
+                    "--skip-git-repo-check",
+                    "--ephemeral",
+                    full_prompt,
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+                    out_text = stdout.decode("utf-8", errors="replace")
+                    if proc.returncode == 0 and out_text.strip():
+                        return self._parse_response(out_text)
+                    logger.warning("Codex exec returned code %d: %s", proc.returncode, stderr.decode()[:200])
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    logger.error("Codex exec timeout after 60s")
+            except Exception as exc:
+                logger.error("Codex CLI evaluation error: %s", exc)
+
+        # 2. Fallback เฉพาะกรณีมี OPENAI_API_KEY ใน env
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if api_key:
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=api_key)
+                model = os.getenv("OPENAI_MODEL", "gpt-4o")
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=800,
+                    temperature=0.3,
+                )
+                raw = response.choices[0].message.content or ""
+                return self._parse_response(raw)
+            except Exception as exc:
+                logger.error("OpenAI API fallback error: %s", exc)
+
+        return self._fallback_verdict("Codex CLI Auth Login และ API Key ไม่พร้อมใช้งาน")
 
     def _build_prompt(self, ctx: dict) -> str:
         symbol = ctx.get("symbol", "XAUUSD")
@@ -116,26 +145,28 @@ Format (JSON):
         eql_info = ctx.get("eql_summary", "ไม่มีข้อมูล")
         rr = ctx.get("rr_ratio", 0)
 
-        return f"""ตรวจสอบ Setup นี้ใน {symbol} จากมุม Bear (ความเสี่ยง):
+        return f"""ตรวจสอบความเสี่ยง Setup นี้ใน {symbol} จากมุมมอง Bear Analyst:
 
-**Setup:**
-- ทิศทาง: {direction} | Entry: {entry:.2f} | SL: {sl:.2f} | TP: {tp:.2f}
-- R:R Ratio: {rr:.1f} | Rule Score: {rule_score}/100
+**Setup Details:**
+- คู่เงิน/สินทรัพย์: {symbol}
+- ทิศทาง: {direction}
+- Entry Price: {entry:.2f}
+- Stop Loss: {sl:.2f}
+- Take Profit: {tp:.2f}
+- Risk:Reward Ratio: {rr:.1f}
+- Rule Score: {rule_score}/100
 
-**Timeframe:**
-- H4: {h4_bias}
-- H1: {h1_structure}
-- M5: {m5_entry}
+**โครงสร้างตลาด (Multi-Timeframe):**
+- H4 Bias: {h4_bias}
+- H1 Structure: {h1_structure}
+- M5 Trigger: {m5_entry}
 
-**Liquidity Warning:**
+**ระดับสภาพคล่อง (Liquidity Warning):**
 {eql_info}
 
-คุณคือ Bear Analyst — หาทุกเหตุผลที่ทำให้ไม้นี้อาจ FAIL
-ระบุกับดักที่ซ่อนอยู่ ถ้าไม่พบจริงๆ ค่อย APPROVE"""
+วิเคราะห์และตอบเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น:"""
 
     def _parse_response(self, raw: str) -> GPTVerdict:
-        import json
-        import re
         try:
             match = re.search(r"\{.*?\}", raw, re.DOTALL)
             if match:
