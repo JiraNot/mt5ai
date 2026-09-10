@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mt5-node:
+    build:
+      context: .
+      dockerfile: docker/mt5/Dockerfile
+    container_name: mt5-node
+    restart: unless-stopped
+    expose:
+      - 3000
+      - 8900
+    environment:
+      - CUSTOM_USER=admin
+      - PASSWORD=freebuff2026
+    volumes:
+      - mt5_config:/config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
+      - "traefik.http.routers.mt5.rule=Host(`mt5.onetapweb.com`)"
+      - "traefik.http.routers.mt5.entrypoints=http,https"
+      - "traefik.http.routers.mt5.tls=true"
+      - "traefik.http.routers.mt5.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mt5.loadbalancer.server.port=3000"
+
+  mt5ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mt5ai
+    restart: unless-stopped
+    depends_on:
+      - mt5-node
+    expose:
+      - 8501
+    environment:
+      - MT5_MODE=bridge
+      - BRIDGE_URL=http://mt5-node:8900
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
+    volumes:
+      - mt5ai_data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
+      - "traefik.http.routers.bot.rule=Host(`trade.onetapweb.com`)"
+      - "traefik.http.routers.bot.entrypoints=http,https"
+      - "traefik.http.routers.bot.tls=true"
+      - "traefik.http.routers.bot.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bot.loadbalancer.server.port=8501"
+
+volumes:
+  mt5_config:
+  mt5ai_data:
