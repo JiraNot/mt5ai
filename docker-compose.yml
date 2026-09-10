@@ -7,9 +7,9 @@ services:
       dockerfile: docker/mt5/Dockerfile
     container_name: mt5-node
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-      - "8900:8900"
+    expose:
+      - 3000
+      - 8900
     environment:
       - CUSTOM_USER=admin
       - PASSWORD=freebuff2026
@@ -32,12 +32,12 @@ services:
     restart: unless-stopped
     depends_on:
       - mt5-node
+    expose:
+      - 8501
     environment:
       - MT5_MODE=bridge
       - BRIDGE_URL=http://mt5-node:8900
       - DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
-    ports:
-      - "8501:8501"
     volumes:
       - mt5ai_data:/app/data
     labels:
