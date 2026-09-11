@@ -40,10 +40,10 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
       - DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
       - CODEX_AUTH_JSON=${CODEX_AUTH_JSON:-}
-      - GOOGLE_ADC_JSON=${GOOGLE_ADC_JSON:-}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-freebuff2026}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - AI_CLI_BIN=${AI_CLI_BIN:-agy}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}

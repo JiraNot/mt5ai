@@ -100,3 +100,12 @@ AI ไม่ทำหน้าที่:
 | 1004 | ⚠️ Partial | |
 | 1005 | ❌ Not done | |
 | 1006 | ❌ Not done | |
+
+## Audit remediation — 2026-09-10
+
+- [x] Strict GPT/Gemini response schema; malformed input rejects
+- [x] Main app Council wiring and actual MTF context
+- [x] Closed broker outcomes and versioned, facts-only memories
+- [x] Legacy memories excluded; no automatic per-trade score adjustment
+- [x] Regression tests for invalid approvals, Risk veto, restart and breakeven
+- [ ] Shadow comparison and counterfactual rejected-candidate outcomes

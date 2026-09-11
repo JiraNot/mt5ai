@@ -1,31 +1,34 @@
-"""Gemini AI Trade Evaluator — Bull Analyst.
+"""Gemini CLI trade evaluator — Bull Analyst.
 
-ใช้ Google Application Default Credentials (ADC)
-รัน: gcloud auth application-default login  ครั้งเดียวบน server
-Python จะหา credentials อัตโนมัติ ไม่ต้องใส่ API Key ในโค้ด
-
-Role: Gemini = Bull Analyst — หาเหตุผลว่า "ทำไมควรเข้าไม้"
+Authentication is owned by the locally installed Gemini CLI.  This module never
+uses Vertex AI, gcloud, Application Default Credentials, or a Gemini API key.
 """
 from __future__ import annotations
 
+import json
 import logging
+import asyncio
 import os
+import shutil
 from dataclasses import dataclass
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ใช้ google-genai SDK (ไม่ใช่ google-generativeai เดิม)
-try:
-    from google import genai
-    _GENAI_AVAILABLE = True
-except ImportError:
-    _GENAI_AVAILABLE = False
-    logger.warning("google-genai ยังไม่ได้ติดตั้ง: pip install google-genai")
+AI_CLI_BIN = os.getenv("AI_CLI_BIN", "agy")
 
-
-GEMINI_MODEL = "gemini-3.6-flash"
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Optional fallback
+_VERDICT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["APPROVE", "REJECT"]},
+        "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+        "narrative": {"type": "string", "minLength": 1},
+        "confluences": {"type": "array", "items": {"type": "string"}},
+        "risks": {"type": "array", "items": {"type": "string"}},
+        "trap_warning": {"type": "string"},
+    },
+    "required": ["verdict", "confidence", "narrative", "confluences", "risks", "trap_warning"],
+    "additionalProperties": False,
+}
 
 
 @dataclass
@@ -42,8 +45,7 @@ class GeminiVerdict:
 class GeminiEvaluator:
     """Gemini Bull Analyst — วิเคราะห์ Setup จากมุมมอง SMC ภาษาไทย.
 
-    Auth: ใช้ ADC (Application Default Credentials)
-    ถ้าตั้ง GEMINI_API_KEY ใน env จะใช้ API Key แทน
+    Auth is provided by an existing Antigravity CLI Google login.
     """
 
     SYSTEM_PROMPT = """คุณคือ AI Trade Analyst ผู้เชี่ยวชาญด้าน Smart Money Concepts (SMC)
@@ -53,6 +55,9 @@ class GeminiEvaluator:
 3. ระบุ Confluence ที่เห็น
 4. ระบุกับดัก (Trap) ที่อาจซ่อนอยู่
 5. ให้ Verdict: APPROVE หรือ REJECT พร้อมคะแนน 0-100
+
+ห้ามใช้ tool, command, file, workspace inspection, internet search หรือ external action
+ให้วิเคราะห์จากข้อมูลใน prompt นี้เท่านั้น
 
 ตอบเป็นภาษาไทยเท่านั้น ใช้ภาษากระชับ ตรงประเด็น
 Format การตอบ (JSON):
@@ -66,46 +71,71 @@ Format การตอบ (JSON):
 }"""
 
     def __init__(self) -> None:
-        self._client: Any = None
-        self._init_client()
+        self._cli_bin = self._find_cli()
 
-    def _init_client(self) -> None:
-        if not _GENAI_AVAILABLE:
-            return
-        try:
-            if GEMINI_API_KEY:
-                # ใช้ API Key (fallback)
-                self._client = genai.Client(api_key=GEMINI_API_KEY)
-                logger.info("Gemini: ใช้ API Key auth")
-            else:
-                # ใช้ ADC (Application Default Credentials)
-                self._client = genai.Client()
-                logger.info("Gemini: ใช้ ADC auth (gcloud)")
-        except Exception as exc:
-            logger.error("Gemini init failed: %s", exc)
+    @staticmethod
+    def _find_cli() -> str | None:
+        configured = AI_CLI_BIN.strip()
+        if os.path.isabs(configured) and os.access(configured, os.X_OK):
+            return configured
+        return shutil.which(configured)
 
     async def evaluate(self, setup_context: dict) -> GeminiVerdict:
         """ส่ง Setup context ให้ Gemini วิเคราะห์."""
-        if not _GENAI_AVAILABLE or self._client is None:
-            return self._fallback_verdict("Gemini ไม่พร้อมใช้งาน")
+        if self._cli_bin is None:
+            return self._fallback_verdict("Antigravity CLI ไม่พร้อมใช้งาน")
 
         prompt = self._build_prompt(setup_context)
         try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self._client.interactions.create(
-                    model=GEMINI_MODEL,
-                    system_instruction=self.SYSTEM_PROMPT,
-                    input=prompt,
-                    store=False,  # ไม่เก็บ interaction (privacy)
-                ),
+            process = await asyncio.create_subprocess_exec(
+                self._cli_bin,
+                "--print",
+                f"{self.SYSTEM_PROMPT}\n\n{prompt}",
+                "--output-format",
+                "json",
+                "--json-schema",
+                json.dumps(_VERDICT_SCHEMA),
+                "--mode",
+                "plan",
+                "--sandbox",
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            return self._parse_response(response.output_text or "")
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            if process.returncode != 0:
+                logger.error("Antigravity CLI failed: %s", stderr.decode("utf-8", errors="replace")[:300])
+                return self._fallback_verdict("Antigravity CLI command failed")
+            return self._parse_response(self._extract_structured_output(stdout))
+        except asyncio.TimeoutError:
+            if "process" in locals():
+                process.kill()
+                await process.communicate()
+            return self._fallback_verdict("Antigravity CLI timeout")
         except Exception as exc:
             logger.error("Gemini evaluate error: %s", exc)
             return self._fallback_verdict(f"Error: {exc}")
+
+    @staticmethod
+    def _extract_structured_output(stdout: bytes) -> str:
+        """Accept the schema result across supported Antigravity CLI envelopes."""
+        envelope = json.loads(stdout.decode("utf-8", errors="replace"))
+        structured = envelope.get("structured_output")
+        if isinstance(structured, dict):
+            return json.dumps(structured)
+
+        # Some CLI builds only include the final schema result as the first JSON
+        # line in `response`; the strict payload parser still validates it below.
+        response = envelope.get("response")
+        if isinstance(response, str):
+            for line in response.splitlines():
+                try:
+                    candidate = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(candidate, dict):
+                    return json.dumps(candidate)
+        raise ValueError("Antigravity CLI response has no structured output")
 
     def _build_prompt(self, ctx: dict) -> str:
         symbol = ctx.get("symbol", "XAUUSD")
@@ -135,7 +165,11 @@ Format การตอบ (JSON):
 **Multi-Timeframe Analysis:**
 - H4 Bias: {h4_bias}
 - H1 Structure: {h1_structure}
+- M15 Structure: {ctx.get("m15_structure", "UNKNOWN")}
 - M5 Entry: {m5_entry}
+
+**Structured evidence (closed candles only):**
+{json.dumps(ctx.get("evidence", {}), ensure_ascii=False)}
 
 **Confluences ที่ตรวจพบ:**
 {chr(10).join(f"- {c}" for c in confluences) if confluences else "- ไม่มี"}
@@ -153,36 +187,18 @@ Format การตอบ (JSON):
 ตรวจหา Liquidity Trap และ Fair Value Gap ที่อาจทำให้ราคากลับตัวก่อนถึง TP"""
 
     def _parse_response(self, raw: str) -> GeminiVerdict:
-        import json
-        import re
+        from src.ai.response_schema import GeminiPayload, parse_payload
         try:
-            # หา JSON block ในข้อความ
-            match = re.search(r"\{.*?\}", raw, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-                return GeminiVerdict(
-                    verdict=data.get("verdict", "REJECT").upper(),
-                    confidence=int(data.get("confidence", 50)),
-                    narrative_th=data.get("narrative", raw[:200]),
-                    key_confluences=data.get("confluences", []),
-                    key_risks=data.get("risks", []),
-                    trap_warning=data.get("trap_warning", ""),
-                    raw_response=raw,
-                )
-        except (json.JSONDecodeError, AttributeError):
-            pass
-
-        # Fallback: parse text
-        verdict = "APPROVE" if "APPROVE" in raw.upper() else "REJECT"
-        return GeminiVerdict(
-            verdict=verdict,
-            confidence=60 if verdict == "APPROVE" else 40,
-            narrative_th=raw[:300] if raw else "ไม่สามารถวิเคราะห์ได้",
-            key_confluences=[],
-            key_risks=[],
-            trap_warning="",
-            raw_response=raw,
-        )
+            data = parse_payload(raw, GeminiPayload)
+            return GeminiVerdict(
+                verdict=data.verdict, confidence=data.confidence,
+                narrative_th=data.narrative, key_confluences=data.confluences, key_risks=data.risks, trap_warning=data.trap_warning,
+                raw_response=raw,
+            )
+        except (ValueError, TypeError):
+            result = self._fallback_verdict("Invalid AI response schema")
+            result.raw_response = raw
+            return result
 
     def _fallback_verdict(self, reason: str) -> GeminiVerdict:
         return GeminiVerdict(

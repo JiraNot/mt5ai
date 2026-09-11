@@ -149,7 +149,11 @@ class MLTrainer:
         self.best_model_name: Optional[str] = None
         self.best_model = None
         self.training_results: List[TrainingResult] = []
-        self.version: str = "1.0.0"
+        self.version: str = "2.0.0"
+        self.deployment_approved = False
+        self.holdout_metrics = {}
+        self.sample_times = []
+        self.label_end_times = []
 
     def _extract_features(self, candidate: Dict) -> Optional[List[float]]:
         """
@@ -164,15 +168,17 @@ class MLTrainer:
         - spread: int
         """
         try:
-            ctx = candidate.get("market_context", {})
-            structure = ctx.get("structure", {})
-            regime = ctx.get("regime", {})
-            liquidity = ctx.get("liquidity", {})
-            fvg = ctx.get("fvg", {})
-            ob = ctx.get("order_block", {})
-            zone = ctx.get("zone", {})
+            ctx = candidate.get("market_context")
+            if not isinstance(ctx, dict) or not ctx:
+                return None
+            structure = ctx.get("structure") or {}
+            regime = ctx.get("regime") or {}
+            liquidity = ctx.get("liquidity") or {}
+            fvg = ctx.get("fvg") or {}
+            ob = ctx.get("order_block") or {}
+            zone = ctx.get("zone") or {}
 
-            ts = candidate.get("timestamp", datetime.now())
+            ts = candidate["timestamp"]
             if isinstance(ts, str):
                 ts = datetime.fromisoformat(ts)
             if isinstance(ts, datetime):
@@ -182,13 +188,13 @@ class MLTrainer:
                 hour = 12
                 dow = 0
 
-            session = candidate.get("session", "UNKNOWN")
+            session = candidate.get("session", "UNKNOWN").upper()
 
             features = [
                 # Hour and day
                 hour / 24.0,
                 dow / 6.0,
-                1.0 if session == "ASIA" else 0.0,
+                1.0 if session in ("ASIA", "ASIAN") else 0.0,
                 1.0 if session == "LONDON" else 0.0,
                 1.0 if session == "NEW_YORK" else 0.0,
                 
@@ -238,95 +244,50 @@ class MLTrainer:
             logger.warning(f"Failed to extract features: {e}")
             return None
 
-    def load_dataset(self, db_path: str = "trading.db") -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Load dataset from trade candidates database.
-        
-        Returns:
-            (X, y) where X is feature matrix and y is labels (1=win, 0=loss)
+    def load_dataset(self, db_path: str = "freebuff.db") -> Tuple[np.ndarray, np.ndarray]:
+        """Load only reconciled outcomes joined to immutable entry snapshots.
+
+        Old unverified trades are deliberately excluded. Empty and malformed
+        datasets never become synthetic zero-feature training observations.
         """
         import sqlite3
-
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        # Try to get candidates with outcomes
-        try:
-            cursor.execute("""
-                SELECT 
-                    strategy, symbol, direction, setup_time, rule_score, rr,
-                    market_context_json, evidence_json, status,
-                    profit, r_multiple
-                FROM trade_candidates
-                WHERE status IN ('APPROVED', 'REJECTED')
-                AND profit IS NOT NULL
-                ORDER BY created_at
-            """)
-            rows = cursor.fetchall()
-        except Exception:
-            # Fallback: try trades table
+        from datetime import timezone
+        self.sample_times = []
+        self.label_end_times = []
+        with sqlite3.connect(db_path) as conn:
             try:
-                cursor.execute("""
-                    SELECT 
-                        strategy, symbol, direction, opened_at, 50, 2.0,
-                        NULL, NULL, 'APPROVED',
-                        profit, r_multiple
-                    FROM trades
-                    WHERE profit IS NOT NULL
-                    ORDER BY opened_at
-                """)
-                rows = cursor.fetchall()
-            except Exception:
-                logger.warning("No trade data found in database")
-                conn.close()
-                return np.array([]), np.array([])
-
-        conn.close()
-
-        if not rows:
-            logger.warning("No training data found")
-            return np.array([]), np.array([])
-
-        X_list = []
-        y_list = []
-
-        for row in rows:
-            strategy, symbol, direction, setup_time, rule_score, rr, ctx_json, evidence_json, status, profit, r_multiple = row
-
-            # Build candidate dict
-            candidate = {
-                "strategy": strategy,
-                "symbol": symbol,
-                "direction": direction,
-                "timestamp": setup_time,
-                "rule_score": rule_score or 50,
-                "rr": rr or 2.0,
-                "spread": 20,
-                "market_context": {},
-                "session": "UNKNOWN",
-            }
-
-            if ctx_json:
-                try:
-                    candidate["market_context"] = json.loads(ctx_json)
-                except Exception:
-                    pass
-
-            features = self._extract_features(candidate)
-            if features is None:
-                continue
-
-            # Label: win = 1, loss = 0
-            label = 1 if (profit and profit > 0) or (r_multiple and r_multiple > 0) else 0
-
-            X_list.append(features)
-            y_list.append(label)
-
-        X = np.array(X_list)
-        y = np.array(y_list)
-
-        logger.info(f"Loaded {len(X)} samples: {sum(y)} wins, {len(y) - sum(y)} losses")
-        return X, y
+                rows = conn.execute("""
+                    SELECT snapshot_json, outcome_json FROM learning_evidence
+                    WHERE outcome_json IS NOT NULL
+                """).fetchall()
+            except sqlite3.OperationalError:
+                logger.warning("No verified learning evidence table")
+                return np.empty((0, len(FEATURE_COLUMNS))), np.array([])
+        samples = []
+        for snapshot_json, outcome_json in rows:
+            try:
+                candidate = json.loads(snapshot_json)
+                outcome = json.loads(outcome_json)
+                if candidate.get("schema_version") != "1.0.0":
+                    continue
+                start = datetime.fromisoformat(candidate["timestamp"])
+                end = datetime.fromisoformat(outcome["close_time"])
+                start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
+                end = end.replace(tzinfo=timezone.utc) if end.tzinfo is None else end
+                net = float(outcome["net_profit"])
+                if end < start or not np.isfinite(net) or net == 0:
+                    continue  # Breakeven is neither a win nor a loss.
+                features = self._extract_features(candidate)
+                if features is None or not np.isfinite(features).all():
+                    continue
+                samples.append((start, end, features, int(net > 0)))
+            except (KeyError, ValueError, TypeError):
+                logger.warning("Skipping invalid learning evidence")
+        samples.sort(key=lambda row: row[0])
+        self.sample_times = [row[0] for row in samples]
+        self.label_end_times = [row[1] for row in samples]
+        return (np.array([row[2] for row in samples]).reshape(-1, len(FEATURE_COLUMNS)),
+                np.array([row[3] for row in samples]))
 
     def load_from_csv(self, csv_path: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load dataset from CSV file."""
@@ -335,9 +296,14 @@ class MLTrainer:
         X_list = []
         y_list = []
 
+        self.sample_times = []
+        self.label_end_times = []
         with open(csv_path, "r") as f:
             reader = csv.DictReader(f)
-            for row in reader:
+            rows = sorted(reader, key=lambda row: row.get("timestamp", ""))
+            for row in rows:
+                if row.get("outcome", "").upper() not in ("WIN", "LOSS"):
+                    continue
                 candidate = {
                     "strategy": row.get("strategy", ""),
                     "symbol": row.get("symbol", "XAUUSD"),
@@ -354,154 +320,98 @@ class MLTrainer:
                 if features is None:
                     continue
 
-                label = 1 if row.get("outcome") == "win" else 0
+                label = 1 if row.get("outcome", "").upper() == "WIN" else 0
                 X_list.append(features)
                 y_list.append(label)
 
         return np.array(X_list), np.array(y_list)
 
     def train(self, X: np.ndarray, y: np.ndarray) -> List[TrainingResult]:
+        """Walk-forward selection on development data, then untouched final holdout.
+
+        All preprocessing is fitted inside each training fold. Label intervals
+        crossing a boundary are purged when verified dataset timestamps exist.
+        Research artifacts are never automatically enabled for trading.
         """
-        Train multiple models and compare performance.
-        
-        Uses time-series split to avoid data leakage.
-        """
-        if not SKLEARN_AVAILABLE:
-            logger.error("scikit-learn not installed")
+        self.models = {}
+        self.best_model = None
+        self.best_model_name = None
+        self.scaler = None
+        self.training_results = []
+        self.holdout_metrics = {}
+        self.deployment_approved = False
+        if not SKLEARN_AVAILABLE or len(X) < 50:
             return []
-
-        if len(X) < 50:
-            logger.warning(f"Insufficient data: {len(X)} samples (need 50+)")
-            return []
-
-        logger.info(f"Training on {len(X)} samples with {X.shape[1]} features")
-
-        # Scale features
-        self.scaler = StandardScaler()
-        X_scaled = self.scaler.fit_transform(X)
-
-        # Time-series split (80/20)
-        split_idx = int(len(X_scaled) * 0.8)
-        X_train, X_test = X_scaled[:split_idx], X_scaled[split_idx:]
-        y_train, y_test = y[:split_idx], y[split_idx:]
-
-        results = []
-
-        # 1. Logistic Regression
-        try:
-            lr = LogisticRegression(max_iter=1000, random_state=42)
-            lr.fit(X_train, y_train)
-            y_pred = lr.predict(X_test)
-            y_proba = lr.predict_proba(X_test)[:, 1]
-
-            result = TrainingResult(
-                model_name="LogisticRegression",
-                accuracy=accuracy_score(y_test, y_pred),
-                precision=precision_score(y_test, y_pred, zero_division=0),
-                recall=recall_score(y_test, y_pred, zero_division=0),
-                f1=f1_score(y_test, y_pred, zero_division=0),
-                auc_roc=roc_auc_score(y_test, y_proba) if len(set(y_test)) > 1 else 0.5,
-                feature_importance=dict(zip(FEATURE_COLUMNS, lr.coef_[0])),
-                train_size=len(X_train),
-                test_size=len(X_test),
-                trained_at=datetime.now().isoformat(),
-            )
-            self.models["LogisticRegression"] = lr
-            results.append(result)
-            logger.info(f"LogisticRegression: Acc={result.accuracy:.3f} AUC={result.auc_roc:.3f}")
-        except Exception as e:
-            logger.error(f"LogisticRegression failed: {e}")
-
-        # 2. Random Forest
-        try:
-            rf = RandomForestClassifier(
-                n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
-            )
-            rf.fit(X_train, y_train)
-            y_pred = rf.predict(X_test)
-            y_proba = rf.predict_proba(X_test)[:, 1]
-
-            importance = dict(zip(FEATURE_COLUMNS, rf.feature_importances_))
-            result = TrainingResult(
-                model_name="RandomForest",
-                accuracy=accuracy_score(y_test, y_pred),
-                precision=precision_score(y_test, y_pred, zero_division=0),
-                recall=recall_score(y_test, y_pred, zero_division=0),
-                f1=f1_score(y_test, y_pred, zero_division=0),
-                auc_roc=roc_auc_score(y_test, y_proba) if len(set(y_test)) > 1 else 0.5,
-                feature_importance=importance,
-                train_size=len(X_train),
-                test_size=len(X_test),
-                trained_at=datetime.now().isoformat(),
-            )
-            self.models["RandomForest"] = rf
-            results.append(result)
-            logger.info(f"RandomForest: Acc={result.accuracy:.3f} AUC={result.auc_roc:.3f}")
-        except Exception as e:
-            logger.error(f"RandomForest failed: {e}")
-
-        # 3. LightGBM
+        from sklearn.base import clone
+        if X.ndim != 2 or X.shape[1] != len(FEATURE_COLUMNS) or len(y) != len(X):
+            raise ValueError("Invalid feature/label shape")
+        if not np.isfinite(X).all() or not set(np.unique(y)).issubset({0, 1}):
+            raise ValueError("Invalid training data")
+        has_times = len(getattr(self, "sample_times", [])) == len(X)
+        if has_times and self.sample_times != sorted(self.sample_times):
+            raise ValueError("Training samples must be chronological")
+        split = int(len(X) * 0.8)
+        def purge(indices, boundary):
+            if not has_times:
+                return indices
+            return np.array([i for i in indices
+                             if self.label_end_times[i] < self.sample_times[boundary]], dtype=int)
+        factories = {
+            "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42),
+            "RandomForest": RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, n_jobs=1),
+        }
         if LIGHTGBM_AVAILABLE:
-            try:
-                train_data = lgb.Dataset(X_train, label=y_train)
-                valid_data = lgb.Dataset(X_test, label=y_test, reference=train_data)
-
-                params = {
-                    "objective": "binary",
-                    "metric": "auc",
-                    "boosting_type": "gbdt",
-                    "num_leaves": 31,
-                    "learning_rate": 0.05,
-                    "feature_fraction": 0.9,
-                    "bagging_fraction": 0.8,
-                    "bagging_freq": 5,
-                    "verbose": -1,
-                    "random_state": 42,
-                }
-
-                gbm = lgb.train(
-                    params,
-                    train_data,
-                    num_boost_round=100,
-                    valid_sets=[valid_data],
-                    callbacks=[lgb.log_evaluation(0)],
-                )
-
-                y_proba = gbm.predict(X_test)
-                y_pred = (y_proba > 0.5).astype(int)
-
-                importance = dict(zip(FEATURE_COLUMNS, gbm.feature_importance(importance_type="gain")))
-                result = TrainingResult(
-                    model_name="LightGBM",
-                    accuracy=accuracy_score(y_test, y_pred),
-                    precision=precision_score(y_test, y_pred, zero_division=0),
-                    recall=recall_score(y_test, y_pred, zero_division=0),
-                    f1=f1_score(y_test, y_pred, zero_division=0),
-                    auc_roc=roc_auc_score(y_test, y_proba) if len(set(y_test)) > 1 else 0.5,
-                    feature_importance=importance,
-                    train_size=len(X_train),
-                    test_size=len(X_test),
-                    trained_at=datetime.now().isoformat(),
-                )
-                self.models["LightGBM"] = gbm
-                results.append(result)
-                logger.info(f"LightGBM: Acc={result.accuracy:.3f} AUC={result.auc_roc:.3f}")
-            except Exception as e:
-                logger.error(f"LightGBM failed: {e}")
-
-        # Select best model by AUC-ROC
-        if results:
-            best = max(results, key=lambda r: r.auc_roc)
-            self.best_model_name = best.model_name
-            self.best_model = self.models[best.model_name]
-            self.training_results = results
-            logger.info(f"Best model: {best.model_name} (AUC={best.auc_roc:.3f})")
-
+            factories["LightGBM"] = lgb.LGBMClassifier(n_estimators=100, random_state=42, verbosity=-1)
+        results = []
+        folds = list(TimeSeriesSplit(n_splits=3).split(X[:split]))
+        rule_column = FEATURE_COLUMNS.index("rule_score")
+        for name, prototype in factories.items():
+            scores, baselines = [], []
+            for train_idx, val_idx in folds:
+                train_idx = purge(train_idx, val_idx[0])
+                if len(train_idx) == 0 or len(np.unique(y[train_idx])) < 2 or len(np.unique(y[val_idx])) < 2:
+                    continue
+                scaler = StandardScaler().fit(X[train_idx])
+                model = clone(prototype).fit(scaler.transform(X[train_idx]), y[train_idx])
+                proba = model.predict_proba(scaler.transform(X[val_idx]))[:, 1]
+                pred = proba >= 0.5
+                scores.append((accuracy_score(y[val_idx], pred), precision_score(y[val_idx], pred, zero_division=0),
+                               recall_score(y[val_idx], pred, zero_division=0), f1_score(y[val_idx], pred, zero_division=0),
+                               roc_auc_score(y[val_idx], proba), len(train_idx), len(val_idx)))
+                baselines.append(roc_auc_score(y[val_idx], X[val_idx, rule_column]))
+            if len(scores) != len(folds):
+                continue  # Insufficient class coverage for a credible comparison.
+            mean = np.mean(scores, axis=0)
+            results.append(TrainingResult(
+                model_name=name, accuracy=float(mean[0]), precision=float(mean[1]),
+                recall=float(mean[2]), f1=float(mean[3]), auc_roc=float(mean[4]),
+                feature_importance={}, train_size=int(mean[5]), test_size=int(mean[6]),
+                trained_at=datetime.now().isoformat(),
+            ))
+            self.walk_forward_baseline_auc = float(np.mean(baselines))
+        if not results:
+            return []
+        best = max(results, key=lambda result: result.auc_roc)
+        train_idx = purge(np.arange(split), split)
+        if not len(train_idx) or len(np.unique(y[train_idx])) < 2:
+            return []
+        self.scaler = StandardScaler().fit(X[train_idx])
+        self.best_model = clone(factories[best.model_name]).fit(self.scaler.transform(X[train_idx]), y[train_idx])
+        self.best_model_name = best.model_name
+        self.models[best.model_name] = self.best_model
+        self.training_results = results
+        proba = self.best_model.predict_proba(self.scaler.transform(X[split:]))[:, 1]
+        if len(np.unique(y[split:])) == 2:
+            self.holdout_metrics = {
+                "auc": float(roc_auc_score(y[split:], proba)),
+                "rule_baseline_auc": float(roc_auc_score(y[split:], X[split:, rule_column])),
+                "size": len(y[split:]), "label_intervals_verified": has_times,
+            }
         return results
 
     def predict(self, candidate: Dict) -> Optional[MLPrediction]:
         """Predict win probability for a trade candidate."""
-        if self.best_model is None or self.scaler is None:
+        if not self.deployment_approved or self.best_model is None or self.scaler is None:
             return None
 
         features = self._extract_features(candidate)
@@ -512,10 +422,7 @@ class MLTrainer:
         X_scaled = self.scaler.transform(X)
 
         try:
-            if self.best_model_name == "LightGBM":
-                proba = self.best_model.predict(X_scaled)[0]
-            else:
-                proba = self.best_model.predict_proba(X_scaled)[0][1]
+            proba = self.best_model.predict_proba(X_scaled)[0][1]
 
             # Calculate confidence based on distance from 0.5
             confidence = abs(proba - 0.5) * 2  # 0 at 0.5, 1 at 0 or 1
@@ -550,6 +457,8 @@ class MLTrainer:
             "scaler": self.scaler,
             "model_name": self.best_model_name,
             "version": self.version,
+            "deployment_approved": False,
+            "holdout_metrics": self.holdout_metrics,
             "trained_at": datetime.now().isoformat(),
             "feature_columns": FEATURE_COLUMNS,
             "training_results": [
@@ -578,6 +487,9 @@ class MLTrainer:
 
         try:
             model_data = joblib.load(filepath)
+            if model_data.get("version") != self.version or model_data.get("feature_columns") != FEATURE_COLUMNS:
+                return False
+            self.deployment_approved = False
             self.best_model = model_data["model"]
             self.scaler = model_data["scaler"]
             self.best_model_name = model_data["model_name"]
@@ -595,12 +507,12 @@ class MLTrainer:
 
         lines = [
             "=" * 60,
-            "ML Training Report",
+            "ML Training Report (research only; deployment disabled)",
             "=" * 60,
             f"Best Model: {self.best_model_name}",
             f"Version: {self.version}",
             "",
-            "Model Comparison:",
+            "Model Comparison (walk-forward validation):",
             "-" * 60,
         ]
 
@@ -632,5 +544,6 @@ class MLTrainer:
                 for name, score in sorted_features:
                     lines.append(f"  {name:25s} {score:.4f}")
 
+        lines.append(f"Final untouched holdout: {self.holdout_metrics}")
         lines.append("=" * 60)
         return "\n".join(lines)

@@ -35,6 +35,16 @@ class SpreadMonitor:
             return self._symbol_config.max_spread
         return settings.risk.max_spread_pips * 2
 
+    def get_spread_pips(self, bid: float, ask: float) -> float:
+        """Convert price spread with the configured symbol pip size."""
+        if not self._symbol_config or self._symbol_config.pip_value <= 0:
+            raise ValueError(f"Missing pip size for {self.symbol}")
+        if bid <= 0 or ask < bid:
+            raise ValueError("Invalid bid/ask")
+        spread = (ask - bid) / self._symbol_config.pip_value
+        self.update(spread)
+        return spread
+
     def update(self, spread: float) -> None:
         """Record a new spread reading."""
         self._history.append((datetime.utcnow(), spread))

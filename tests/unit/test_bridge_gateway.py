@@ -323,3 +323,34 @@ async def test_auth_header_is_sent():
         transport=httpx.MockTransport(iso_handler_factory(HEALTH_OK)),
     )
     assert await gw.connect() is False
+
+
+@pytest.mark.asyncio
+async def test_deal_history_contract():
+    from tests.unit.test_ai_audit_regressions import deals
+    payload = [d.model_dump(mode='json') for d in deals()]
+    def handler(request):
+        assert request.headers['X-Bridge-Token'] == 'secret-token'
+        if request.url.path == '/health':
+            return httpx.Response(200, json=HEALTH_OK)
+        assert request.url.path == '/position/100/deals'
+        return httpx.Response(200, json={'deals': payload})
+    gateway = make_gateway(handler)
+    assert await gateway.connect()
+    assert (await gateway.get_position_deals(100))[2].fee == -1
+    await gateway.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_position_error_is_not_empty_snapshot():
+    def handler(request):
+        if request.url.path == '/health':
+            return httpx.Response(200, json=HEALTH_OK)
+        return httpx.Response(503, json={'detail': 'history unavailable'})
+    gateway = make_gateway(handler)
+    await gateway.connect()
+    with pytest.raises(httpx.HTTPStatusError):
+        await gateway.get_positions()
+    with pytest.raises(httpx.HTTPStatusError):
+        await gateway.get_position_deals(100)
+    await gateway.disconnect()

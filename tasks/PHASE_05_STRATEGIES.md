@@ -112,3 +112,10 @@
 | 0510 | ✅ Done | |
 | 0520 | ✅ Done | |
 | 0530 | ⚠️ Needs work | Never triggers on real data |
+
+## Real-feed audit regression — 2026-09-10
+
+- [x] Replace absolute-TP and inverted SELL R:R formulas with shared distance arithmetic
+- [x] Reconcile R:R before AI/Risk; record strategy patch version in candidate evidence
+- [x] Regression test range BUY and SELL both produce 2R targets
+- [ ] Re-run historical performance comparisons; prior metrics predate these corrections

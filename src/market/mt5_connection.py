@@ -11,6 +11,7 @@ from src.core.config import settings
 from src.core.exceptions import MT5ConnectionError
 from src.core.types import (
     AccountInfo,
+    Deal,
     Candle,
     Direction,
     OrderRequest,
@@ -371,13 +372,14 @@ class MT5Connection:
             raw_positions = mt5.positions_get()
 
         if raw_positions is None:
-            return []
+            raise MT5ConnectionError("MT5 position snapshot unavailable")
 
         positions = []
         for pos in raw_positions:
             positions.append(
                 Position(
                     ticket=pos.ticket,
+                    identifier=getattr(pos, "identifier", pos.ticket),
                     symbol=pos.symbol,
                     direction=(
                         Direction.BUY if pos.type == mt5.ORDER_TYPE_BUY else Direction.SELL
@@ -389,7 +391,7 @@ class MT5Connection:
                     tp=pos.tp,
                     profit=pos.profit,
                     swap=pos.swap,
-                    commission=pos.commission,
+                    commission=getattr(pos, "commission", 0.0),
                     magic=pos.magic,
                     open_time=datetime.fromtimestamp(pos.time),
                     comment=pos.comment,
@@ -397,3 +399,17 @@ class MT5Connection:
             )
 
         return positions
+
+    async def get_position_deals(self, position_id: int) -> list[Deal]:
+        self._ensure_connected()
+        raw = mt5.history_deals_get(position=position_id)
+        if raw is None:
+            raise MT5ConnectionError("MT5 deal history unavailable")
+        from datetime import timezone
+        return [Deal(
+            ticket=d.ticket, order=d.order, position_id=d.position_id,
+            time=datetime.fromtimestamp(d.time_msc / 1000, tz=timezone.utc),
+            entry=d.entry, type=d.type, volume=d.volume, price=d.price,
+            profit=d.profit, commission=d.commission, swap=d.swap,
+            fee=getattr(d, "fee", 0), reason=d.reason, symbol=d.symbol,
+        ) for d in raw if d.type in (0, 1)]

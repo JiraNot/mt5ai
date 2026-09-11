@@ -76,6 +76,7 @@ Full reference lives in `mt5-bridge/README.md`.
 | GET | `/symbol/{symbol}` | Trading conditions |
 | GET | `/account` | Balance, equity, margin |
 | GET | `/positions?symbol=XAUUSD` | Open positions |
+| GET | `/position/{position_id}/deals` | Broker deal history for outcome reconciliation |
 | POST | `/order` | Market order (OrderRequest JSON) |
 | POST | `/position/{ticket}/modify` | Change SL/TP |
 | POST | `/position/{ticket}/close` | Close position |
@@ -89,3 +90,9 @@ Full reference lives in `mt5-bridge/README.md`.
 | Tick returns 0.00 | Market closed (weekend) — historical data still works |
 | `connect timeout` | Firewall on Windows (allow inbound 8900) or wrong/missing Tailscale IP |
 | Data differs from charts | Bars are broker time (UTC+2/+3 typical), not local time |
+
+## Outcome history compatibility (2026-09-10)
+
+Deploy the matching updated `mt5-bridge/mt5_bridge.py` before enabling outcome
+learning. Missing endpoints or unavailable history leave outcomes pending; they
+never fall back to floating PnL. See the server README for the raw deal contract.

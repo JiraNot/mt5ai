@@ -23,6 +23,7 @@ from src.core.config import settings
 from src.core.exceptions import MT5ConnectionError
 from src.core.types import (
     AccountInfo,
+    Deal,
     Candle,
     Direction,
     OrderRequest,
@@ -198,4 +199,10 @@ class BridgeGateway:
             "/positions", params={"symbol": symbol} if symbol else None
         )
         resp.raise_for_status()
-        return [Position(**p) for p in resp.json().get("positions", [])]
+        return [Position(**p) for p in resp.json()["positions"]]
+
+    async def get_position_deals(self, position_id: int) -> list[Deal]:
+        self._ensure_connected()
+        resp = await self._client.get(f"/position/{position_id}/deals")
+        resp.raise_for_status()
+        return [Deal(**d) for d in resp.json()["deals"]]

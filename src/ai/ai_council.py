@@ -41,6 +41,8 @@ class CouncilDecision:
 class AICouncil:
     """ประสานงาน Gemini + GPT ให้ debate ก่อนตัดสินใจเทรด."""
 
+    VERSION = "2.0.0"
+
     def __init__(
         self,
         min_rule_score: int = 60,

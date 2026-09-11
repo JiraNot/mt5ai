@@ -80,7 +80,9 @@ class DataFeed:
                 # Same candle — update close/volume
                 cached[-1] = latest
             elif cached:
-                # New candle!
+                # Refresh the now-closed bar from the broker before appending.
+                updates = {c.timestamp: c for c in candles}
+                cached[:] = [updates.get(c.timestamp, c) for c in cached]
                 cached.append(latest)
                 # Keep cache bounded
                 if len(cached) > settings.data.candle_count:

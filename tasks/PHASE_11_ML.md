@@ -131,3 +131,13 @@
 | 1107 | ❌ Not done | |
 | 1108 | ❌ Not done | |
 | 1109 | ❌ Not done | |
+
+## Audit remediation — 2026-09-10
+
+- [x] Dataset from immutable entry evidence + reconciled net outcomes
+- [x] Chronological walk-forward splits and label-overlap purge
+- [x] Train-only preprocessing; final holdout separate from model selection
+- [x] Rule-score AUC baseline comparison and regression tests
+- [x] Research artifacts remain disabled after train/load
+- [ ] Real dataset demonstrating improved net expectancy and drawdown
+- [ ] Calibrated probabilities and approved model registry promotion

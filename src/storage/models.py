@@ -216,3 +216,18 @@ def get_session_factory(engine):
         class_=AsyncSession,
         expire_on_commit=False,
     )
+
+
+class LearningEvidence(Base):
+    """Immutable entry evidence and reconciled outcomes; separate from legacy memories."""
+    __tablename__ = "learning_evidence"
+    key = Column(String(200), primary_key=True)  # server/login/opening order
+    account_key = Column(String(150), nullable=False, index=True)
+    opening_order = Column(Integer, nullable=False)
+    position_id = Column(Integer, nullable=False)
+    setup_id = Column(Integer, ForeignKey("setup_log.id"))
+    snapshot_json = Column(Text, nullable=False)
+    initial_risk = Column(Numeric(18, 6))
+    outcome_json = Column(Text)
+    memory_id = Column(Integer, ForeignKey("trade_memories.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)

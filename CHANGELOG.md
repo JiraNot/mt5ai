@@ -1,6 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- Docker image now installs the Codex and Antigravity CLIs for AI Council deployment.
+- Coolify can initialize Codex/ChatGPT login from the `CODEX_AUTH_JSON` secret;
+  Antigravity uses the `GEMINI_API_KEY` secret through its supported Gemini
+  provider, without gcloud or Vertex AI.
+
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
+
+## [Unreleased] - 2026-09-10
+
+### Fixed
+
+- Real-feed smoke exposed inflated BUY and inverted SELL R:R formulas; shared
+  distance arithmetic now feeds strategy scoring and AI/Risk, with strategy version bumps.
+- AI audit: strict fail-closed provider parsing; complete main-app wiring and actual
+  MTF context; use closed candles and refresh finalized bars.
+- Reconcile closed trades from broker deals, including costs and partial exits;
+  retry unavailable history instead of labelling floating PnL.
+- Persist entry evidence and idempotent, factual outcome memories; calculate R
+  from initial monetary risk; stop unvalidated per-trade score adjustments.
+- ML dataset/schema mismatch and preprocessing leakage; purged walk-forward
+  selection plus untouched holdout; research models never auto-enable.
+- Main OrderManager blocks broker execution in PAPER/LIVE; only explicit DEMO
+  may submit orders after Risk approval. Added bounded `--cycles` smoke runs.
+
+### Added
+
+- Additive `learning_evidence` table and AI/learning/ML regression tests.
+- Matched local/bridge deal-history interface and separate bridge server tests.
+- Details and remaining research boundaries: `docs/ai/AUDIT_FIXES_2026_09_10.md`.
 
 ## [0.6.0] - 2026-09-09
 

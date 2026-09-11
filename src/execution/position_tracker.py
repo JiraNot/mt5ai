@@ -7,6 +7,7 @@ from typing import Optional
 
 from src.core.events import EventType, event_bus
 from src.core.types import Position
+from src.execution.outcomes import reconcile_deals
 from src.market.mt5_connection import MT5Connection
 
 logger = logging.getLogger(__name__)
@@ -36,14 +37,27 @@ class PositionTracker:
         # Track new/updated/closed positions
         current_tickets = {p.ticket for p in positions}
 
-        # Detect closed positions
-        for ticket in list(self._positions.keys()):
+        # Missing from a successful snapshot is only a closure candidate.
+        for ticket, previous in list(self._positions.items()):
+            if symbol and previous.symbol != symbol:
+                continue
             if ticket not in current_tickets:
-                closed_pos = self._positions.pop(ticket)
-                logger.info(f"Position closed: {closed_pos.ticket} {closed_pos.symbol}")
-                await event_bus.publish(EventType.POSITION_CLOSED, {
-                    "position": closed_pos,
-                })
+                try:
+                    position_id = previous.identifier or ticket
+                    deals = await self._mt5.get_position_deals(position_id)
+                    outcome = reconcile_deals(position_id, deals)
+                    if outcome is None:
+                        continue  # History may be delayed; retry next poll.
+                    closed_pos = previous.model_copy(update={
+                        "current_price": outcome.close_price,
+                        "profit": outcome.net_profit, "swap": 0.0, "commission": 0.0,
+                    })
+                    await event_bus.publish(EventType.POSITION_CLOSED, {
+                        "position": closed_pos, "outcome": outcome,
+                    })
+                    self._positions.pop(ticket, None)
+                except Exception:
+                    logger.exception("Closure reconciliation pending for %s", ticket)
 
         # Detect new/updated positions
         for pos in positions:

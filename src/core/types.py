@@ -286,6 +286,7 @@ class Position(BaseModel):
     """Live position from MT5."""
 
     ticket: int
+    identifier: int | None = None
     symbol: str
     direction: Direction
     volume: float
@@ -380,3 +381,33 @@ class DailyRisk(BaseModel):
     max_drawdown: float = 0.0
     circuit_breaker: bool = False
     notes: str = ""
+
+
+class Deal(BaseModel):
+    """Broker deal history, version 1; MT5 numeric entry/type codes."""
+    model_config = {"allow_inf_nan": False}
+    ticket: int
+    order: int
+    position_id: int
+    time: datetime
+    entry: int
+    type: int
+    volume: float = Field(gt=0)
+    price: float = Field(gt=0)
+    profit: float
+    commission: float = 0
+    swap: float = 0
+    fee: float = 0
+    reason: int = 0
+    symbol: str
+
+class ClosedOutcome(BaseModel):
+    """Verified flat position result; net PnL includes all deal costs."""
+    position_id: int
+    opening_order: int
+    symbol: str
+    close_time: datetime
+    close_price: float
+    net_profit: float
+    deal_tickets: list[int]
+    reason_codes: list[int]

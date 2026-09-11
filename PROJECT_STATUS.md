@@ -45,7 +45,7 @@ DISABLED
 - [x] Live Monitor MTF (Phase 09)
 - [x] Paper Trader (Phase 09)
 - [x] Dashboard (Streamlit) (Phase 08)
-- [x] 181 Tests passing
+- [x] 232 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -89,6 +89,8 @@ DISABLED
 
 ## Performance Results
 
+Historical figures below predate the 2026-09-10 R:R correction and must be revalidated.
+
 | Strategy | Trades | Win Rate | Profit Factor | Return | Verdict |
 |----------|--------|----------|---------------|--------|---------|
 | FVG Optimized | 23 | 82.6% | 8.64 | +30.8% | Profitable |
@@ -101,7 +103,7 @@ DISABLED
 ```
 Source files: 50+
 Test files: 11
-Total tests: 181 (all passing)
+Total tests: 232 (all passing)
 Documentation files: 40+
 Task files: 13
 ```
@@ -135,4 +137,17 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-09
+2026-09-11
+
+
+## AI audit remediation — 2026-09-10
+
+- [x] Strict provider response validation and repaired main app/context wiring
+- [x] Verified broker outcomes, durable entry evidence and restart-safe memories
+- [x] Removed unsupported causal diagnoses and per-trade score mutation
+- [x] Repaired ML dataset and leakage; walk-forward plus final holdout implemented
+- [x] PAPER broker-order guard and bounded smoke-run support
+- [ ] Real-data evidence that AI/ML beats the rule baseline (no model promoted)
+- [ ] Full PAPER simulation/rejected-candidate outcome comparison
+
+See `docs/ai/AUDIT_FIXES_2026_09_10.md` for verified scope and limitations.

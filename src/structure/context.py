@@ -45,6 +45,7 @@ class MultiTimeframeContext:
 
     # Primary timeframe candle
     primary_candle: Candle | None = None
+    candles_by_tf: dict[str, list[Candle]] = field(default_factory=dict)
 
     # HTF trend (H4 or D1)
     htf_trend: Direction | None = None
@@ -104,6 +105,7 @@ class ContextBuilder:
         ctx = MultiTimeframeContext(symbol=symbol)
 
         # Get current price from primary timeframe
+        ctx.candles_by_tf = {tf: list(candles) for tf, candles in candles_by_tf.items()}
         primary_candles = candles_by_tf.get(primary_tf, [])
         if primary_candles:
             ctx.primary_candle = primary_candles[-1]

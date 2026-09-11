@@ -581,7 +581,11 @@ def check_mt5_bridge_status() -> dict:
 
 
 def check_ai_status() -> dict:
-    """Check live status of AI Council (Codex ChatGPT & Google Gemini ADC)."""
+    """Check CLI installation and Codex credential availability.
+
+    Antigravity's account tokens are held in an OS keyring. In a container we
+    report only the supported API-key deployment configuration.
+    """
     codex_auth_files = [
         os.path.expanduser("~/.codex/auth.json"),
         "/root/.codex/auth.json",
@@ -599,18 +603,15 @@ def check_ai_status() -> dict:
         ]
     )
 
-    adc_files = [
-        os.path.expanduser("~/.config/gcloud/application_default_credentials.json"),
-        "/root/.config/gcloud/application_default_credentials.json",
-        "/home/dulla/.config/gcloud/application_default_credentials.json",
-    ]
-    gemini_auth_ok = any(os.path.exists(p) for p in adc_files) or bool(os.getenv("GOOGLE_ADC_JSON")) or bool(os.getenv("GEMINI_API_KEY"))
+    ai_cli = os.getenv("AI_CLI_BIN", "agy")
+    antigravity_cli_ok = bool(shutil.which(ai_cli) or (os.path.isabs(ai_cli) and os.access(ai_cli, os.X_OK)))
+    antigravity_auth_ok = bool(os.getenv("GEMINI_API_KEY"))
 
     return {
         "chatgpt_auth": codex_auth_ok,
         "chatgpt_cli": codex_cli_ok,
-        "gemini_auth": gemini_auth_ok,
-        "council_ready": (codex_auth_ok or codex_cli_ok) and gemini_auth_ok,
+        "gemini_auth": antigravity_cli_ok and antigravity_auth_ok,
+        "council_ready": codex_auth_ok and codex_cli_ok and antigravity_cli_ok and antigravity_auth_ok,
     }
 
 

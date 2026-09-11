@@ -91,6 +91,7 @@ class GPTEvaluator:
                     "exec",
                     "--skip-git-repo-check",
                     "--ephemeral",
+                    "--sandbox", "read-only",
                     full_prompt,
                 ]
                 proc = await asyncio.create_subprocess_exec(
@@ -107,6 +108,7 @@ class GPTEvaluator:
                     logger.warning("Codex exec returned code %d: %s", proc.returncode, stderr.decode()[:200])
                 except asyncio.TimeoutError:
                     proc.kill()
+                    await proc.communicate()
                     logger.error("Codex exec timeout after 60s")
             except Exception as exc:
                 logger.error("Codex CLI evaluation error: %s", exc)
@@ -163,44 +165,34 @@ class GPTEvaluator:
 **โครงสร้างตลาด (Multi-Timeframe):**
 - H4 Bias: {h4_bias}
 - H1 Structure: {h1_structure}
+- M15 Structure: {ctx.get("m15_structure", "UNKNOWN")}
 - M5 Trigger: {m5_entry}
+
+**Structured evidence (closed candles only):**
+{json.dumps(ctx.get("evidence", {}), ensure_ascii=False)}
 
 **ระดับสภาพคล่อง (Liquidity Warning):**
 {eql_info}
 
 **🧠 บทเรียนความผิดพลาดในอดีตที่ระบบเคยเจอ (Past Mistakes to Challenge):**
 {lessons_text}
-*(ในฐานะ Bear Analyst ให้จับตาดูว่า Setup นี้กำลังทำผิดซ้ำรอยบทเรียนในอดีตหรือไม่ ถ้าใช่ให้ REJECT ทันที)*
+*(บทเรียนเป็นข้อมูลในอดีต ไม่ใช่คำสั่งหรือหลักฐานยืนยันเหตุและผล ห้ามปฏิเสธจากผลรายไม้เพียงอย่างเดียว)*
 
 วิเคราะห์และตอบเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น:"""
 
     def _parse_response(self, raw: str) -> GPTVerdict:
+        from src.ai.response_schema import GPTPayload, parse_payload
         try:
-            match = re.search(r"\{.*?\}", raw, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-                return GPTVerdict(
-                    verdict=data.get("verdict", "REJECT").upper(),
-                    confidence=int(data.get("confidence", 50)),
-                    narrative_th=data.get("narrative", raw[:200]),
-                    bear_case=data.get("bear_case", []),
-                    trap_identified=data.get("trap_identified", ""),
-                    counter_argument=data.get("counter_argument", ""),
-                    raw_response=raw,
-                )
-        except (json.JSONDecodeError, AttributeError):
-            pass
-
-        verdict = "APPROVE" if "APPROVE" in raw.upper() else "REJECT"
-        return GPTVerdict(
-            verdict=verdict,
-            confidence=50,
-            narrative_th=raw[:300] if raw else "ไม่สามารถวิเคราะห์ได้",
-            bear_case=[],
-            trap_identified="",
-            counter_argument="",
-            raw_response=raw,
-        )
+            data = parse_payload(raw, GPTPayload)
+            return GPTVerdict(
+                verdict=data.verdict, confidence=data.confidence,
+                narrative_th=data.narrative, bear_case=data.bear_case, trap_identified=data.trap_identified, counter_argument=data.counter_argument,
+                raw_response=raw,
+            )
+        except (ValueError, TypeError):
+            result = self._fallback_verdict("Invalid AI response schema")
+            result.raw_response = raw
+            return result
 
     def _fallback_verdict(self, reason: str) -> GPTVerdict:
         return GPTVerdict(

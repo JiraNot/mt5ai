@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
+from datetime import datetime
 from typing import Any
 
 from src.core.config import settings
+from src.core.ratios import reward_risk
 from src.core.events import EventType, event_bus
 from src.core.logger import get_logger, setup_logging
 from src.core.types import (
@@ -34,6 +37,11 @@ from src.strategies.meta_engine import MetaDecisionEngine
 from src.strategies.registry import auto_discover, get_strategy_ids
 
 # Phase 5: AI Scorer
+from src.ai.ai_council import AICouncil
+from src.ai.trade_learner import TradeLearner
+from src.ai.snapshot import build_snapshot
+from src.structure.equal_highs_lows import EqualHighsLowsDetector
+from src.notification.telegram_alert import TradeAlert, alert_trade_opened, alert_trade_skipped
 from src.ai.scorer import RuleBasedScorer
 from src.ai.context_analyzer import ContextAnalyzer
 
@@ -66,20 +74,6 @@ def setup_auth_credentials() -> None:
         except Exception as e:
             logger.error("Failed writing CODEX_AUTH_JSON: %s", e)
 
-    adc_json = os.getenv("GOOGLE_ADC_JSON", "").strip()
-    if adc_json:
-        target_dir = os.path.expanduser("~/.config/gcloud")
-        os.makedirs(target_dir, exist_ok=True)
-        target_file = os.path.join(target_dir, "application_default_credentials.json")
-        try:
-            with open(target_file, "w", encoding="utf-8") as f:
-                f.write(adc_json)
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = target_file
-            logger.info("✅ GOOGLE_ADC_JSON successfully initialized in %s", target_file)
-        except Exception as e:
-            logger.error("Failed writing GOOGLE_ADC_JSON: %s", e)
-
-
 class TradingPlatform:
     """
     Main orchestrator — wires all components together.
@@ -88,7 +82,10 @@ class TradingPlatform:
         MT5 Data → Structure Engine → Strategy Plugins → AI Scorer → Risk Engine → Execute
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_cycles: int | None = None) -> None:
+        self._max_cycles = max_cycles
+        self._cycle_count = 0
+        self._cycle_errors = 0
         # MT5 — local MetaTrader5 package / Wine, or remote Windows bridge
         if settings.mt5_mode == "bridge":
             from src.market.bridge_gateway import BridgeGateway
@@ -109,6 +106,8 @@ class TradingPlatform:
         self._meta_engine = MetaDecisionEngine()
 
         # AI
+        self._ai_council = AICouncil()
+        self._eql_detector = EqualHighsLowsDetector()
         self._ai_scorer = RuleBasedScorer()
         self._context_analyzer = ContextAnalyzer()
 
@@ -127,8 +126,17 @@ class TradingPlatform:
         self._session_factory = None
 
         self._running = False
+        self._poll_task = None
+        self._event_handlers = []
 
     async def start(self) -> None:
+        """Always release sessions/tasks, including failures during startup."""
+        try:
+            await self._start()
+        finally:
+            await self.stop()
+
+    async def _start(self) -> None:
         """Start the trading platform."""
         setup_auth_credentials()
         logger.info(
@@ -142,6 +150,7 @@ class TradingPlatform:
 
         # Initialize database (risk engine + setup logger)
         engine = get_engine(settings.database_url)
+        self._engine = engine
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         self._session_factory = get_session_factory(engine)
@@ -178,13 +187,15 @@ class TradingPlatform:
             except asyncio.CancelledError:
                 return
 
+        account = await self._mt5.get_account_info()
+        self._trade_learner.account_key = f"{account.server}/{account.login}"
         self._running = True
 
         # Initialize data feed
         symbol = settings.primary_symbol
         logger.info(f"Initializing data feed for {symbol}...")
         await self._data_feed.initialize(symbol)
-        asyncio.create_task(self._data_feed.start_polling(symbol))
+        self._poll_task = asyncio.create_task(self._data_feed.start_polling(symbol))
 
         # Start main loop
         session = get_current_session()
@@ -196,16 +207,24 @@ class TradingPlatform:
             logger.info("Platform shutdown requested")
         except Exception as e:
             logger.error(f"Platform error: {e}", exc_info=True)
-        finally:
-            await self.stop()
 
     async def stop(self) -> None:
         """Stop the trading platform."""
         self._running = False
         logger.info("Stopping platform...")
         await self._data_feed.stop_polling()
+        if self._poll_task:
+            self._poll_task.cancel()
+            await asyncio.gather(self._poll_task, return_exceptions=True)
+        for event, handler in self._event_handlers:
+            event_bus.unsubscribe(event, handler)
+        self._event_handlers.clear()
+        if self._trade_learner:
+            self._trade_learner.close()
         if self._db_session:
-            self._db_session.close()
+            await self._db_session.close()
+        if hasattr(self, "_engine"):
+            await self._engine.dispose()
         await self._mt5.disconnect()
         logger.info("Platform stopped cleanly")
 
@@ -229,21 +248,15 @@ class TradingPlatform:
 
         event_bus.subscribe(EventType.CIRCUIT_BREAKER, on_circuit_breaker)
         event_bus.subscribe(EventType.ORDER_FILLED, on_order_filled)
-
-        async def on_position_closed(data: dict) -> None:
-            pos = data.get("position")
-            if pos:
-                outcome = "WIN" if (pos.profit or 0) > 0 else "LOSS"
-                strategy_id = pos.comment or "smc_strategy"
-                self._meta_engine.adjust_strategy(strategy_id, outcome, reason=f"PnL: ${pos.profit:.2f}")
-
-        event_bus.subscribe(EventType.POSITION_CLOSED, on_position_closed)
+        self._event_handlers = [(EventType.CIRCUIT_BREAKER, on_circuit_breaker),
+                                (EventType.ORDER_FILLED, on_order_filled)]
 
     async def _main_loop(self, symbol: str) -> None:
         """Main evaluation loop: runs on each polling cycle."""
         logger.info(f"Main trading loop started for {symbol}")
 
-        while self._running:
+        while self._running and (self._max_cycles is None or self._cycle_count < self._max_cycles):
+            self._cycle_count += 1
             try:
                 # Check session
                 session = get_current_session()
@@ -256,13 +269,13 @@ class TradingPlatform:
 
                 # Build multi-timeframe context
                 candles_by_tf = {
-                    "M5": self._data_feed.get_cached_candles("M5"),
-                    "M15": self._data_feed.get_cached_candles("M15"),
-                    "H1": self._data_feed.get_cached_candles("H1"),
-                    "H4": self._data_feed.get_cached_candles("H4"),
+                    "M5": self._data_feed.get_cached_candles("M5", symbol)[:-1],
+                    "M15": self._data_feed.get_cached_candles("M15", symbol)[:-1],
+                    "H1": self._data_feed.get_cached_candles("H1", symbol)[:-1],
+                    "H4": self._data_feed.get_cached_candles("H4", symbol)[:-1],
                 }
 
-                if not candles_by_tf:
+                if not all(candles_by_tf.get(tf) for tf in ("M5", "M15", "H1")):
                     await asyncio.sleep(5)
                     continue
 
@@ -270,7 +283,7 @@ class TradingPlatform:
                     symbol=symbol,
                     candles_by_tf=candles_by_tf,
                     primary_tf="M5",
-                    htf="H4",
+                    htf="H1",
                 )
                 ctx.current_price = tick.mid
                 ctx.spread = spread_pips
@@ -278,12 +291,16 @@ class TradingPlatform:
                 # Run strategy pipeline
                 await self._process_strategies(ctx, tick.mid, spread_pips, session)
 
+                if self._trade_learner:
+                    await self._trade_learner.reconcile_pending(self._mt5)
+
                 # Sync positions
                 await self._position_tracker.sync_positions(symbol)
 
                 await asyncio.sleep(5)
 
             except Exception as e:
+                self._cycle_errors += 1
                 logger.error(f"Main loop error: {e}", exc_info=True)
                 await asyncio.sleep(10)
 
@@ -320,6 +337,13 @@ class TradingPlatform:
         session: str,
     ) -> None:
         """Process a single candidate through AI → Risk → Execute."""
+
+        # Reconcile derived RR before AI/Risk even for third-party strategies.
+        sign = 1 if candidate.direction.value == "BUY" else -1
+        candidate.rr_ratio = round(reward_risk(
+            sign * (candidate.take_profit_1 - candidate.entry_price),
+            sign * (candidate.entry_price - candidate.stop_loss),
+        ), 2)
 
         # Step 2a: Rule-based AI Scoring (fast, no API call)
         ai_decision = self._ai_scorer.score(
@@ -375,14 +399,25 @@ class TradingPlatform:
             "stop_loss": float(candidate.stop_loss or 0),
             "take_profit": float(candidate.take_profit_1 or 0),
             "rr_ratio": float(candidate.rr_ratio or 0),
-            "rule_score": ai_decision.rule_score,
+            "rule_score": candidate.rule_score,
             "confluences": candidate.confluences or [],
-            "h4_bias": str(ctx.htf_bias) if hasattr(ctx, "htf_bias") else "N/A",
-            "h1_structure": str(ctx.primary_structure) if hasattr(ctx, "primary_structure") else "N/A",
+            "h4_bias": ctx.get_trend("H4").value if ctx.get_trend("H4") else "UNKNOWN",
+            "h1_structure": ctx.get_structure("H1").model_dump_json() if ctx.get_structure("H1") else "UNKNOWN",
+            "m15_structure": ctx.get_structure("M15").model_dump_json() if ctx.get_structure("M15") else "UNKNOWN",
             "m5_entry": candidate.strategy_id,
             "eql_summary": eql_result.summary,
             "displacement_detected": bool(getattr(candidate, "displacement", False)),
             "past_lessons": past_lessons,
+            "evidence": {
+                "strategy_version": candidate.metadata.get("version", "unknown"),
+                "has_choch": ctx.has_choch, "has_bos": ctx.has_bos,
+                "liquidity_sweep": ctx.has_liquidity_sweep,
+                "fvgs": [f.model_dump(mode="json") for f in ctx.fvgs
+                         if f.direction == candidate.direction and f.valid][:5],
+                "order_blocks": [o.model_dump(mode="json") for o in ctx.order_blocks
+                                 if o.direction == candidate.direction and not o.mitigated][:5],
+                "closed_m5_bars": [c.model_dump(mode="json") for c in ctx.candles_by_tf.get("M5", [])[-5:]],
+            },
         }
 
         council = await self._ai_council.evaluate(setup_context)
@@ -412,7 +447,6 @@ class TradingPlatform:
                 )
             # Telegram alert for disagreement
             if council.final_verdict == "SKIP":  # Disagreement
-                import asyncio
                 asyncio.create_task(alert_trade_skipped(
                     symbol=candidate.symbol,
                     reason=council.recommendation,
@@ -456,11 +490,25 @@ class TradingPlatform:
                 tp=risk_decision.adjusted_tp1 or candidate.take_profit_1,
                 comment=f"{candidate.strategy_id}",
             )
+            snapshot = build_snapshot(candidate, ctx, spread, session)
             result = await self._order_manager.send_market_order(request)
 
             if result.success:
+                setup_id = None
+                if self._trade_learner and result.ticket:
+                    snapshot["fill_price"] = result.price
+                    snapshot["initial_sl"] = request.sl
+                    snapshot["fill_volume"] = result.volume
+                    symbol_config = settings.symbols.get(candidate.symbol)
+                    initial_risk = (abs(result.price - request.sl) * result.volume * symbol_config.contract_size
+                                    if result.price and result.volume and symbol_config else None)
+                    await self._trade_learner.record_entry(
+                        account_key=f"{account.server}/{account.login}",
+                        opening_order=result.ticket, snapshot=snapshot,
+                        initial_risk=initial_risk, setup_id=setup_id,
+                    )
                 if self._setup_logger:
-                    await self._setup_logger.log_traded(
+                    setup_id = await self._setup_logger.log_traded(
                         candidate=candidate,
                         ai_decision=ai_decision,
                         risk_decision=risk_decision,
@@ -473,6 +521,9 @@ class TradingPlatform:
                         debate_summary=council.debate_summary_th,
                         eql_summary=eql_result.summary,
                     )
+                if self._trade_learner and result.ticket and setup_id:
+                    await self._trade_learner.link_setup(
+                        f"{account.server}/{account.login}", result.ticket, setup_id)
                 logger.info(
                     f"✅ TRADE EXECUTED: ticket={result.ticket} "
                     f"price={result.price} volume={result.volume} "
@@ -486,7 +537,7 @@ class TradingPlatform:
                     entry_price=float(result.price or current_price),
                     stop_loss=float(request.sl),
                     take_profit=float(request.tp),
-                    rule_score=ai_decision.rule_score,
+                    rule_score=candidate.rule_score,
                     gemini_score=council.gemini_verdict.confidence,
                     gpt_score=council.gpt_verdict.confidence,
                     gemini_verdict=council.gemini_verdict.verdict,
@@ -577,6 +628,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Freebuff Trading Platform")
     parser.add_argument("--backtest", action="store_true", help="Run backtesting mode")
     parser.add_argument("--status", action="store_true", help="Show system status")
+    parser.add_argument("--cycles", type=int, default=None, help="Stop after N evaluation cycles")
     args = parser.parse_args()
 
     setup_logging(
@@ -590,7 +642,7 @@ def main() -> None:
     elif args.backtest:
         asyncio.run(_run_backtest())
     else:
-        platform = TradingPlatform()
+        platform = TradingPlatform(max_cycles=args.cycles)
         try:
             asyncio.run(platform.start())
         except KeyboardInterrupt:

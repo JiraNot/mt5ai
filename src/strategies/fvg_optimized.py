@@ -9,6 +9,8 @@ Enhanced version with:
 
 from __future__ import annotations
 
+from src.core.ratios import reward_risk
+
 import logging
 from typing import Optional
 
@@ -43,7 +45,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
 
     @property
     def version(self) -> str:
-        return "1.0.0"
+        return "1.0.1"
 
     def min_rr(self) -> float:
         return 2.0
@@ -221,7 +223,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price + risk * 2
         tp2 = price + risk * 3
 
-        rr = tp1 / risk if risk > 0 else 0
+        rr = reward_risk(tp1 - price, risk)
         if rr >= 3.0:
             score += 10
             confluences.append("excellent_rr")
@@ -299,7 +301,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price - risk * 2
         tp2 = price - risk * 3
 
-        rr = risk / (price - tp1) if (price - tp1) > 0 else 0
+        rr = reward_risk(price - tp1, risk)
         if rr >= 3.0:
             score += 10
             confluences.append("excellent_rr")
@@ -379,7 +381,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price + risk * 2
         tp2 = price + risk * 3
 
-        rr = tp1 / risk if risk > 0 else 0
+        rr = reward_risk(tp1 - price, risk)
 
         score = max(0, min(100, score))
 
@@ -425,7 +427,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price - risk * 2
         tp2 = price - risk * 3
 
-        rr = risk / (price - tp1) if (price - tp1) > 0 else 0
+        rr = reward_risk(price - tp1, risk)
 
         score = max(0, min(100, score))
 
@@ -482,7 +484,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price - risk * 2
         tp2 = price - risk * 3
 
-        rr = risk / (price - tp1) if (price - tp1) > 0 else 0
+        rr = reward_risk(price - tp1, risk)
 
         score = max(0, min(100, score))
 
@@ -539,7 +541,7 @@ class FVGOptimizedStrategy(StrategyPlugin):
         tp1 = price + risk * 2
         tp2 = price + risk * 3
 
-        rr = tp1 / risk if risk > 0 else 0
+        rr = reward_risk(tp1 - price, risk)
 
         score = max(0, min(100, score))
 

@@ -21,7 +21,6 @@ dependencies = [
     "structlog>=24.1",
     "python-dotenv>=1.0",
     "httpx>=0.26",
-    "google-genai>=2.3.0",
     "openai>=1.0.0",
 
     # Database

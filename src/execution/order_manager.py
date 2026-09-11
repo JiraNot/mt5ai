@@ -38,6 +38,10 @@ class OrderManager:
         Returns:
             OrderResult with execution details
         """
+        # This orchestrator may send broker orders only in explicit DEMO mode.
+        if settings.trading_mode.lower() != "demo":
+            return OrderResult(success=False, error_message="Broker execution requires DEMO; PAPER and LIVE are disabled here")
+
         # Validate
         validation_error = self._validate_order(request)
         if validation_error:
