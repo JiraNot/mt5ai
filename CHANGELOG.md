@@ -16,6 +16,8 @@
 - Coolify Compose persists research models and runs the verified-outcome trainer
   daily. `TRADING_MODE=PAPER` remains the safe default; set `TRADING_MODE=DEMO`
   explicitly when demo broker orders are intended.
+- Docker runtime now includes `libgomp1` for LightGBM and creates the data/model
+  volume directories before starting the worker, dashboard, or trainer.
 
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
 

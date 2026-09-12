@@ -10,4 +10,10 @@ RUN mkdir -p /custom-cont-init.d && \
     printf '#!/bin/bash\n(\n  export WINEPREFIX="/config/.wine"\n  export WINEDEBUG=-all\n  echo "Waiting for Wine python and MetaTrader 5..."\n  while ! wine python --version >/dev/null 2>&1; do sleep 5; done\n  while ! wine python -c "import MetaTrader5" >/dev/null 2>&1; do sleep 5; done\n  echo "Installing fastapi & uvicorn..."\n  wine python -m pip install --no-cache-dir fastapi uvicorn\n  echo "Starting MT5 Bridge on port 8900..."\n  while true; do\n    wine python /app/bridge/mt5_bridge.py\n    sleep 5\n  done\n) > /tmp/mt5_bridge.log 2>&1 &\n' > /custom-cont-init.d/99-mt5-bridge.sh && \
     chmod +x /custom-cont-init.d/99-mt5-bridge.sh
 
+# Repair a malformed command left in some persisted volumes by older image
+# startup scripts before Openbox launches MetaTrader.
+RUN printf '#!/bin/bash\nif [ -f /config/.config/openbox/autostart ]; then\n  sed -i "s#/Metatrader/start\\.shsleep#/Metatrader/start.sh\\nsleep#g" /config/.config/openbox/autostart\nfi\n' \
+    > /custom-cont-init.d/98-repair-mt5-autostart.sh && \
+    chmod +x /custom-cont-init.d/98-repair-mt5-autostart.sh
+
 EXPOSE 3000 8900

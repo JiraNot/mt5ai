@@ -7,6 +7,7 @@ WORKDIR /app
 # authenticated runtime session.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libgomp1 \
     nodejs \
     npm \
     && npm install -g @openai/codex \
@@ -43,4 +44,4 @@ EXPOSE 8501
 
 # Run background trading loop and foreground Streamlit dashboard
 ENTRYPOINT ["/app/scripts/container-entrypoint.sh"]
-CMD ["bash", "-c", "mkdir -p /app/data && python -m src.app & exec streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true"]
+CMD ["bash", "-c", "mkdir -p /app/data /app/models && python -m src.app & exec streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true"]
