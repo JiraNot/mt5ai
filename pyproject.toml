@@ -34,6 +34,7 @@ dependencies = [
 
     # Dashboard
     "streamlit>=1.30",
+    "streamlit-autorefresh>=1.0.1",
     "plotly>=5.18",
 
     # MT5 (Windows only)

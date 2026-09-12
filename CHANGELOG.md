@@ -6,6 +6,16 @@
 - Coolify can initialize Codex/ChatGPT login from the `CODEX_AUTH_JSON` secret;
   Antigravity uses the `GEMINI_API_KEY` secret through its supported Gemini
   provider, without gcloud or Vertex AI.
+- Added a scheduled research-only trainer that retrains after new verified Demo
+  outcomes and persists artifacts separately from the trading database.
+- Dashboard now refreshes live status and database metrics every 10 seconds by default.
+- Dashboard status now includes the trading mode, worker state, cycle count, and
+  last engine decision. The worker publishes an atomic heartbeat at
+  `/app/data/runtime_status.json`; diagnostic write failures cannot interrupt the
+  trading loop.
+- Coolify Compose persists research models and runs the verified-outcome trainer
+  daily. `TRADING_MODE=PAPER` remains the safe default; set `TRADING_MODE=DEMO`
+  explicitly when demo broker orders are intended.
 
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
 

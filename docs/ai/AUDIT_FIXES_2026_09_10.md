@@ -70,6 +70,9 @@ Bridge contract tests use mocked MT5 and httpx.MockTransport.
   `CODEX_AUTH_JSON` as a secret for Codex/ChatGPT and `GEMINI_API_KEY` as a
   secret for Antigravity. The container entrypoint enables Antigravity's
   `gemini` provider without writing the API key to disk.
+- Compose runs `mt5ai-trainer` once per day by default. It waits for 50
+  broker-confirmed outcomes, trains only from verified evidence, and writes
+  `/app/models/research_model.pkl`; deployment remains disabled.
 - Local portable Wine terminal attachment requires MT5_PATH plus MT5_PORTABLE=true.
   No account credentials were changed and no broker orders were sent during testing.
 

@@ -20,6 +20,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -30,6 +31,7 @@ from src.storage.models import (
     SetupLog,
     Trade,
 )
+from src.core.runtime_status import read_runtime_status
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 
@@ -674,6 +676,12 @@ def check_dashboard_auth() -> bool:
 def main():
     if not check_dashboard_auth():
         return
+    refresh_seconds = max(0, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "10")))
+    if refresh_seconds:
+        st_autorefresh(
+            interval=refresh_seconds * 1000,
+            key="dashboard_auto_refresh",
+        )
     # Sidebar
     st.sidebar.title("🏦 Freebuff Trading")
     st.sidebar.markdown("---")
@@ -681,9 +689,20 @@ def main():
     # Check live connections
     mt5_status = check_mt5_bridge_status()
     ai_status = check_ai_status()
+    runtime_status = read_runtime_status()
+    trading_mode = os.getenv("TRADING_MODE", "PAPER").upper()
 
     # Sidebar: Live Connection Status
     st.sidebar.markdown("### 🔌 Live Connection Status")
+    if refresh_seconds:
+        st.sidebar.caption(f"Auto refresh: every {refresh_seconds}s")
+    mode_icon = "🟢" if trading_mode == "DEMO" else "🟡"
+    st.sidebar.caption(f"{mode_icon} Trading mode: `{trading_mode}`")
+    if runtime_status:
+        st.sidebar.caption(
+            f"Loop: `{runtime_status.get('state', 'unknown')}` · "
+            f"cycles: `{runtime_status.get('cycle_count', 0)}`"
+        )
     if mt5_status["online"] and mt5_status["mt5_connected"]:
         st.sidebar.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
         if mt5_status.get("account"):
@@ -705,9 +724,9 @@ def main():
         st.sidebar.markdown("🟡 `ChatGPT (Codex)`: Waiting Session")
 
     if ai_status["gemini_auth"]:
-        st.sidebar.markdown("🟢 `Gemini (Google)`: ADC Ready (Bull)")
+        st.sidebar.markdown("🟢 `Gemini (Google)`: API Key Ready (Bull)")
     else:
-        st.sidebar.markdown("🟡 `Gemini (Google)`: Waiting ADC Auth")
+        st.sidebar.markdown("🟡 `Gemini (Google)`: API Key Not Ready")
 
     st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")
@@ -820,7 +839,15 @@ def main():
             symbol = os.getenv("TRADING_SYMBOL", "XAUUSD")
             st.info(
                 f"⚡ **Active Market & Engine**\n\n"
-                f"Symbol: `{symbol}` · 15 Multi-Timeframe SMC Models"
+                f"Symbol: `{symbol}` · Mode: `{trading_mode}` · "
+                f"Cycles: `{runtime_status.get('cycle_count', 0)}`"
+            )
+
+        if runtime_status.get("last_decision"):
+            reason = runtime_status.get("last_reason") or runtime_status.get("last_error") or ""
+            st.caption(
+                f"Last engine decision: `{runtime_status['last_decision']}` "
+                f"{('— ' + reason) if reason else ''}"
             )
 
         st.markdown("## 📊 Trading Overview")

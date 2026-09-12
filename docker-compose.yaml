@@ -37,10 +37,12 @@ services:
     environment:
       - MT5_MODE=bridge
       - BRIDGE_URL=http://mt5-node:8900
+      - TRADING_MODE=${TRADING_MODE:-PAPER}
       - DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
       - DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
       - CODEX_AUTH_JSON=${CODEX_AUTH_JSON:-}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-freebuff2026}
+      - DASHBOARD_REFRESH_SECONDS=${DASHBOARD_REFRESH_SECONDS:-10}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
       - AI_CLI_BIN=${AI_CLI_BIN:-agy}
@@ -49,6 +51,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     volumes:
       - mt5ai_data:/app/data
+      - mt5ai_models:/app/models
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
@@ -58,6 +61,25 @@ services:
       - "traefik.http.routers.bot.tls.certresolver=letsencrypt"
       - "traefik.http.services.bot.loadbalancer.server.port=8501"
 
+  mt5ai-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mt5ai-trainer
+    restart: unless-stopped
+    depends_on:
+      - mt5ai
+    command: ["python", "scripts/retrain_loop.py"]
+    environment:
+      - TRAINING_DB_PATH=/app/data/freebuff.db
+      - TRAINING_MODEL_DIR=/app/models
+      - TRAINING_MIN_SAMPLES=${TRAINING_MIN_SAMPLES:-50}
+      - TRAINING_INTERVAL_SECONDS=${TRAINING_INTERVAL_SECONDS:-86400}
+    volumes:
+      - mt5ai_data:/app/data
+      - mt5ai_models:/app/models
+
 volumes:
   mt5_config:
   mt5ai_data:
+  mt5ai_models:

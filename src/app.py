@@ -19,6 +19,7 @@ from src.core.config import settings
 from src.core.ratios import reward_risk
 from src.core.events import EventType, event_bus
 from src.core.logger import get_logger, setup_logging
+from src.core.runtime_status import update_runtime_status
 from src.core.types import (
     OrderRequest,
     RiskDecision,
@@ -139,6 +140,10 @@ class TradingPlatform:
     async def _start(self) -> None:
         """Start the trading platform."""
         setup_auth_credentials()
+        update_runtime_status(
+            state="starting", mode=settings.trading_mode.upper(),
+            symbol=settings.primary_symbol, cycle_count=0, cycle_errors=0,
+        )
         logger.info(
             f"Starting Freebuff Trading Platform v{settings.app.version} "
             f"(mode={settings.trading_mode})"
@@ -171,6 +176,7 @@ class TradingPlatform:
         while True:
             connected = await self._mt5.connect()
             if connected:
+                update_runtime_status(state="connected", mt5_connected=True)
                 logger.info("✅ MT5 Connected successfully!")
                 break
             if settings.mt5_mode == "bridge":
@@ -190,6 +196,7 @@ class TradingPlatform:
         account = await self._mt5.get_account_info()
         self._trade_learner.account_key = f"{account.server}/{account.login}"
         self._running = True
+        update_runtime_status(state="running", last_error=None)
 
         # Initialize data feed
         symbol = settings.primary_symbol
@@ -258,6 +265,10 @@ class TradingPlatform:
         while self._running and (self._max_cycles is None or self._cycle_count < self._max_cycles):
             self._cycle_count += 1
             try:
+                update_runtime_status(
+                    state="running", cycle_count=self._cycle_count,
+                    cycle_errors=self._cycle_errors, symbol=symbol,
+                )
                 # Check session
                 session = get_current_session()
 
@@ -276,6 +287,7 @@ class TradingPlatform:
                 }
 
                 if not all(candles_by_tf.get(tf) for tf in ("M5", "M15", "H1")):
+                    update_runtime_status(last_decision="WAITING_FOR_CANDLES")
                     await asyncio.sleep(5)
                     continue
 
@@ -301,6 +313,10 @@ class TradingPlatform:
 
             except Exception as e:
                 self._cycle_errors += 1
+                update_runtime_status(
+                    state="error", cycle_count=self._cycle_count,
+                    cycle_errors=self._cycle_errors, last_error=str(e)[:500],
+                )
                 logger.error(f"Main loop error: {e}", exc_info=True)
                 await asyncio.sleep(10)
 
@@ -322,10 +338,16 @@ class TradingPlatform:
         )
 
         if not candidates:
+            update_runtime_status(last_decision="NO_CANDIDATE", candidate_count=0)
             return
+
+        update_runtime_status(candidate_count=len(candidates))
 
         # Process top candidate
         for candidate in candidates[:3]:  # Process top 3 candidates
+            update_runtime_status(
+                last_candidate=f"{candidate.strategy_id}:{candidate.direction.value}",
+            )
             await self._process_candidate(candidate, ctx, current_price, spread, session)
 
     async def _process_candidate(
@@ -354,6 +376,7 @@ class TradingPlatform:
         )
 
         if ai_decision.decision == "WAIT":
+            update_runtime_status(last_decision="AI_SKIP", last_reason=f"score={ai_decision.combined_score}")
             logger.info(
                 f"AI SKIP: {candidate.strategy_id} "
                 f"score={ai_decision.combined_score} — below threshold"
@@ -431,6 +454,7 @@ class TradingPlatform:
 
         # Council said SKIP or HARD_SKIP
         if not council.should_execute:
+            update_runtime_status(last_decision="COUNCIL_SKIP", last_reason=council.recommendation)
             logger.info(f"Council SKIP: {council.debate_summary_th}")
             if self._setup_logger:
                 await self._setup_logger.log_skipped(
@@ -474,6 +498,7 @@ class TradingPlatform:
 
         # Step 4: Execute or log rejection
         if risk_decision.approved:
+            update_runtime_status(last_decision="RISK_APPROVED", last_reason="risk approved")
             logger.info(
                 f"✅ TRADE APPROVED: {candidate.strategy_id} "
                 f"{candidate.direction.value} {candidate.symbol} | "
@@ -494,6 +519,7 @@ class TradingPlatform:
             result = await self._order_manager.send_market_order(request)
 
             if result.success:
+                update_runtime_status(last_decision="TRADE_EXECUTED", last_ticket=result.ticket, last_error=None)
                 setup_id = None
                 if self._trade_learner and result.ticket:
                     snapshot["fill_price"] = result.price
@@ -546,12 +572,14 @@ class TradingPlatform:
                     narrative_th=council.debate_summary_th,
                 )))
             else:
+                update_runtime_status(last_decision="ORDER_FAILED", last_error=result.error_message)
                 logger.error(
                     f"❌ ORDER FAILED: {candidate.strategy_id} — "
                     f"{result.error_message}"
                 )
         else:
             reason = risk_decision.rejection_reason or "unknown"
+            update_runtime_status(last_decision="RISK_REJECTED", last_reason=reason)
             logger.info(
                 f"❌ RISK REJECTED: {candidate.strategy_id} — {reason}"
             )
