@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     && npm install -g @openai/codex \
-    && curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases --skip-path \
+    && curl -fsSL https://antigravity.google/cli/install.sh | bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency definition first for optimal Docker layer caching
