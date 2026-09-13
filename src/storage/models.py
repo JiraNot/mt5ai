@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
+from urllib.parse import urlparse
 
 from sqlalchemy import (
     Boolean,
@@ -200,8 +202,22 @@ class ModelVersion(Base):
 
 # ─── Database Setup ───────────────────────────────────────────────────────────
 
+def ensure_database_parent(database_url: str) -> None:
+    """Create the parent directory for a file-backed SQLite URL."""
+    if not database_url.startswith("sqlite"):
+        return
+    database_path = urlparse(database_url).path
+    if not database_path or database_path in {":memory:", "/:memory:"}:
+        return
+    try:
+        Path(database_path).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # The subsequent engine connection reports the actionable permission error.
+        return
+
 def get_engine(database_url: str):
     """Create async SQLAlchemy engine."""
+    ensure_database_parent(database_url)
     return create_async_engine(
         database_url,
         echo=False,

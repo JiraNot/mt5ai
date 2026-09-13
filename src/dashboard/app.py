@@ -30,6 +30,7 @@ from src.storage.models import (
     DailyRisk,
     SetupLog,
     Trade,
+    ensure_database_parent,
 )
 from src.core.runtime_status import read_runtime_status
 
@@ -85,6 +86,7 @@ def get_engine(db_url: str | None = None):
     """Create synchronous SQLite engine for Streamlit."""
     if not db_url:
         db_url = os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")
+    ensure_database_parent(db_url)
     engine = create_engine(db_url, echo=False)
     try:
         Base.metadata.create_all(engine)

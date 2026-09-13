@@ -18,6 +18,10 @@
   explicitly when demo broker orders are intended.
 - Docker runtime now includes `libgomp1` for LightGBM and creates the data/model
   volume directories before starting the worker, dashboard, or trainer.
+- SQLite startup now creates the configured database parent from both the async
+  worker and synchronous dashboard paths.
+- Coolify/Traefik router labels now explicitly select their named backend service,
+  avoiding automatic-linking conflicts with Coolify's generated HTTP/HTTPS services.
 
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
 
