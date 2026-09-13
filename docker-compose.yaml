@@ -16,12 +16,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
-      - "traefik.http.routers.mt5.rule=Host(`mt5.onetapweb.com`)"
-      - "traefik.http.routers.mt5.entrypoints=http,https"
-      - "traefik.http.routers.mt5.tls=true"
-      - "traefik.http.routers.mt5.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.mt5.service=mt5"
-      - "traefik.http.services.mt5.loadbalancer.server.port=3000"
+      - "traefik.http.routers.freebuff-mt5.rule=Host(`mt5.onetapweb.com`)"
+      - "traefik.http.routers.freebuff-mt5.entrypoints=http,https"
+      - "traefik.http.routers.freebuff-mt5.tls=true"
+      - "traefik.http.routers.freebuff-mt5.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.freebuff-mt5.service=freebuff-mt5"
+      - "traefik.http.services.freebuff-mt5.loadbalancer.server.port=3000"
 
   mt5ai:
     build:
@@ -54,12 +54,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
-      - "traefik.http.routers.bot.rule=Host(`trade.onetapweb.com`)"
-      - "traefik.http.routers.bot.entrypoints=http,https"
-      - "traefik.http.routers.bot.tls=true"
-      - "traefik.http.routers.bot.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.bot.service=bot"
-      - "traefik.http.services.bot.loadbalancer.server.port=8501"
+      - "traefik.http.routers.freebuff-bot.rule=Host(`trade.onetapweb.com`)"
+      - "traefik.http.routers.freebuff-bot.entrypoints=http,https"
+      - "traefik.http.routers.freebuff-bot.tls=true"
+      - "traefik.http.routers.freebuff-bot.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.freebuff-bot.service=freebuff-bot"
+      - "traefik.http.services.freebuff-bot.loadbalancer.server.port=8501"
 
   mt5ai-trainer:
     build:

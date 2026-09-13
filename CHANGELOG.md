@@ -22,6 +22,8 @@
   worker and synchronous dashboard paths.
 - Coolify/Traefik router labels now explicitly select their named backend service,
   avoiding automatic-linking conflicts with Coolify's generated HTTP/HTTPS services.
+- Custom router names use the `freebuff-` prefix so they cannot collide with
+  Coolify's routers named after the Compose services.
 
 All notable changes to the MT5 AI Trading Platform will be documented in this file.
 
