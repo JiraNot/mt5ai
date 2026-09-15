@@ -27,6 +27,9 @@
 - Testnet execution coverage now verifies HMAC signature fields, server-time
   parameters, partial primary-fill status, filled quantity, and close-position
   protective orders.
+- Testnet retries now query Binance by `origClientOrderId` before creating a
+  primary order, and recover existing protective orders after a process restart
+  instead of sending a duplicate order.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100

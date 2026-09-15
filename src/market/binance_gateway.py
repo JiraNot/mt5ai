@@ -138,6 +138,54 @@ class BinanceGateway:
         response.raise_for_status()
         return response.json()
 
+    async def _find_existing_order(self, symbol: str, client_id: str) -> dict[str, Any] | None:
+        """Find an exchange order by client id; only -2013 means "not found"."""
+        try:
+            return await self._signed_request("GET", "/fapi/v1/order", {
+                "symbol": symbol.upper(), "origClientOrderId": client_id,
+            })
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 400:
+                try:
+                    if int(exc.response.json().get("code", 0)) == -2013:
+                        return None
+                except (TypeError, ValueError):
+                    pass
+            raise
+
+    @staticmethod
+    def _map_exchange_status(status: str) -> OrderStatus:
+        return {
+            "FILLED": OrderStatus.FILLED,
+            "PARTIALLY_FILLED": OrderStatus.PARTIAL,
+            "CANCELED": OrderStatus.CANCELLED,
+            "REJECTED": OrderStatus.REJECTED,
+            "EXPIRED": OrderStatus.EXPIRED,
+        }.get(status, OrderStatus.PENDING)
+
+    async def _place_protective_orders(
+        self, symbol: str, side: str, client_id: str, sl: float, tp: float,
+        lookup_existing: bool,
+    ) -> tuple[dict[str, Any], str | None]:
+        protective: dict[str, Any] = {}
+        opposite = "SELL" if side == "BUY" else "BUY"
+        for suffix, order_type, stop_price in (("sl", "STOP_MARKET", sl), ("tp", "TAKE_PROFIT_MARKET", tp)):
+            protective_id = f"{client_id}-{suffix}"
+            try:
+                if lookup_existing:
+                    existing = await self._find_existing_order(symbol, protective_id)
+                    if existing is not None:
+                        protective[suffix] = existing
+                        continue
+                protective[suffix] = await self._signed_request("POST", "/fapi/v1/order", {
+                    "symbol": symbol.upper(), "side": opposite, "type": order_type,
+                    "stopPrice": stop_price, "closePosition": "true",
+                    "workingType": "MARK_PRICE", "newClientOrderId": protective_id,
+                })
+            except Exception as exc:
+                return protective, f"Failed to place server-side {suffix.upper()}: {exc}"
+        return protective, None
+
     async def get_ohlcv(
         self, symbol: str, timeframe: str, count: int = 500, start: datetime | None = None
     ) -> list[Candle]:
@@ -229,31 +277,26 @@ class BinanceGateway:
             previous = self._submitted_orders[client_id]
             return previous.model_copy(update={"metadata": {**previous.metadata, "duplicate": True}})
         side = "BUY" if request.direction == Direction.BUY else "SELL"
-        filled = await self._signed_request("POST", "/fapi/v1/order", {
-            "symbol": request.symbol.upper(), "side": side, "type": "MARKET",
-            "quantity": request.volume, "newClientOrderId": client_id,
-        })
+        filled = await self._find_existing_order(request.symbol, client_id)
+        recovered = filled is not None
+        if filled is None:
+            filled = await self._signed_request("POST", "/fapi/v1/order", {
+                "symbol": request.symbol.upper(), "side": side, "type": "MARKET",
+                "quantity": request.volume, "newClientOrderId": client_id,
+            })
         order_id = str(filled.get("orderId", ""))
-        status = OrderStatus.PARTIAL if filled.get("status") == "PARTIALLY_FILLED" else OrderStatus.FILLED
+        status = self._map_exchange_status(str(filled.get("status", "")))
         fill_price = float(filled.get("avgPrice") or filled.get("price") or 0) or None
-        protective: dict[str, Any] = {}
-        protective_error: str | None = None
-        opposite = "SELL" if side == "BUY" else "BUY"
-        for suffix, order_type, stop_price in (("sl", "STOP_MARKET", request.sl), ("tp", "TAKE_PROFIT_MARKET", request.tp)):
-            try:
-                protective[suffix] = await self._signed_request("POST", "/fapi/v1/order", {
-                    "symbol": request.symbol.upper(), "side": opposite, "type": order_type,
-                    "stopPrice": stop_price, "closePosition": "true",
-                    "workingType": "MARK_PRICE", "newClientOrderId": f"{client_id}-{suffix}",
-                })
-            except Exception as exc:
-                protective_error = f"Failed to place server-side {suffix.upper()}: {exc}"
-                break
+        protective, protective_error = await self._place_protective_orders(
+            request.symbol, side, client_id, request.sl, request.tp, lookup_existing=recovered
+        ) if status in (OrderStatus.FILLED, OrderStatus.PARTIAL) else ({}, "Primary order is not filled")
+        if recovered and status not in (OrderStatus.FILLED, OrderStatus.PARTIAL):
+            protective_error = f"Existing Binance order is {filled.get('status', 'UNKNOWN')}"
         result = OrderResult(
             success=protective_error is None, ticket=int(order_id) if order_id.isdigit() else None,
             price=fill_price, volume=float(filled.get("executedQty", request.volume)),
             venue=self.venue, external_order_id=order_id, status=status,
-            error_message=protective_error, metadata={"primary": filled, "protective": protective},
+            error_message=protective_error, metadata={"primary": filled, "protective": protective, "duplicate": recovered},
         )
         self._submitted_orders[client_id] = result
         return result

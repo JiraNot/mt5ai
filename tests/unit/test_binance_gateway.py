@@ -133,7 +133,9 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
         if request.url.path == "/fapi/v1/time":
             return httpx.Response(200, json={"serverTime": 0})
         assert request.url.path == "/fapi/v1/order"
-        if len(calls) == 3:
+        if request.method == "GET":
+            return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
+        if len(calls) == 4:
             return httpx.Response(200, json={"orderId": 123, "status": "FILLED", "avgPrice": "100", "executedQty": "1"})
         return httpx.Response(200, json={"orderId": 124 + len(calls), "status": "NEW"})
 
@@ -145,14 +147,16 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
     ))
     assert result.success is True
     assert result.external_order_id == "123"
-    assert len(calls) == 5
+    assert len(calls) == 6
     assert calls[1].url.path == "/fapi/v1/time"
     assert calls[2].headers["X-MBX-APIKEY"] == "key"
     assert calls[2].url.params["timestamp"]
     assert calls[2].url.params["recvWindow"] == "5000"
     assert len(calls[2].url.params["signature"]) == 64
-    assert calls[3].url.params["type"] == "STOP_MARKET"
-    assert calls[4].url.params["type"] == "TAKE_PROFIT_MARKET"
+    assert calls[2].url.params["origClientOrderId"] == "candidate-1"
+    assert calls[3].url.params["type"] == "MARKET"
+    assert calls[4].url.params["type"] == "STOP_MARKET"
+    assert calls[5].url.params["type"] == "TAKE_PROFIT_MARKET"
     await gateway.disconnect()
 
 
@@ -168,6 +172,8 @@ async def test_partial_primary_fill_returns_partial_status_and_filled_volume(mon
             return httpx.Response(200, json={})
         if request.url.path == "/fapi/v1/time":
             return httpx.Response(200, json={"serverTime": 0})
+        if request.method == "GET":
+            return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
         order_calls.append(request)
         if len(order_calls) == 1:
             return httpx.Response(200, json={
@@ -188,6 +194,59 @@ async def test_partial_primary_fill_returns_partial_status_and_filled_volume(mon
     assert len(order_calls) == 3
     assert all(call.url.params["closePosition"] == "true" for call in order_calls[1:])
     await gateway.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_testnet_order_is_idempotent_across_gateway_restart(monkeypatch):
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
+    primary = {"orderId": 301, "status": "FILLED", "avgPrice": "100", "executedQty": "1"}
+    protective = {
+        "restart-key-sl": {"orderId": 302, "status": "NEW"},
+        "restart-key-tp": {"orderId": 303, "status": "NEW"},
+    }
+    post_calls = []
+    installed = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal installed
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        assert request.url.path == "/fapi/v1/order"
+        client_id = request.url.params.get("origClientOrderId")
+        if request.method == "GET":
+            if installed and client_id == "restart-key":
+                return httpx.Response(200, json=primary)
+            if installed and client_id in protective:
+                return httpx.Response(200, json=protective[client_id])
+            return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
+        post_calls.append(request)
+        if request.url.params["type"] == "MARKET":
+            installed = True
+            return httpx.Response(200, json=primary)
+        suffix = "restart-key-sl" if request.url.params["type"] == "STOP_MARKET" else "restart-key-tp"
+        return httpx.Response(200, json=protective[suffix])
+
+    request = OrderRequest(
+        symbol="BTCUSDT", direction=Direction.BUY, volume=1, sl=99, tp=102,
+        execution_key="restart-key", venue="binance",
+    )
+    first = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await first.connect()
+    first_result = await first.send_order(request)
+    await first.disconnect()
+
+    restarted = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await restarted.connect()
+    recovered = await restarted.send_order(request)
+    assert first_result.success and recovered.success
+    assert recovered.external_order_id == "301"
+    assert recovered.metadata["duplicate"] is True
+    assert len(post_calls) == 3
+    await restarted.disconnect()
 
 
 def test_gateway_selects_testnet_websocket_endpoint():
