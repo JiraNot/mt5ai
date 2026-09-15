@@ -32,7 +32,7 @@ class OrderIntent(BaseModel):
 [ ] Market open
 [ ] Spread valid
 [ ] Candidate not expired
-[ ] No duplicate (execution_key check)
+[x] No duplicate (execution_key check, including Binance client-order recovery)
 [ ] Risk approval valid
 [ ] Price deviation acceptable
 ```
