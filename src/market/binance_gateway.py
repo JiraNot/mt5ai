@@ -152,7 +152,9 @@ class BinanceGateway:
             params["startTime"] = int(start.timestamp() * 1000)
         response = await client.get("/fapi/v1/klines", params=params)
         response.raise_for_status()
-        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        # Use Binance-adjusted time so a local clock drift cannot make the
+        # data feed evaluate a still-forming candle (or skip a closed one).
+        now_ms = int(time.time() * 1000) + self._server_time_offset_ms
         return [
             Candle(
                 timestamp=datetime.fromtimestamp(row[0] / 1000, tz=timezone.utc),
