@@ -46,12 +46,14 @@ class AICouncil:
     def __init__(
         self,
         min_rule_score: int = 60,
-        require_consensus: bool = True,
+        require_consensus: bool = False,
         min_combined_score: int = 65,
+        min_single_approval_confidence: int = 75,
     ) -> None:
         self.min_rule_score = min_rule_score
         self.require_consensus = require_consensus
         self.min_combined_score = min_combined_score
+        self.min_single_approval_confidence = min_single_approval_confidence
         self.gemini = GeminiEvaluator()
         self.gpt = GPTEvaluator()
 
@@ -105,7 +107,24 @@ class AICouncil:
             + gpt.confidence * 0.25
         )
 
-        if gemini_approve and gpt_approve and combined >= self.min_combined_score:
+        both_approve = gemini_approve and gpt_approve
+        one_approves = gemini_approve != gpt_approve
+        approving_confidence = max(
+            gemini.confidence if gemini_approve else 0,
+            gpt.confidence if gpt_approve else 0,
+        )
+
+        # A disagreement is allowed to proceed to the Risk Engine only when
+        # the approving analyst is highly confident and the combined score is
+        # still strong. Risk Engine remains the final authority.
+        high_confidence_disagreement = (
+            one_approves
+            and not self.require_consensus
+            and approving_confidence >= self.min_single_approval_confidence
+            and combined >= self.min_combined_score
+        )
+
+        if (both_approve and combined >= self.min_combined_score) or high_confidence_disagreement:
             verdict = "EXECUTE"
         elif not gemini_approve and not gpt_approve:
             verdict = "HARD_SKIP"

@@ -74,7 +74,7 @@ DISABLED
 ## Known Issues
 
 - Native `MetaTrader5` package unavailable on Linux — solved by bridge mode (proven E2E via Wine); awaiting Windows host for production
-- Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed in source. Deployment verification is still pending until the latest image is rebuilt with the URL fix.
+- Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed and verified in production on 2026-09-15. The AI Council now permits only high-confidence disagreements to proceed to the Risk Engine; Risk Engine remains final authority.
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
