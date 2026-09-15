@@ -7,6 +7,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from typing import Awaitable, Callable
 
 from src.core.types import Candle
 
@@ -28,9 +29,15 @@ def parse_kline_event(payload: dict) -> tuple[str, Candle, bool]:
 class BinanceWebSocket:
     """Reconnectable Binance Futures stream; emits only parsed venue data."""
 
-    def __init__(self, base_url: str = "wss://stream.binancefuture.com", reconnect_delay: float = 2.0) -> None:
+    def __init__(
+        self,
+        base_url: str = "wss://fstream.binance.com",
+        reconnect_delay: float = 2.0,
+        time_sync: Callable[[], Awaitable[int]] | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._reconnect_delay = reconnect_delay
+        self._time_sync = time_sync
         self.server_time_offset_ms = 0
 
     async def stream_klines(self, symbol: str, timeframe: str) -> AsyncIterator[tuple[str, Candle, bool]]:
@@ -46,6 +53,11 @@ class BinanceWebSocket:
         delay = self._reconnect_delay
         while True:
             try:
+                if self._time_sync is not None:
+                    try:
+                        self.server_time_offset_ms = await self._time_sync()
+                    except Exception as exc:
+                        logger.warning("Binance WebSocket server-time sync unavailable: %s", exc)
                 async with websockets.connect(url, ping_interval=20, ping_timeout=20) as socket:
                     delay = self._reconnect_delay
                     async for message in socket:

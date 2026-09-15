@@ -166,7 +166,7 @@ class BinanceGateway:
         """Expose the reconnectable WebSocket stream through the venue gateway."""
         from src.market.binance_websocket import BinanceWebSocket
 
-        stream = BinanceWebSocket(self.websocket_base_url)
+        stream = BinanceWebSocket(self.websocket_base_url, time_sync=self.sync_server_time)
         async for event in stream.stream_klines(symbol, timeframe):
             yield event
 

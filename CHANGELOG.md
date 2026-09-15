@@ -17,6 +17,9 @@
   handles partial exits deterministically, selects the official testnet/mainnet
   WebSocket host through a tested property, and never treats liquidation price as
   a protective stop.
+- Binance WebSocket streams now invoke the gateway's server-time synchronization
+  callback before each connection/reconnect, with a regression test for the
+  `sync → connect` ordering.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100

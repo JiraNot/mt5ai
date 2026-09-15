@@ -7,6 +7,7 @@ from src.core.config import load_settings
 from src.market.binance_gateway import BinanceGateway
 from src.execution.paper_gateway import PaperGateway
 from src.market.binance_websocket import parse_kline_event
+from src.market.binance_websocket import BinanceWebSocket
 from src.core.types import Direction, OrderRequest
 
 
@@ -142,6 +143,45 @@ def test_gateway_selects_testnet_websocket_endpoint():
 def test_gateway_selects_mainnet_websocket_endpoint():
     gateway = BinanceGateway(base_url="https://fapi.binance.com")
     assert gateway.websocket_base_url == "wss://fstream.binance.com"
+
+
+@pytest.mark.asyncio
+async def test_websocket_syncs_server_time_before_connect(monkeypatch):
+    calls = []
+
+    class FakeSocket:
+        async def __aenter__(self):
+            calls.append("connect")
+            return self
+
+        async def __aexit__(self, *_):
+            return False
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise asyncio.CancelledError
+
+    class FakeWebsockets:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            return FakeSocket()
+
+    import asyncio
+    import sys
+    monkeypatch.setitem(sys.modules, "websockets", FakeWebsockets)
+
+    async def sync_time():
+        calls.append("sync")
+        return 123
+
+    stream = BinanceWebSocket("wss://fstream.binance.com", reconnect_delay=0, time_sync=sync_time)
+    iterator = stream.stream_klines("BTCUSDT", "M5")
+    with pytest.raises(asyncio.CancelledError):
+        await iterator.__anext__()
+    assert calls == ["sync", "connect"]
+    assert stream.server_time_offset_ms == 123
 
 
 @pytest.mark.asyncio
