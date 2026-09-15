@@ -49,11 +49,13 @@ class AICouncil:
         require_consensus: bool = False,
         min_combined_score: int = 65,
         min_single_approval_confidence: int = 75,
+        min_single_provider_rule_score: int = 80,
     ) -> None:
         self.min_rule_score = min_rule_score
         self.require_consensus = require_consensus
         self.min_combined_score = min_combined_score
         self.min_single_approval_confidence = min_single_approval_confidence
+        self.min_single_provider_rule_score = min_single_provider_rule_score
         self.gemini = GeminiEvaluator()
         self.gpt = GPTEvaluator()
 
@@ -114,6 +116,24 @@ class AICouncil:
             gpt.confidence if gpt_approve else 0,
         )
 
+        # If one CLI/provider is not configured or temporarily unavailable,
+        # do not turn that operational problem into a permanent trading halt.
+        # A strong available analyst plus a high rule score may continue to
+        # the Risk Engine. An actual provider rejection (non-empty response)
+        # still blocks the setup.
+        gemini_unavailable = (
+            not gemini_approve and gemini.confidence == 0 and not gemini.raw_response
+        )
+        gpt_unavailable = (
+            not gpt_approve and gpt.confidence == 0 and not gpt.raw_response
+        )
+        single_provider_fallback = (
+            one_approves
+            and (gemini_unavailable or gpt_unavailable)
+            and rule_score >= self.min_single_provider_rule_score
+            and approving_confidence >= self.min_single_approval_confidence
+        )
+
         # A disagreement is allowed to proceed to the Risk Engine only when
         # the approving analyst is highly confident and the combined score is
         # still strong. Risk Engine remains the final authority.
@@ -124,7 +144,11 @@ class AICouncil:
             and combined >= self.min_combined_score
         )
 
-        if (both_approve and combined >= self.min_combined_score) or high_confidence_disagreement:
+        if (
+            (both_approve and combined >= self.min_combined_score)
+            or high_confidence_disagreement
+            or single_provider_fallback
+        ):
             verdict = "EXECUTE"
         elif not gemini_approve and not gpt_approve:
             verdict = "HARD_SKIP"

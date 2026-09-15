@@ -59,3 +59,32 @@ def test_low_confidence_disagreement_is_rejected() -> None:
     decision = council._make_decision(_gemini("APPROVE", 74), _gpt("REJECT", 70), 100)
 
     assert decision.final_verdict == "SKIP"
+
+
+def test_unavailable_provider_does_not_block_strong_available_analyst() -> None:
+    council = AICouncil(
+        require_consensus=False,
+        min_single_approval_confidence=75,
+        min_single_provider_rule_score=80,
+    )
+
+    unavailable_gemini = _gemini("REJECT", 0)
+    available_gpt = _gpt("APPROVE", 85)
+    decision = council._make_decision(unavailable_gemini, available_gpt, 85)
+
+    assert decision.final_verdict == "EXECUTE"
+
+
+def test_real_rejection_still_blocks_single_provider_fallback() -> None:
+    council = AICouncil(
+        require_consensus=False,
+        min_single_approval_confidence=75,
+        min_single_provider_rule_score=80,
+    )
+
+    rejected_gemini = _gemini("REJECT", 0)
+    rejected_gemini.raw_response = '{"verdict":"REJECT"}'
+    available_gpt = _gpt("APPROVE", 95)
+    decision = council._make_decision(rejected_gemini, available_gpt, 95)
+
+    assert decision.final_verdict == "SKIP"

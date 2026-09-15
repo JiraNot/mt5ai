@@ -6,6 +6,9 @@
   proceed to the Risk Engine only when the approving analyst has at least 75/100
   confidence and the combined score is at least 70. Consensus mode remains
   available, and all hard risk controls remain unchanged.
+- When one AI provider is unavailable (for example, Gemini credentials are not
+  configured), a strong available analyst plus rule score >=80 may proceed to
+  the Risk Engine; a real provider rejection still blocks the setup.
 - Docker services now run under a small supervisor so a crashed trading worker
   terminates the container instead of leaving the dashboard with a stale
   `starting` heartbeat; `BRIDGE_TOKEN` is also passed explicitly to the worker.
