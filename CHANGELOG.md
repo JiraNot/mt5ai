@@ -26,6 +26,8 @@
   worker and synchronous dashboard paths.
 - Coolify Compose now runs the database-sharing app and trainer as UID/GID 0 so
   the startup permission repair can access restrictive persistent-volume mounts.
+- Configuration now normalizes the legacy three-slash absolute SQLite URL so
+  older Coolify environment values cannot redirect the worker to `/app/app/data`.
 - Coolify/Traefik router labels now explicitly select their named backend service,
   avoiding automatic-linking conflicts with Coolify's generated HTTP/HTTPS services.
 - Custom router names use the `freebuff-` prefix so they cannot collide with

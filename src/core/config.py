@@ -179,6 +179,15 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
     # Build database URL from env
     db_url = os.getenv("DATABASE_URL", settings_yaml.get("database_url", ""))
 
+    # SQLAlchemy requires four slashes for an absolute SQLite path.  Coolify
+    # environment values may still contain the older three-slash form; repair
+    # that representation at the configuration boundary so the worker cannot
+    # accidentally target /app/app/data when its working directory is /app.
+    if db_url.startswith("sqlite+aiosqlite:///app/") and not db_url.startswith(
+        "sqlite+aiosqlite:////app/"
+    ):
+        db_url = db_url.replace("sqlite+aiosqlite:///app/", "sqlite+aiosqlite:////app/", 1)
+
     # Construct settings
     return Settings(
         mt5_login=mt5_config.login,
