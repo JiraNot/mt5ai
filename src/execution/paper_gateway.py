@@ -21,6 +21,7 @@ class PaperGateway:
         self._positions: dict[int, Position] = {}
         self._deals: dict[int, list[Deal]] = {}
         self._execution_keys: dict[str, int] = {}
+        self._execution_results: dict[int, OrderResult] = {}
         self._next_ticket = 1
 
     @property
@@ -63,15 +64,8 @@ class PaperGateway:
     async def send_order(self, request: OrderRequest) -> OrderResult:
         if request.execution_key and request.execution_key in self._execution_keys:
             ticket = self._execution_keys[request.execution_key]
-            position = self._positions.get(ticket)
-            return OrderResult(
-                success=position is not None, ticket=ticket,
-                price=position.open_price if position else None,
-                volume=position.volume if position else None,
-                venue=self.venue, status=(OrderResult.model_fields["status"].default),
-                error_message="duplicate execution key" if position is None else "duplicate ignored",
-                metadata={"duplicate": True},
-            )
+            original = self._execution_results[ticket]
+            return original.model_copy(update={"metadata": {**original.metadata, "duplicate": True}})
         if request.volume <= 0 or request.sl <= 0 or request.tp <= 0:
             return OrderResult(success=False, venue=self.venue, error_message="Paper order requires positive volume, SL, and TP")
         tick = await self._market.get_current_price(request.symbol)
@@ -92,10 +86,12 @@ class PaperGateway:
         )]
         if request.execution_key:
             self._execution_keys[request.execution_key] = ticket
-        return OrderResult(
+        result = OrderResult(
             success=True, ticket=ticket, price=price, volume=request.volume,
             venue=self.venue, external_order_id=str(ticket), metadata={"paper": True},
         )
+        self._execution_results[ticket] = result
+        return result
 
     async def modify_position(self, ticket: int, sl: float | None = None, tp: float | None = None) -> OrderResult:
         position = self._positions.get(ticket)

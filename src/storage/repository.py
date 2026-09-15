@@ -189,6 +189,35 @@ class Repository:
             )
         )
 
+    async def close_trade_by_external_order(
+        self,
+        external_order_id: int | str,
+        exit_price: float,
+        profit: float,
+        commission: float = 0,
+        swap: float = 0,
+    ) -> bool:
+        """Close an open journal row by broker/exchange order identity."""
+        net_profit = profit + commission + swap
+        result = await self._session.execute(
+            update(Trade)
+            .where(
+                Trade.external_order_id == str(external_order_id),
+                Trade.status == PositionStatus.OPEN.value,
+            )
+            .values(
+                exit_price=exit_price,
+                exit_time=datetime.utcnow(),
+                profit=profit,
+                commission=commission,
+                swap=swap,
+                net_profit=net_profit,
+                status=PositionStatus.CLOSED.value,
+            )
+        )
+        await self._session.commit()
+        return bool(result.rowcount)
+
     async def get_recent_trades(
         self, symbol: Optional[str] = None, limit: int = 50
     ) -> list[Trade]:

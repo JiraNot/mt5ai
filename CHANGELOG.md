@@ -11,6 +11,8 @@
 - Binance can now be selected as the market-data venue, with paper fills,
   venue-aware trade journal identity, reconnectable kline streaming, server
   clock synchronization, and testnet-only signed orders with protective SL/TP.
+- Verified position outcomes now close the corresponding venue-aware trade
+  journal row by external order ID, including net PnL and close price.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100

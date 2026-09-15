@@ -52,6 +52,7 @@ DISABLED
 - [x] Binance WebSocket kline streaming with reconnect and server-time sync
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
+- [x] Verified outcomes close venue-aware journal trades
 - [x] 248 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)

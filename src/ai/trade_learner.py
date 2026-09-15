@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from src.core.events import EventType, event_bus
 from src.core.types import ClosedOutcome
 from src.storage.models import LearningEvidence, TradeMemory
+from src.storage.repository import Repository
 from src.execution.outcomes import reconcile_deals
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,12 @@ class TradeLearner:
                 evidence.position_id = outcome.position_id
                 evidence.outcome_json = outcome.model_dump_json()
                 await session.commit()  # Outcome and memory are one transaction.
+            async with self._repo_factory() as trade_session:
+                await Repository(trade_session).close_trade_by_external_order(
+                    outcome.opening_order,
+                    outcome.close_price,
+                    outcome.net_profit,
+                )
 
     async def reconcile_pending(self, gateway):
         """Recover missed closes after restart; never label an open/incomplete position."""
