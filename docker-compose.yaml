@@ -28,6 +28,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mt5ai
+    # Coolify may attach persistent volumes with restrictive ownership.  Run
+    # the app as root so the entrypoint can repair the mount permissions before
+    # SQLite and the worker open the shared database.
+    user: "0:0"
     restart: unless-stopped
     depends_on:
       - mt5-node
@@ -67,6 +71,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mt5ai-trainer
+    user: "0:0"
     restart: unless-stopped
     depends_on:
       - mt5ai

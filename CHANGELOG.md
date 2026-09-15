@@ -24,6 +24,8 @@
   volume directories before starting the worker, dashboard, or trainer.
 - SQLite startup now creates the configured database parent from both the async
   worker and synchronous dashboard paths.
+- Coolify Compose now runs the database-sharing app and trainer as UID/GID 0 so
+  the startup permission repair can access restrictive persistent-volume mounts.
 - Coolify/Traefik router labels now explicitly select their named backend service,
   avoiding automatic-linking conflicts with Coolify's generated HTTP/HTTPS services.
 - Custom router names use the `freebuff-` prefix so they cannot collide with
