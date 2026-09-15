@@ -90,6 +90,11 @@ class TradingPlatform:
         self._max_cycles = max_cycles
         self._cycle_count = 0
         self._cycle_errors = 0
+        self._trading_symbol = (
+            settings.binance_symbol
+            if settings.market_data_venue == "binance"
+            else settings.primary_symbol
+        )
         # Select one venue for the pipeline. Binance PAPER is wrapped so the
         # same strategies/risk/journal path can be exercised without signing.
         if settings.market_data_venue == "binance":
@@ -110,7 +115,7 @@ class TradingPlatform:
             self._mt5 = MT5Connection()
 
         self._data_feed = DataFeed(self._mt5)
-        self._spread_monitor = SpreadMonitor(settings.primary_symbol)
+        self._spread_monitor = SpreadMonitor(self._trading_symbol)
 
         # Structure
         self._context_builder = ContextBuilder()
@@ -155,7 +160,7 @@ class TradingPlatform:
         setup_auth_credentials()
         update_runtime_status(
             state="starting", mode=settings.trading_mode.upper(),
-            symbol=settings.primary_symbol, cycle_count=0, cycle_errors=0,
+            symbol=self._trading_symbol, cycle_count=0, cycle_errors=0,
         )
         logger.info(
             f"Starting Freebuff Trading Platform v{settings.app.version} "
@@ -213,7 +218,7 @@ class TradingPlatform:
         update_runtime_status(state="running", last_error=None)
 
         # Initialize data feed
-        symbol = settings.primary_symbol
+        symbol = self._trading_symbol
         logger.info(f"Initializing data feed for {symbol}...")
         await self._data_feed.initialize(symbol)
         self._poll_task = asyncio.create_task(self._data_feed.start_polling(symbol))
