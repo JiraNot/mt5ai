@@ -134,6 +134,7 @@ class AICouncil:
         )
         single_provider_fallback = (
             one_approves
+            and not self.require_consensus
             and (gemini_unavailable or gpt_unavailable)
             and rule_score >= self.min_single_provider_rule_score
             and approving_confidence >= self.min_single_approval_confidence

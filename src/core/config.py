@@ -118,6 +118,15 @@ class Settings(BaseSettings):
     bridge_token: str = ""
     bridge_timeout: float = 10.0
 
+    # Binance USDT-M Futures. The first phase is public market data only;
+    # execution remains fail-closed until paper/testnet safeguards are ready.
+    binance_mode: str = "paper"
+    binance_base_url: str = "https://testnet.binancefuture.com"
+    binance_api_key: str = ""
+    binance_api_secret: str = ""
+    binance_timeout: float = 10.0
+    binance_symbol: str = "BTCUSDT"
+
     database_url: str = "sqlite+aiosqlite:///freebuff.db"
     redis_url: str = "redis://localhost:6379/0"
     trading_mode: str = "paper"
@@ -197,6 +206,12 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         bridge_url=os.getenv("BRIDGE_URL", "http://127.0.0.1:8900"),
         bridge_token=os.getenv("BRIDGE_TOKEN", ""),
         bridge_timeout=float(os.getenv("BRIDGE_TIMEOUT", "10")),
+        binance_mode=os.getenv("BINANCE_MODE", "paper").lower(),
+        binance_base_url=os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com"),
+        binance_api_key=os.getenv("BINANCE_API_KEY", ""),
+        binance_api_secret=os.getenv("BINANCE_API_SECRET", ""),
+        binance_timeout=float(os.getenv("BINANCE_TIMEOUT", "10")),
+        binance_symbol=os.getenv("BINANCE_SYMBOL", "BTCUSDT").upper(),
         database_url=db_url or "sqlite+aiosqlite:///freebuff.db",
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         trading_mode=os.getenv("TRADING_MODE", settings_yaml.get("app", {}).get("mode", "paper")),

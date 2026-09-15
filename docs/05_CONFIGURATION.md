@@ -197,6 +197,14 @@ BRIDGE_URL=http://100.x.y.z:8900
 BRIDGE_TOKEN=your-shared-secret
 BRIDGE_TIMEOUT=10
 
+# Binance USDT-M Futures
+BINANCE_MODE=paper              # paper / testnet / live (live disabled by design)
+BINANCE_BASE_URL=https://testnet.binancefuture.com
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
+BINANCE_TIMEOUT=10
+BINANCE_SYMBOL=BTCUSDT
+
 # AI
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...

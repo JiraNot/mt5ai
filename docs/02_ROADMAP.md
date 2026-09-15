@@ -184,3 +184,17 @@
 - [ ] Multi-symbol
 - [ ] Advanced ML
 - [ ] Ensemble engine
+
+## Phase 15 — Multi-Venue Binance (new)
+
+**Status:** 🟡 Read-only foundation started (2026-09-15)
+
+- [x] Venue gateway contract
+- [x] Binance USDT-M public REST: ping, klines, book ticker, exchange info
+- [x] Binance config with paper/testnet/live modes (LIVE remains disabled)
+- [x] Mock transport tests
+- [ ] Binance paper execution and venue-aware journal fields
+- [ ] Binance WebSocket market data with reconnect and server-time sync
+- [ ] Binance Futures Testnet signed orders with server-side SL/TP
+- [ ] Restart reconciliation, duplicate-order protection, partial fills
+- [ ] Production DEMO rollout after acceptance tests

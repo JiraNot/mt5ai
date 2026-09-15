@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Started the multi-venue Binance slice with a venue gateway contract and a
+  read-only Binance USDT-M Futures REST adapter for klines, book ticker, and
+  exchange symbol filters. Binance order execution is intentionally fail-closed
+  until paper, testnet signing, and reconciliation are implemented.
+- Consensus mode now blocks unavailable-provider fallback as well as real
+  analyst disagreement; the relaxed fallback remains opt-in only.
+
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100
   confidence and the combined score is at least 70. Consensus mode remains
