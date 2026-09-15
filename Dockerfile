@@ -42,6 +42,7 @@ ENV DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
 
 EXPOSE 8501
 
-# Run background trading loop and foreground Streamlit dashboard
+# Run the trading worker and dashboard under one supervisor so a worker crash
+# cannot leave a healthy-looking dashboard behind with a stale heartbeat.
 ENTRYPOINT ["/app/scripts/container-entrypoint.sh"]
-CMD ["bash", "-c", "mkdir -p /app/data /app/models && python -m src.app & exec streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true"]
+CMD ["bash", "scripts/run_services.sh"]

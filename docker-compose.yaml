@@ -36,6 +36,7 @@ services:
     environment:
       - MT5_MODE=bridge
       - BRIDGE_URL=http://mt5-node:8900
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
       - TRADING_MODE=${TRADING_MODE:-PAPER}
       - DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
       - DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db

@@ -218,6 +218,7 @@ class TradingPlatform:
     async def stop(self) -> None:
         """Stop the trading platform."""
         self._running = False
+        update_runtime_status(state="stopped", mt5_connected=False)
         logger.info("Stopping platform...")
         await self._data_feed.stop_polling()
         if self._poll_task:

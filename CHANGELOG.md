@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Docker services now run under a small supervisor so a crashed trading worker
+  terminates the container instead of leaving the dashboard with a stale
+  `starting` heartbeat; `BRIDGE_TOKEN` is also passed explicitly to the worker.
+- Graceful worker shutdown now publishes a `stopped` runtime state.
 - Docker image now installs the Codex and Antigravity CLIs for AI Council deployment.
 - Coolify can initialize Codex/ChatGPT login from the `CODEX_AUTH_JSON` secret;
   Antigravity uses the `GEMINI_API_KEY` secret through its supported Gemini

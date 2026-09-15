@@ -74,6 +74,7 @@ DISABLED
 ## Known Issues
 
 - Native `MetaTrader5` package unavailable on Linux — solved by bridge mode (proven E2E via Wine); awaiting Windows host for production
+- Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision and explicit bridge-token wiring are now fixed in source, but the deployment must be rebuilt/restarted to apply them
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
