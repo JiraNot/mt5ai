@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 
 from src.ai.gemini_evaluator import GeminiEvaluator, GeminiVerdict
 from src.ai.gpt_evaluator import GPTEvaluator, GPTVerdict
+from src.ai.openrouter_evaluator import OpenRouterEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,10 @@ class AICouncil:
         self.min_combined_score = min_combined_score
         self.min_single_approval_confidence = min_single_approval_confidence
         self.min_single_provider_rule_score = min_single_provider_rule_score
-        self.gemini = GeminiEvaluator()
+        # Keep the Bull side contract stable while allowing DeepSeek to replace
+        # the fragile Gemini CLI when an OpenRouter key is configured.
+        self.bull_provider = "deepseek" if os.getenv("OPENROUTER_API_KEY", "").strip() else "gemini"
+        self.gemini = OpenRouterEvaluator() if self.bull_provider == "deepseek" else GeminiEvaluator()
         self.gpt = GPTEvaluator()
 
     async def evaluate(self, setup_context: dict) -> CouncilDecision:
@@ -76,7 +81,7 @@ class AICouncil:
         )
 
         if isinstance(gemini_result, Exception):
-            logger.error("Gemini error: %s", gemini_result)
+            logger.error("%s error: %s", self.bull_provider.title(), gemini_result)
             gemini_result = GeminiVerdict(
                 verdict="REJECT", confidence=0,
                 narrative_th="Gemini Error: " + str(gemini_result),

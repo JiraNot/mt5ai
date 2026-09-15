@@ -610,12 +610,16 @@ def check_ai_status() -> dict:
     ai_cli = os.getenv("AI_CLI_BIN", "agy")
     antigravity_cli_ok = bool(shutil.which(ai_cli) or (os.path.isabs(ai_cli) and os.access(ai_cli, os.X_OK)))
     antigravity_auth_ok = bool(os.getenv("GEMINI_API_KEY"))
+    openrouter_auth_ok = bool(os.getenv("OPENROUTER_API_KEY"))
 
     return {
         "chatgpt_auth": codex_auth_ok,
         "chatgpt_cli": codex_cli_ok,
         "gemini_auth": antigravity_cli_ok and antigravity_auth_ok,
-        "council_ready": codex_auth_ok and codex_cli_ok and antigravity_cli_ok and antigravity_auth_ok,
+        "deepseek_auth": openrouter_auth_ok,
+        "council_ready": codex_auth_ok and codex_cli_ok and (
+            (antigravity_cli_ok and antigravity_auth_ok) or openrouter_auth_ok
+        ),
     }
 
 
@@ -730,6 +734,11 @@ def main():
     else:
         st.sidebar.markdown("🟡 `Gemini (Google)`: API Key Not Ready")
 
+    if ai_status["deepseek_auth"]:
+        st.sidebar.markdown("🟢 `DeepSeek (OpenRouter)`: API Key Ready (Bull)")
+    else:
+        st.sidebar.markdown("⚪ `DeepSeek (OpenRouter)`: Not Configured")
+
     st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")
     if st.sidebar.button("🔒 Logout", use_container_width=True):
@@ -826,15 +835,16 @@ def main():
         with s_col2:
             cg_tag = "🟢 ChatGPT" if (ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]) else "🟡 ChatGPT"
             gm_tag = "🟢 Gemini" if ai_status["gemini_auth"] else "🟡 Gemini"
+            ds_tag = "🟢 DeepSeek" if ai_status["deepseek_auth"] else "⚪ DeepSeek"
             if ai_status["council_ready"]:
                 st.success(
                     f"🧠 **AI Council Debate: Online**\n\n"
-                    f"{cg_tag} (Bear Trap) · {gm_tag} (Bull Confluence) · Auth Ready"
+                    f"{cg_tag} (Bear Trap) · {gm_tag if ai_status['gemini_auth'] else ds_tag} (Bull Confluence) · Auth Ready"
                 )
             else:
                 st.info(
                     f"🧠 **AI Council Status**\n\n"
-                    f"{cg_tag} · {gm_tag} · Rule Scorer Active"
+                    f"{cg_tag} · {gm_tag if ai_status['gemini_auth'] else ds_tag} · Rule Scorer Active"
                 )
 
         with s_col3:

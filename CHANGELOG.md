@@ -9,6 +9,9 @@
 - When one AI provider is unavailable (for example, Gemini credentials are not
   configured), a strong available analyst plus rule score >=80 may proceed to
   the Risk Engine; a real provider rejection still blocks the setup.
+- Added OpenRouter DeepSeek as a Bull analyst provider, selected automatically
+  when `OPENROUTER_API_KEY` is configured. It uses the existing structured
+  verdict contract and cannot bypass the Risk Engine.
 - Docker services now run under a small supervisor so a crashed trading worker
   terminates the container instead of leaving the dashboard with a stale
   `starting` heartbeat; `BRIDGE_TOKEN` is also passed explicitly to the worker.
