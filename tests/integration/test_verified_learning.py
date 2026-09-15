@@ -51,6 +51,44 @@ async def test_memory_exactly_once_costs_r_multiple_dataset_and_restart(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_binance_restart_reconciliation_uses_journaled_symbol_and_order():
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    learner = TradeLearner(factory)
+    learner.account_key = 'binance-testnet/0'
+    await learner.record_entry(
+        account_key=learner.account_key,
+        opening_order=100,
+        snapshot={
+            'symbol': 'XAUUSD', 'direction': 'BUY', 'strategy': 'fvg',
+            'entry_price': 2000, 'pip_size': 0.1,
+        },
+        initial_risk=400,
+    )
+
+    class BinanceRecoveryGateway:
+        def __init__(self):
+            self.calls = []
+
+        async def get_positions(self):
+            return []
+
+        async def get_symbol_deals(self, symbol, opening_order, position_id):
+            self.calls.append((symbol, opening_order, position_id))
+            return deals()
+
+    gateway = BinanceRecoveryGateway()
+    await learner.reconcile_pending(gateway)
+    assert gateway.calls == [('XAUUSD', 100, 100)]
+    async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(TradeMemory)) == 1
+    learner.close()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('net,label', [(10, 'WIN'), (0, 'BREAKEVEN'), (-10, 'LOSS')])
 async def test_labels_use_verified_net_profit_without_causal_claims(tmp_path, net, label):
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')

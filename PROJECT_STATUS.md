@@ -53,7 +53,7 @@ DISABLED
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 257 Tests passing
+- [x] 258 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -116,7 +116,7 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ```
 Source files: 50+
 Test files: 11
-Total tests: 257 (all passing)
+Total tests: 258 (all passing)
 Documentation files: 40+
 Task files: 13
 ```
