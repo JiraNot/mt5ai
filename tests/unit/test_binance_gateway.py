@@ -147,8 +147,45 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
     assert len(calls) == 5
     assert calls[1].url.path == "/fapi/v1/time"
     assert calls[2].headers["X-MBX-APIKEY"] == "key"
+    assert calls[2].url.params["timestamp"]
+    assert calls[2].url.params["recvWindow"] == "5000"
+    assert len(calls[2].url.params["signature"]) == 64
     assert calls[3].url.params["type"] == "STOP_MARKET"
     assert calls[4].url.params["type"] == "TAKE_PROFIT_MARKET"
+    await gateway.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_partial_primary_fill_returns_partial_status_and_filled_volume(monkeypatch):
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
+    order_calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        order_calls.append(request)
+        if len(order_calls) == 1:
+            return httpx.Response(200, json={
+                "orderId": 200, "status": "PARTIALLY_FILLED",
+                "avgPrice": "100", "executedQty": "0.4",
+            })
+        return httpx.Response(200, json={"orderId": 200 + len(order_calls), "status": "NEW"})
+
+    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await gateway.connect()
+    result = await gateway.send_order(OrderRequest(
+        symbol="BTCUSDT", direction=Direction.BUY, volume=1, sl=99, tp=102,
+        execution_key="partial-1", venue="binance",
+    ))
+    assert result.success is True
+    assert result.status.value == "PARTIAL"
+    assert result.volume == pytest.approx(0.4)
+    assert len(order_calls) == 3
+    assert all(call.url.params["closePosition"] == "true" for call in order_calls[1:])
     await gateway.disconnect()
 
 

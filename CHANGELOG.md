@@ -24,6 +24,9 @@
   `NEW_CANDLE` events, matching the WebSocket data-feed contract.
 - Outcome reconciliation now accepts multiple fills from one opening order,
   while still rejecting separate opening order IDs as unsafe attribution.
+- Testnet execution coverage now verifies HMAC signature fields, server-time
+  parameters, partial primary-fill status, filled quantity, and close-position
+  protective orders.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100
