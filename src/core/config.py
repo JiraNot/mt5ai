@@ -126,6 +126,9 @@ class Settings(BaseSettings):
     binance_api_secret: str = ""
     binance_timeout: float = 10.0
     binance_symbol: str = "BTCUSDT"
+    binance_use_websocket: bool = False
+    market_data_venue: str = "mt5"
+    paper_initial_balance: float = 100000.0
 
     database_url: str = "sqlite+aiosqlite:///freebuff.db"
     redis_url: str = "redis://localhost:6379/0"
@@ -212,6 +215,9 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         binance_api_secret=os.getenv("BINANCE_API_SECRET", ""),
         binance_timeout=float(os.getenv("BINANCE_TIMEOUT", "10")),
         binance_symbol=os.getenv("BINANCE_SYMBOL", "BTCUSDT").upper(),
+        binance_use_websocket=os.getenv("BINANCE_USE_WEBSOCKET", "false").lower() in {"1", "true", "yes"},
+        market_data_venue=os.getenv("MARKET_DATA_VENUE", "mt5").lower(),
+        paper_initial_balance=float(os.getenv("PAPER_INITIAL_BALANCE", "100000")),
         database_url=db_url or "sqlite+aiosqlite:///freebuff.db",
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         trading_mode=os.getenv("TRADING_MODE", settings_yaml.get("app", {}).get("mode", "paper")),

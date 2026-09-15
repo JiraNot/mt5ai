@@ -8,6 +8,9 @@
   until paper, testnet signing, and reconciliation are implemented.
 - Consensus mode now blocks unavailable-provider fallback as well as real
   analyst disagreement; the relaxed fallback remains opt-in only.
+- Binance can now be selected as the market-data venue, with paper fills,
+  venue-aware trade journal identity, reconnectable kline streaming, server
+  clock synchronization, and testnet-only signed orders with protective SL/TP.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100

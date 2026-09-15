@@ -10,7 +10,7 @@ from typing import Optional
 from src.core.config import settings
 from src.core.events import EventType, event_bus
 from src.core.types import Candle, Tick
-from src.market.mt5_connection import MT5Connection
+from src.market.venue_gateway import VenueGateway
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class DataFeed:
     - Track current price via ticks
     """
 
-    def __init__(self, mt5: MT5Connection) -> None:
+    def __init__(self, mt5: VenueGateway) -> None:
         self._mt5 = mt5
         self._cache: dict[str, dict[str, list[Candle]]] = {}  # symbol -> tf -> candles
         self._running = False
@@ -46,6 +46,9 @@ class DataFeed:
 
     async def start_polling(self, symbol: str) -> None:
         """Start polling for new candles. Runs until stopped."""
+        if settings.market_data_venue == "binance" and settings.binance_use_websocket:
+            await self.start_streaming(symbol)
+            return
         self._running = True
         logger.info(f"Data feed polling started for {symbol}")
 
@@ -56,6 +59,39 @@ class DataFeed:
             except Exception as e:
                 logger.error(f"Data feed error: {e}")
                 await asyncio.sleep(10)  # Back off on error
+
+    async def start_streaming(self, symbol: str) -> None:
+        """Stream closed Binance candles for all configured timeframes."""
+        stream = getattr(self._mt5, "stream_klines", None)
+        if stream is None:
+            raise RuntimeError("Selected gateway does not support Binance WebSocket streaming")
+        self._running = True
+        timeframes = settings.data.timeframes.get("structure", ["H4", "H1", "M15", "M5"])
+        tasks = [asyncio.create_task(self._stream_timeframe(stream, symbol, tf)) for tf in timeframes]
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _stream_timeframe(self, stream, symbol: str, timeframe: str) -> None:
+        async for event_symbol, candle, is_closed in stream(symbol, timeframe):
+            if not self._running:
+                return
+            if event_symbol != symbol or not is_closed:
+                continue
+            cached = self._cache.setdefault(symbol, {}).setdefault(timeframe, [])
+            if cached and cached[-1].timestamp == candle.timestamp:
+                cached[-1] = candle
+                continue
+            cached.append(candle)
+            if len(cached) > settings.data.candle_count:
+                cached.pop(0)
+            await event_bus.publish(EventType.NEW_CANDLE, {
+                "symbol": symbol, "timeframe": timeframe, "candle": candle,
+                "venue": getattr(self._mt5, "venue", settings.market_data_venue),
+            })
 
     async def stop_polling(self) -> None:
         """Stop polling."""

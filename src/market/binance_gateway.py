@@ -8,7 +8,13 @@ reconciliation have been implemented and tested.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import logging
+import re
+import time
+import zlib
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,7 +22,7 @@ import httpx
 
 from src.core.config import settings
 from src.core.exceptions import FreebuffError
-from src.core.types import AccountInfo, Candle, Deal, OrderRequest, OrderResult, Position, Tick
+from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, OrderResult, OrderStatus, Position, Tick
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +49,9 @@ class BinanceGateway:
         self._timeout = timeout or settings.binance_timeout
         self._client: httpx.AsyncClient | None = None
         self._connected = False
+        self._server_time_offset_ms = 0
+        self._position_symbols: dict[int, str] = {}
+        self._submitted_orders: dict[str, OrderResult] = {}
 
     @property
     def connected(self) -> bool:
@@ -60,6 +69,12 @@ class BinanceGateway:
             response = await self._client.get("/fapi/v1/ping")
             response.raise_for_status()
             self._connected = True
+            try:
+                await self.sync_server_time()
+            except Exception as exc:
+                # Public market data remains usable if the optional clock
+                # endpoint is temporarily unavailable; signed calls retry it.
+                logger.warning("Binance server-time sync unavailable: %s", exc)
             logger.info("Binance connected: %s (%s)", self._base_url, settings.binance_mode)
             return True
         except Exception as exc:
@@ -83,6 +98,38 @@ class BinanceGateway:
             raise BinanceConnectionError("Not connected to Binance")
         return self._client
 
+    async def sync_server_time(self) -> int:
+        """Refresh local/server clock offset required for signed requests."""
+        client = self._ensure_connected()
+        response = await client.get("/fapi/v1/time")
+        response.raise_for_status()
+        server_time = int(response.json()["serverTime"])
+        self._server_time_offset_ms = server_time - int(time.time() * 1000)
+        return self._server_time_offset_ms
+
+    def _signed_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        if not settings.binance_api_key or not settings.binance_api_secret:
+            raise BinanceConnectionError("Binance API credentials are not configured")
+        signed = {
+            **params,
+            "timestamp": int(time.time() * 1000) + self._server_time_offset_ms,
+            "recvWindow": 5000,
+        }
+        query = str(httpx.QueryParams(signed))
+        signed["signature"] = hmac.new(
+            settings.binance_api_secret.encode(), query.encode(), hashlib.sha256
+        ).hexdigest()
+        return signed
+
+    async def _signed_request(self, method: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
+        client = self._ensure_connected()
+        response = await client.request(
+            method, path, params=self._signed_params(params),
+            headers={"X-MBX-APIKEY": settings.binance_api_key},
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def get_ohlcv(
         self, symbol: str, timeframe: str, count: int = 500, start: datetime | None = None
     ) -> list[Candle]:
@@ -105,6 +152,19 @@ class BinanceGateway:
             )
             for row in response.json()
         ]
+
+    async def stream_klines(self, symbol: str, timeframe: str) -> AsyncIterator[tuple[str, Candle, bool]]:
+        """Expose the reconnectable WebSocket stream through the venue gateway."""
+        from src.market.binance_websocket import BinanceWebSocket
+
+        websocket_base = (
+            "wss://stream.binancefuture.com"
+            if "testnet.binancefuture.com" in self._base_url
+            else "wss://fstream.binance.com"
+        )
+        stream = BinanceWebSocket(websocket_base)
+        async for event in stream.stream_klines(symbol, timeframe):
+            yield event
 
     async def get_current_price(self, symbol: str) -> Tick:
         client = self._ensure_connected()
@@ -135,10 +195,59 @@ class BinanceGateway:
         raise BinanceConnectionError(f"Symbol not found: {symbol}")
 
     async def get_account_info(self) -> AccountInfo:
-        raise BinanceConnectionError("Binance account endpoint is not enabled in the read-only phase")
+        if settings.binance_mode != "testnet":
+            raise BinanceConnectionError("Signed Binance account access is restricted to BINANCE_MODE=testnet")
+        row = await self._signed_request("GET", "/fapi/v2/account", {})
+        return AccountInfo(
+            login=0, name="Binance Futures", server="binance-testnet",
+            balance=float(row.get("totalWalletBalance", 0)),
+            equity=float(row.get("totalMarginBalance", 0)),
+            margin=float(row.get("totalInitialMargin", 0)),
+            free_margin=float(row.get("availableBalance", 0)),
+            profit=float(row.get("totalUnrealizedProfit", 0)),
+            currency="USDT", leverage=0,
+        )
 
     async def send_order(self, request: OrderRequest) -> OrderResult:
-        return OrderResult(success=False, error_message="Binance order execution is disabled; use PAPER first")
+        if settings.binance_mode != "testnet":
+            return OrderResult(success=False, venue=self.venue, error_message="Binance execution requires BINANCE_MODE=testnet")
+        if not settings.binance_api_key or not settings.binance_api_secret:
+            return OrderResult(success=False, venue=self.venue, error_message="Binance testnet credentials are not configured")
+        if request.sl <= 0 or request.tp <= 0:
+            return OrderResult(success=False, venue=self.venue, error_message="Server-side SL and TP are required")
+        client_id = re.sub(r"[^A-Za-z0-9_-]", "-", request.execution_key or request.comment or "freebuff")[:28]
+        if client_id in self._submitted_orders:
+            previous = self._submitted_orders[client_id]
+            return previous.model_copy(update={"metadata": {**previous.metadata, "duplicate": True}})
+        side = "BUY" if request.direction == Direction.BUY else "SELL"
+        filled = await self._signed_request("POST", "/fapi/v1/order", {
+            "symbol": request.symbol.upper(), "side": side, "type": "MARKET",
+            "quantity": request.volume, "newClientOrderId": client_id,
+        })
+        order_id = str(filled.get("orderId", ""))
+        status = OrderStatus.PARTIAL if filled.get("status") == "PARTIALLY_FILLED" else OrderStatus.FILLED
+        fill_price = float(filled.get("avgPrice") or filled.get("price") or 0) or None
+        protective: dict[str, Any] = {}
+        protective_error: str | None = None
+        opposite = "SELL" if side == "BUY" else "BUY"
+        for suffix, order_type, stop_price in (("sl", "STOP_MARKET", request.sl), ("tp", "TAKE_PROFIT_MARKET", request.tp)):
+            try:
+                protective[suffix] = await self._signed_request("POST", "/fapi/v1/order", {
+                    "symbol": request.symbol.upper(), "side": opposite, "type": order_type,
+                    "stopPrice": stop_price, "closePosition": "true",
+                    "workingType": "MARK_PRICE", "newClientOrderId": f"{client_id}-{suffix}",
+                })
+            except Exception as exc:
+                protective_error = f"Failed to place server-side {suffix.upper()}: {exc}"
+                break
+        result = OrderResult(
+            success=protective_error is None, ticket=int(order_id) if order_id.isdigit() else None,
+            price=fill_price, volume=float(filled.get("executedQty", request.volume)),
+            venue=self.venue, external_order_id=order_id, status=status,
+            error_message=protective_error, metadata={"primary": filled, "protective": protective},
+        )
+        self._submitted_orders[client_id] = result
+        return result
 
     async def modify_position(self, ticket: int, sl: float | None = None, tp: float | None = None) -> OrderResult:
         return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
@@ -147,7 +256,49 @@ class BinanceGateway:
         return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
-        raise BinanceConnectionError("Binance position endpoint is not enabled in the read-only phase")
+        if settings.binance_mode != "testnet":
+            raise BinanceConnectionError("Binance positions require BINANCE_MODE=testnet")
+        params = {"symbol": symbol.upper()} if symbol else {}
+        rows = await self._signed_request("GET", "/fapi/v2/positionRisk", params)
+        positions: list[Position] = []
+        for row in rows:
+            amount = float(row.get("positionAmt", 0))
+            if amount == 0:
+                continue
+            symbol_name = row["symbol"]
+            synthetic_id = zlib.crc32(f"{symbol_name}:{row.get('positionSide', 'BOTH')}".encode())
+            self._position_symbols[synthetic_id] = symbol_name
+            direction = Direction.BUY if amount > 0 else Direction.SELL
+            positions.append(Position(
+                ticket=synthetic_id, identifier=synthetic_id, symbol=symbol_name,
+                direction=direction, volume=abs(amount), open_price=float(row.get("entryPrice", 0)),
+                current_price=float(row.get("markPrice", 0)),
+                sl=float(row.get("liquidationPrice", 0) or 0),
+                profit=float(row.get("unRealizedProfit", 0)),
+                open_time=datetime.fromtimestamp(float(row.get("updateTime", 0)) / 1000, tz=timezone.utc),
+                comment="binance-position-risk",
+            ))
+        return positions
 
     async def get_position_deals(self, position_id: int) -> list[Deal]:
-        raise BinanceConnectionError("Binance deal history is not enabled in the read-only phase")
+        if settings.binance_mode != "testnet":
+            raise BinanceConnectionError("Binance deal history requires BINANCE_MODE=testnet")
+        symbol = self._position_symbols.get(position_id)
+        if not symbol:
+            raise BinanceConnectionError(f"Unknown Binance position id: {position_id}")
+        rows = await self._signed_request("GET", "/fapi/v1/userTrades", {"symbol": symbol, "limit": 1000})
+        deals: list[Deal] = []
+        for index, row in enumerate(rows):
+            qty = float(row.get("qty", 0))
+            if qty <= 0:
+                continue
+            entry = 0 if index == 0 else 1
+            trade_side = 0 if row.get("side") == "BUY" else 1
+            deals.append(Deal(
+                ticket=int(row["id"]), order=int(row["orderId"]), position_id=position_id,
+                time=datetime.fromtimestamp(int(row["time"]) / 1000, tz=timezone.utc),
+                entry=entry, type=trade_side, volume=qty, price=float(row["price"]),
+                profit=float(row.get("realizedPnl", 0)),
+                commission=-abs(float(row.get("commission", 0))), symbol=symbol,
+            ))
+        return deals

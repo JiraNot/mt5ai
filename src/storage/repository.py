@@ -59,6 +59,7 @@ class Repository:
         """
         setup = SetupLog(
             symbol=candidate.symbol,
+            venue=str(candidate.metadata.get("venue", "mt5")),
             timeframe=candidate.timeframe,
             strategy_id=candidate.strategy_id,
             direction=candidate.direction.value,
@@ -128,6 +129,7 @@ class Repository:
         db_trade = Trade(
             setup_id=setup_id,
             symbol=trade.symbol,
+            venue=trade.venue,
             direction=trade.direction.value,
             volume=trade.volume,
             entry_price=trade.entry_price,
@@ -145,6 +147,8 @@ class Repository:
             status=trade.status.value,
             magic=trade.magic,
             comment=trade.comment,
+            external_order_id=trade.external_order_id,
+            execution_key=trade.execution_key or None,
             open_time=trade.open_time,
         )
 

@@ -67,6 +67,7 @@ class SetupLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(20), nullable=False, index=True)
+    venue = Column(String(20), nullable=False, default="mt5", index=True)
     timeframe = Column(String(5), nullable=False)
     strategy_id = Column(String(50), nullable=False, index=True)
     direction = Column(String(5), nullable=False)
@@ -106,6 +107,7 @@ class Trade(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     setup_id = Column(Integer, ForeignKey("setup_log.id"))
     symbol = Column(String(20), nullable=False, index=True)
+    venue = Column(String(20), nullable=False, default="mt5", index=True)
     direction = Column(String(5), nullable=False)
     volume = Column(Numeric(8, 4), nullable=False)
     entry_price = Column(Numeric(12, 5), nullable=False)
@@ -123,6 +125,8 @@ class Trade(Base):
     status = Column(String(15), nullable=False, default="OPEN")
     magic = Column(Integer)
     comment = Column(Text)
+    external_order_id = Column(String(100), index=True)
+    execution_key = Column(String(150), unique=True, index=True)
     open_time = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

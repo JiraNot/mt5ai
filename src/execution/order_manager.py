@@ -9,7 +9,7 @@ from typing import Optional
 from src.core.config import settings
 from src.core.events import EventType, event_bus
 from src.core.types import OrderRequest, OrderResult
-from src.market.mt5_connection import MT5Connection
+from src.market.venue_gateway import VenueGateway
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class OrderManager:
     - Tracks order history
     """
 
-    def __init__(self, mt5: MT5Connection) -> None:
+    def __init__(self, mt5: VenueGateway) -> None:
         self._mt5 = mt5
         self._order_history: list[OrderResult] = []
 
@@ -39,7 +39,12 @@ class OrderManager:
             OrderResult with execution details
         """
         # This orchestrator may send broker orders only in explicit DEMO mode.
-        if settings.trading_mode.lower() != "demo":
+        paper_binance = (
+            getattr(self._mt5, "venue", "mt5") == "binance"
+            and settings.binance_mode == "paper"
+            and settings.trading_mode.lower() == "paper"
+        )
+        if settings.trading_mode.lower() != "demo" and not paper_binance:
             return OrderResult(success=False, error_message="Broker execution requires DEMO; PAPER and LIVE are disabled here")
 
         # Validate

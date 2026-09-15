@@ -27,6 +27,7 @@ from src.core.types import (
 )
 from src.market.data_feed import DataFeed
 from src.market.mt5_connection import MT5Connection
+from src.market.venue_gateway import VenueGateway
 from src.market.session_tracker import get_current_session
 from src.market.spread_monitor import SpreadMonitor
 
@@ -55,7 +56,9 @@ from src.execution.position_tracker import PositionTracker
 
 # Phase 6: Setup Logger
 from src.storage.models import get_engine, get_session_factory, Base
+from src.storage.additive_schema import ensure_additive_schema
 from src.storage.setup_logger import SetupLogger
+from src.storage.repository import Repository
 
 logger = get_logger(__name__)
 
@@ -87,11 +90,21 @@ class TradingPlatform:
         self._max_cycles = max_cycles
         self._cycle_count = 0
         self._cycle_errors = 0
-        # MT5 — local MetaTrader5 package / Wine, or remote Windows bridge
-        if settings.mt5_mode == "bridge":
+        # Select one venue for the pipeline. Binance PAPER is wrapped so the
+        # same strategies/risk/journal path can be exercised without signing.
+        if settings.market_data_venue == "binance":
+            from src.execution.paper_gateway import PaperGateway
+            from src.market.binance_gateway import BinanceGateway
+
+            raw_binance = BinanceGateway()
+            self._mt5: VenueGateway = (
+                PaperGateway(raw_binance) if settings.binance_mode == "paper" else raw_binance
+            )
+            logger.info("Market venue: Binance (%s)", settings.binance_mode)
+        elif settings.mt5_mode == "bridge":
             from src.market.bridge_gateway import BridgeGateway
 
-            self._mt5: MT5Connection | BridgeGateway = BridgeGateway()
+            self._mt5 = BridgeGateway()
             logger.info(f"MT5 mode: bridge ({settings.bridge_url})")
         else:
             self._mt5 = MT5Connection()
@@ -158,6 +171,7 @@ class TradingPlatform:
         self._engine = engine
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await ensure_additive_schema(conn)
         self._session_factory = get_session_factory(engine)
         self._db_session = self._session_factory()
         self._risk_engine = RiskEngine(
@@ -515,7 +529,10 @@ class TradingPlatform:
                 sl=risk_decision.adjusted_sl or candidate.stop_loss,
                 tp=risk_decision.adjusted_tp1 or candidate.take_profit_1,
                 comment=f"{candidate.strategy_id}",
+                venue=getattr(self._mt5, "venue", "mt5"),
+                execution_key=f"{candidate.id}:{candidate.strategy_version}:{getattr(self._mt5, 'venue', 'mt5')}",
             )
+            candidate.metadata["venue"] = request.venue
             snapshot = build_snapshot(candidate, ctx, spread, session)
             result = await self._order_manager.send_market_order(request)
 
@@ -547,6 +564,20 @@ class TradingPlatform:
                         gpt_narrative=council.gpt_verdict.narrative_th,
                         debate_summary=council.debate_summary_th,
                         eql_summary=eql_result.summary,
+                    )
+                if self._db_session and result.ticket and result.price and result.volume:
+                    from src.core.types import PositionStatus, TradeRecord
+                    await Repository(self._db_session).log_trade(
+                        TradeRecord(
+                            setup_id=setup_id, symbol=candidate.symbol,
+                            direction=candidate.direction, volume=result.volume,
+                            entry_price=result.price, sl=request.sl, tp1=request.tp,
+                            status=PositionStatus.OPEN, magic=request.magic,
+                            comment=request.comment, venue=request.venue,
+                            external_order_id=result.external_order_id,
+                            execution_key=request.execution_key,
+                        ),
+                        setup_id=setup_id,
                     )
                 if self._trade_learner and result.ticket and setup_id:
                     await self._trade_learner.link_setup(
