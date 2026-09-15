@@ -38,6 +38,23 @@ async def test_connect_and_read_klines():
 
 
 @pytest.mark.asyncio
+async def test_rest_klines_exclude_forming_candle():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        return httpx.Response(200, json=[
+            [0, "100", "101", "99", "100.5", "1", 0, "0", 0, "0", "0", "0"],
+            [9_999_999_999_999, "100", "101", "99", "100.5", "1", 9_999_999_999_999, "0", 0, "0", "0", "0"],
+        ])
+
+    gateway = make_gateway(handler)
+    await gateway.connect()
+    candles = await gateway.get_ohlcv("BTCUSDT", "M5", 10)
+    assert len(candles) == 1
+    await gateway.disconnect()
+
+
+@pytest.mark.asyncio
 async def test_read_current_price():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/fapi/v1/ping":

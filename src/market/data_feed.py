@@ -128,6 +128,7 @@ class DataFeed:
                     "symbol": symbol,
                     "timeframe": tf,
                     "candle": latest,
+                    "venue": getattr(self._mt5, "venue", settings.market_data_venue),
                 })
                 logger.debug(f"New {tf} candle for {symbol}: {latest.close:.2f}")
             else:

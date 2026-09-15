@@ -153,6 +153,7 @@ class BinanceGateway:
             params["startTime"] = int(start.timestamp() * 1000)
         response = await client.get("/fapi/v1/klines", params=params)
         response.raise_for_status()
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         return [
             Candle(
                 timestamp=datetime.fromtimestamp(row[0] / 1000, tz=timezone.utc),
@@ -160,6 +161,9 @@ class BinanceGateway:
                 close=float(row[4]), volume=float(row[5]),
             )
             for row in response.json()
+            # Binance includes the currently forming kline in REST results;
+            # strategy evaluation must only see closed candles.
+            if len(row) > 6 and int(row[6]) <= now_ms
         ]
 
     async def stream_klines(self, symbol: str, timeframe: str) -> AsyncIterator[tuple[str, Candle, bool]]:

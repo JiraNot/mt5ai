@@ -20,6 +20,8 @@
 - Binance WebSocket streams now invoke the gateway's server-time synchronization
   callback before each connection/reconnect, with a regression test for the
   `sync → connect` ordering.
+- Binance REST polling now excludes forming klines and includes `venue` on its
+  `NEW_CANDLE` events, matching the WebSocket data-feed contract.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100
