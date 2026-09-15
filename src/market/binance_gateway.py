@@ -318,10 +318,18 @@ class BinanceGateway:
             except StopIteration:
                 return []
             opening_side = rows[opening_index].get("side")
-            relevant = [rows[opening_index]]
-            opening_qty = float(rows[opening_index].get("qty", 0))
+            opening_rows = [
+                row for row in rows
+                if int(row.get("orderId", -1)) == opening_order
+            ]
+            relevant = list(opening_rows)
+            opening_qty = sum(float(row.get("qty", 0)) for row in opening_rows)
             exit_qty = 0.0
-            for row in rows[opening_index + 1 :]:
+            last_opening_index = max(
+                i for i, row in enumerate(rows)
+                if int(row.get("orderId", -1)) == opening_order
+            )
+            for row in rows[last_opening_index + 1 :]:
                 if row.get("side") == opening_side:
                     continue
                 relevant.append(row)

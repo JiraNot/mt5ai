@@ -239,7 +239,8 @@ async def test_symbol_deals_filter_to_recorded_order_and_map_partial_exit(monkey
         assert request.url.path == "/fapi/v1/userTrades"
         return httpx.Response(200, json=[
             {"id": 1, "orderId": 90, "time": 1_000, "side": "BUY", "qty": "2", "price": "95", "realizedPnl": "0", "commission": "0.1"},
-            {"id": 2, "orderId": 100, "time": 2_000, "side": "BUY", "qty": "1", "price": "100", "realizedPnl": "0", "commission": "0.1"},
+            {"id": 2, "orderId": 100, "time": 2_000, "side": "BUY", "qty": "0.6", "price": "100", "realizedPnl": "0", "commission": "0.1"},
+            {"id": 6, "orderId": 100, "time": 2_100, "side": "BUY", "qty": "0.4", "price": "101", "realizedPnl": "0", "commission": "0.1"},
             {"id": 3, "orderId": 101, "time": 3_000, "side": "SELL", "qty": "0.4", "price": "110", "realizedPnl": "4", "commission": "0.02"},
             {"id": 4, "orderId": 102, "time": 4_000, "side": "SELL", "qty": "0.6", "price": "111", "realizedPnl": "5", "commission": "0.02"},
             {"id": 5, "orderId": 103, "time": 5_000, "side": "SELL", "qty": "2", "price": "112", "realizedPnl": "20", "commission": "0.02"},
@@ -248,8 +249,9 @@ async def test_symbol_deals_filter_to_recorded_order_and_map_partial_exit(monkey
     gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
     await gateway.connect()
     deals = await gateway.get_symbol_deals("btcusdt", opening_order=100, position_id=777)
-    assert [deal.order for deal in deals] == [100, 101, 102]
-    assert [deal.entry for deal in deals] == [0, 1, 1]
-    assert sum(deal.volume for deal in deals[1:]) == pytest.approx(1)
+    assert [deal.order for deal in deals] == [100, 100, 101, 102]
+    assert [deal.entry for deal in deals] == [0, 0, 1, 1]
+    assert sum(deal.volume for deal in deals if deal.entry == 0) == pytest.approx(1)
+    assert sum(deal.volume for deal in deals if deal.entry == 1) == pytest.approx(1)
     assert all(deal.position_id == 777 for deal in deals)
     await gateway.disconnect()
