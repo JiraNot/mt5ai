@@ -46,6 +46,7 @@ DISABLED
 - [x] Paper Trader (Phase 09)
 - [x] Dashboard (Streamlit) (Phase 08)
 - [x] OpenRouter DeepSeek Bull Analyst integration (uses Risk Engine final gate)
+- [x] OpenRouter model catalog selector in dashboard (Current / Free / Paid)
 - [x] Binance USDT-M public market-data gateway (read-only, fail-closed execution)
 - [x] Binance selectable market venue in the main data feed
 - [x] Binance paper execution with journal venue/order identity fields

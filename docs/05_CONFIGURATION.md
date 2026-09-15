@@ -212,6 +212,20 @@ PAPER_INITIAL_BALANCE=100000
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
+# OpenRouter model selection
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=deepseek/deepseek-chat
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_SITE_URL=https://trade.onetapweb.com
+OPENROUTER_APP_NAME=Freebuff Trading
+OPENROUTER_MODEL_CONFIG_PATH=/app/data/openrouter_model.json
+
+The dashboard loads the current OpenRouter text-model catalog and groups it as
+Current, Free, and Paid using the pricing returned by OpenRouter. The selected
+model is persisted at `OPENROUTER_MODEL_CONFIG_PATH` and picked up by the Bull
+Analyst on the next evaluation without a redeploy. The API key is never stored
+in the selection file.
+
 # Alerts
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...

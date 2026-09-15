@@ -33,6 +33,12 @@ from src.storage.models import (
     ensure_database_parent,
 )
 from src.core.runtime_status import read_runtime_status
+from src.ai.openrouter_model_catalog import (
+    fetch_models,
+    get_selected_model,
+    group_models,
+    save_selected_model,
+)
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 
@@ -217,6 +223,75 @@ def load_daily_risk(engine) -> pd.DataFrame:
             "trade_date", "total_pnl", "total_trades",
             "winning_trades", "losing_trades", "circuit_breaker"
         ])
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_openrouter_models(base_url: str, api_key_configured: bool):
+    """Load the live OpenRouter model catalog for the sidebar selector."""
+    if not api_key_configured:
+        return []
+    try:
+        return fetch_models(
+            base_url=base_url,
+            api_key=os.getenv("OPENROUTER_API_KEY", "").strip(),
+            timeout=10,
+        )
+    except Exception:
+        return []
+
+
+def render_openrouter_model_selector() -> str:
+    """Render and persist the OpenRouter model choice without exposing secrets."""
+    current_model = get_selected_model()
+    api_key_configured = bool(os.getenv("OPENROUTER_API_KEY", "").strip())
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    models = load_openrouter_models(base_url, api_key_configured)
+    groups = group_models(models, current_model)
+
+    st.sidebar.markdown("### 🧠 OpenRouter Model")
+    if not api_key_configured:
+        st.sidebar.info("ใส่ OPENROUTER_API_KEY เพื่อโหลดรายการโมเดล")
+        return current_model
+    if not models:
+        st.sidebar.warning("โหลดรายการโมเดล OpenRouter ไม่สำเร็จ — ใช้โมเดลปัจจุบันต่อไป")
+        st.sidebar.caption(f"Current: `{current_model}`")
+        return current_model
+
+    category_labels = {
+        "current": "ปัจจุบัน",
+        "free": "ฟรี",
+        "paid": "เสียเงิน",
+    }
+    available_categories = [key for key in ("current", "free", "paid") if groups[key]]
+    category = st.sidebar.radio(
+        "ประเภทโมเดล",
+        available_categories,
+        format_func=lambda key: category_labels[key],
+        horizontal=True,
+        key="openrouter_model_category",
+    )
+    choices = groups[category]
+    labels = {
+        model.model_id: f"{model.name} · {model.price_label}"
+        for model in choices
+    }
+    selected = st.sidebar.selectbox(
+        "เลือกโมเดล",
+        [model.model_id for model in choices],
+        format_func=lambda model_id: labels[model_id],
+        index=0,
+        key=f"openrouter_model_choice_{category}",
+    )
+    if selected != current_model:
+        try:
+            save_selected_model(selected)
+            st.sidebar.success(f"บันทึกโมเดลแล้ว: `{selected}`")
+        except (OSError, ValueError) as exc:
+            st.sidebar.error(f"บันทึกโมเดลไม่สำเร็จ: {exc}")
+    else:
+        st.sidebar.caption(f"กำลังใช้: `{current_model}`")
+    st.sidebar.caption("การเลือกมีผลกับ Bull Analyst ในการประเมินรอบถัดไป")
+    return selected
 
 
 # ─── Metrics Calculation ──────────────────────────────────────────────────────
@@ -738,6 +813,8 @@ def main():
         st.sidebar.markdown("🟢 `DeepSeek (OpenRouter)`: API Key Ready (Bull)")
     else:
         st.sidebar.markdown("⚪ `DeepSeek (OpenRouter)`: Not Configured")
+
+    render_openrouter_model_selector()
 
     st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")

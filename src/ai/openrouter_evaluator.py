@@ -12,6 +12,7 @@ import os
 import httpx
 
 from src.ai.gemini_evaluator import GeminiEvaluator, GeminiVerdict
+from src.ai.openrouter_model_catalog import get_selected_model
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class OpenRouterEvaluator(GeminiEvaluator):
     def __init__(self) -> None:
         # Do not initialize or require the Antigravity CLI in this provider.
         self._api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-        self._model = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat").strip()
+        self._model = get_selected_model()
         self._base_url = os.getenv(
             "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
         ).rstrip("/")
@@ -40,7 +41,9 @@ class OpenRouterEvaluator(GeminiEvaluator):
             "X-Title": os.getenv("OPENROUTER_APP_NAME", "Freebuff Trading"),
         }
         payload = {
-            "model": self._model,
+            # Read the dashboard selection for each request so model changes
+            # take effect without restarting the trading worker.
+            "model": get_selected_model(self._model),
             "messages": [
                 {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
