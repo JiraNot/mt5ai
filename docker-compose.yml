@@ -70,7 +70,7 @@ services:
     restart: unless-stopped
     depends_on:
       - mt5ai
-    command: ["bash", "-c", "mkdir -p /app/data /app/models && exec python scripts/retrain_loop.py"]
+    command: ["bash", "-c", "mkdir -p /app/data /app/models && chmod 0777 /app/data /app/models 2>/dev/null || true; exec python scripts/retrain_loop.py"]
     environment:
       - TRAINING_DB_PATH=/app/data/freebuff.db
       - TRAINING_MODEL_DIR=/app/models
