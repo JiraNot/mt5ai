@@ -53,7 +53,7 @@ DISABLED
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 248 Tests passing
+- [x] 252 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -85,6 +85,7 @@ DISABLED
 - Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed and verified in production on 2026-09-15. The AI Council now permits only high-confidence disagreements to proceed to the Risk Engine; Risk Engine remains final authority.
 - OpenRouter DeepSeek is available as the Bull analyst when `OPENROUTER_API_KEY` is configured; without it, the existing Gemini path remains available.
 - Binance integration is selectable with `MARKET_DATA_VENUE=binance`; paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by the execution policy.
+- Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
@@ -114,7 +115,7 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ```
 Source files: 50+
 Test files: 11
-Total tests: 232 (all passing)
+Total tests: 252 (all passing)
 Documentation files: 40+
 Task files: 13
 ```

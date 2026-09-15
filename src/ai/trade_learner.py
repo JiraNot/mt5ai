@@ -117,12 +117,19 @@ class TradeLearner:
                 LearningEvidence.account_key == self.account_key,
                 LearningEvidence.outcome_json.is_(None),
             ))).scalars())
-            pending = [(row.position_id, row.opening_order) for row in rows]
-        for position_id, opening_order in pending:
+            pending = [(row.position_id, row.opening_order, json.loads(row.snapshot_json)) for row in rows]
+        for position_id, opening_order, snapshot in pending:
             if position_id in open_ids:
                 continue
             try:
-                outcome = reconcile_deals(position_id, await gateway.get_position_deals(position_id))
+                symbol_deals = getattr(gateway, "get_symbol_deals", None)
+                if symbol_deals is not None:
+                    deals = await symbol_deals(
+                        snapshot["symbol"], opening_order=opening_order, position_id=position_id
+                    )
+                else:
+                    deals = await gateway.get_position_deals(position_id)
+                outcome = reconcile_deals(position_id, deals)
                 if outcome and outcome.opening_order == opening_order:
                     await self.process_outcome(outcome)
             except Exception:

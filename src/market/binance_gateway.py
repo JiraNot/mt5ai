@@ -57,6 +57,15 @@ class BinanceGateway:
     def connected(self) -> bool:
         return self._connected
 
+    @property
+    def websocket_base_url(self) -> str:
+        """Return the official USDⓈ-M Futures WebSocket host for this venue."""
+        return (
+            "wss://fstream.binancefuture.com"
+            if "testnet.binancefuture.com" in self._base_url
+            else "wss://fstream.binance.com"
+        )
+
     async def connect(self) -> bool:
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -157,12 +166,7 @@ class BinanceGateway:
         """Expose the reconnectable WebSocket stream through the venue gateway."""
         from src.market.binance_websocket import BinanceWebSocket
 
-        websocket_base = (
-            "wss://stream.binancefuture.com"
-            if "testnet.binancefuture.com" in self._base_url
-            else "wss://fstream.binance.com"
-        )
-        stream = BinanceWebSocket(websocket_base)
+        stream = BinanceWebSocket(self.websocket_base_url)
         async for event in stream.stream_klines(symbol, timeframe):
             yield event
 
@@ -273,7 +277,10 @@ class BinanceGateway:
                 ticket=synthetic_id, identifier=synthetic_id, symbol=symbol_name,
                 direction=direction, volume=abs(amount), open_price=float(row.get("entryPrice", 0)),
                 current_price=float(row.get("markPrice", 0)),
-                sl=float(row.get("liquidationPrice", 0) or 0),
+                # Binance's liquidation price is not the strategy's protective
+                # stop. Keep SL unset rather than exposing it as an executable
+                # stop level to the position manager.
+                sl=0.0,
                 profit=float(row.get("unRealizedProfit", 0)),
                 open_time=datetime.fromtimestamp(float(row.get("updateTime", 0)) / 1000, tz=timezone.utc),
                 comment="binance-position-risk",
@@ -286,16 +293,57 @@ class BinanceGateway:
         symbol = self._position_symbols.get(position_id)
         if not symbol:
             raise BinanceConnectionError(f"Unknown Binance position id: {position_id}")
+        return await self.get_symbol_deals(symbol, position_id=position_id)
+
+    async def get_symbol_deals(
+        self, symbol: str, opening_order: int | None = None, position_id: int | None = None
+    ) -> list[Deal]:
+        """Map Binance user trades into deterministic entry/exit deals.
+
+        When ``opening_order`` is supplied (the normal journal/restart path),
+        unrelated fills for the same symbol are excluded and entry is derived
+        from the recorded Binance order id instead of list position.
+        """
+        if settings.binance_mode != "testnet":
+            raise BinanceConnectionError("Binance deal history requires BINANCE_MODE=testnet")
+        symbol = symbol.upper()
         rows = await self._signed_request("GET", "/fapi/v1/userTrades", {"symbol": symbol, "limit": 1000})
+        if opening_order is not None:
+            try:
+                opening_index = next(i for i, row in enumerate(rows) if int(row.get("orderId", -1)) == opening_order)
+            except StopIteration:
+                return []
+            opening_side = rows[opening_index].get("side")
+            relevant = [rows[opening_index]]
+            opening_qty = float(rows[opening_index].get("qty", 0))
+            exit_qty = 0.0
+            for row in rows[opening_index + 1 :]:
+                if row.get("side") == opening_side:
+                    continue
+                relevant.append(row)
+                exit_qty += float(row.get("qty", 0))
+                if exit_qty + 1e-8 >= opening_qty:
+                    break
+            rows = relevant
+
+        if not rows:
+            return []
+        resolved_position_id = position_id
+        if resolved_position_id is None:
+            resolved_position_id = zlib.crc32(f"{symbol}:BOTH".encode())
+        opening_order_id = opening_order
+        if opening_order_id is None:
+            opening_order_id = int(rows[0].get("orderId", 0))
         deals: list[Deal] = []
-        for index, row in enumerate(rows):
+        for row in rows:
             qty = float(row.get("qty", 0))
             if qty <= 0:
                 continue
-            entry = 0 if index == 0 else 1
+            row_order = int(row["orderId"])
+            entry = 0 if row_order == opening_order_id else 1
             trade_side = 0 if row.get("side") == "BUY" else 1
             deals.append(Deal(
-                ticket=int(row["id"]), order=int(row["orderId"]), position_id=position_id,
+                ticket=int(row["id"]), order=row_order, position_id=resolved_position_id,
                 time=datetime.fromtimestamp(int(row["time"]) / 1000, tz=timezone.utc),
                 entry=entry, type=trade_side, volume=qty, price=float(row["price"]),
                 profit=float(row.get("realizedPnl", 0)),

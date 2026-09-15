@@ -132,3 +132,67 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
     assert calls[3].url.params["type"] == "STOP_MARKET"
     assert calls[4].url.params["type"] == "TAKE_PROFIT_MARKET"
     await gateway.disconnect()
+
+
+def test_gateway_selects_testnet_websocket_endpoint():
+    gateway = BinanceGateway(base_url="https://testnet.binancefuture.com")
+    assert gateway.websocket_base_url == "wss://fstream.binancefuture.com"
+
+
+def test_gateway_selects_mainnet_websocket_endpoint():
+    gateway = BinanceGateway(base_url="https://fapi.binance.com")
+    assert gateway.websocket_base_url == "wss://fstream.binance.com"
+
+
+@pytest.mark.asyncio
+async def test_position_risk_does_not_expose_liquidation_as_stop(monkeypatch):
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        return httpx.Response(200, json=[{
+            "symbol": "BTCUSDT", "positionAmt": "0.5", "entryPrice": "100",
+            "markPrice": "101", "liquidationPrice": "50", "unRealizedProfit": "0.5",
+            "updateTime": "0", "positionSide": "BOTH",
+        }])
+
+    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await gateway.connect()
+    positions = await gateway.get_positions("BTCUSDT")
+    assert positions[0].sl == 0
+    await gateway.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_symbol_deals_filter_to_recorded_order_and_map_partial_exit(monkeypatch):
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        assert request.url.path == "/fapi/v1/userTrades"
+        return httpx.Response(200, json=[
+            {"id": 1, "orderId": 90, "time": 1_000, "side": "BUY", "qty": "2", "price": "95", "realizedPnl": "0", "commission": "0.1"},
+            {"id": 2, "orderId": 100, "time": 2_000, "side": "BUY", "qty": "1", "price": "100", "realizedPnl": "0", "commission": "0.1"},
+            {"id": 3, "orderId": 101, "time": 3_000, "side": "SELL", "qty": "0.4", "price": "110", "realizedPnl": "4", "commission": "0.02"},
+            {"id": 4, "orderId": 102, "time": 4_000, "side": "SELL", "qty": "0.6", "price": "111", "realizedPnl": "5", "commission": "0.02"},
+            {"id": 5, "orderId": 103, "time": 5_000, "side": "SELL", "qty": "2", "price": "112", "realizedPnl": "20", "commission": "0.02"},
+        ])
+
+    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await gateway.connect()
+    deals = await gateway.get_symbol_deals("btcusdt", opening_order=100, position_id=777)
+    assert [deal.order for deal in deals] == [100, 101, 102]
+    assert [deal.entry for deal in deals] == [0, 1, 1]
+    assert sum(deal.volume for deal in deals[1:]) == pytest.approx(1)
+    assert all(deal.position_id == 777 for deal in deals)
+    await gateway.disconnect()

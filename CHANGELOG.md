@@ -13,6 +13,10 @@
   clock synchronization, and testnet-only signed orders with protective SL/TP.
 - Verified position outcomes now close the corresponding venue-aware trade
   journal row by external order ID, including net PnL and close price.
+- Binance reconciliation now filters `userTrades` by the journaled opening order,
+  handles partial exits deterministically, selects the official testnet/mainnet
+  WebSocket host through a tested property, and never treats liquidation price as
+  a protective stop.
 
 - AI Council gating is less restrictive for high-quality setups: a disagreement may
   proceed to the Risk Engine only when the approving analyst has at least 75/100
