@@ -1,8 +1,7 @@
-"""Read-only Binance USDT-M Futures gateway.
+"""Binance USDT-M Futures gateway.
 
-The first Binance slice intentionally implements public market data only.
-Order methods fail closed until paper execution, testnet signing, and restart
-reconciliation have been implemented and tested.
+Public market data is available for all configured venues. Execution is paper
+or Testnet-only and remains fail-closed for LIVE mode.
 """
 
 from __future__ import annotations

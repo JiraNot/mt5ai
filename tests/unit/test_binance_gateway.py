@@ -1,5 +1,6 @@
-"""Unit tests for the read-only Binance gateway."""
+"""Unit tests for the Binance market-data and execution gateway."""
 
+import asyncio
 import httpx
 import pytest
 
@@ -222,7 +223,6 @@ async def test_websocket_syncs_server_time_before_connect(monkeypatch):
         def connect(*_args, **_kwargs):
             return FakeSocket()
 
-    import asyncio
     import sys
     monkeypatch.setitem(sys.modules, "websockets", FakeWebsockets)
 
