@@ -37,7 +37,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PATH=/root/.local/bin:${PATH}
 ENV MT5_MODE=bridge
 ENV BRIDGE_URL=http://mt5-node:8900
-ENV DATABASE_URL=sqlite+aiosqlite:///app/data/freebuff.db
+ENV DATABASE_URL=sqlite+aiosqlite:////app/data/freebuff.db
 ENV DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
 
 EXPOSE 8501
