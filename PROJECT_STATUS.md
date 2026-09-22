@@ -84,6 +84,7 @@ DISABLED
 
 - Native `MetaTrader5` package unavailable on Linux — solved by bridge mode (proven E2E via Wine); awaiting Windows host for production
 - Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed and verified in production on 2026-09-15. The AI Council now permits only high-confidence disagreements to proceed to the Risk Engine; Risk Engine remains final authority.
+- Coolify Compose manifests are now kept in sync, including OpenRouter runtime settings and an explicit Streamlit health check, so `trade.onetapweb.com` can be routed only after the dashboard is ready (2026-09-22).
 - OpenRouter DeepSeek is available as the Bull analyst when `OPENROUTER_API_KEY` is configured; without it, the existing Gemini path remains available.
 - Binance integration is selectable with `MARKET_DATA_VENUE=binance`; paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by the execution policy.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.

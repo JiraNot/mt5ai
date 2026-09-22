@@ -25,6 +25,9 @@
 - The dashboard now exposes an OpenRouter model selector grouped into current,
   free, and paid models; the selected model is persisted for the next Bull
   Analyst evaluation without storing the API key or requiring a redeploy.
+- Coolify's `docker-compose.yml` and `docker-compose.yaml` now have matching
+  runtime settings, and the dashboard service exposes a Streamlit health check
+  for reliable proxy readiness detection.
 - Outcome reconciliation now accepts multiple fills from one opening order,
   while still rejecting separate opening order IDs as unsafe attribution.
 - Testnet execution coverage now verifies HMAC signature fields, server-time
