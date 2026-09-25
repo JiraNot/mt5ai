@@ -11,6 +11,11 @@ services:
     environment:
       - CUSTOM_USER=admin
       - PASSWORD=freebuff2026
+      - MT5_LOGIN=${MT5_LOGIN:-}
+      - MT5_PASSWORD=${MT5_PASSWORD:-}
+      - MT5_SERVER=${MT5_SERVER:-}
+      - MT5_PATH=${MT5_PATH:-}
+      - MT5_PORTABLE=${MT5_PORTABLE:-false}
     volumes:
       - mt5_config:/config
     labels:

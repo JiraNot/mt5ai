@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Union
@@ -61,6 +63,8 @@ MT5_LOGIN = os.getenv("MT5_LOGIN", "")
 MT5_PASSWORD = os.getenv("MT5_PASSWORD", "")
 MT5_SERVER = os.getenv("MT5_SERVER", "")
 PORT = int(os.getenv("BRIDGE_PORT", "8900"))
+MT5_PATH = os.getenv("MT5_PATH", "")
+MT5_PORTABLE = os.getenv("MT5_PORTABLE", "false").lower() == "true"
 
 TIMEFRAME_MAP = {
     "M1": mt5.TIMEFRAME_M1,
@@ -380,7 +384,7 @@ def initialize_mt5() -> bool:
         logger.error("MetaTrader5 package not installed on this machine")
         return False
 
-    kwargs: dict = {"timeout": 10000}
+    kwargs: dict = {"timeout": 10000, "portable": MT5_PORTABLE}
     if MT5_LOGIN:
         kwargs.update(
             login=int(MT5_LOGIN),
@@ -388,7 +392,8 @@ def initialize_mt5() -> bool:
             server=MT5_SERVER,
         )
 
-    if not mt5.initialize(**kwargs):
+    initialized = mt5.initialize(MT5_PATH, **kwargs) if MT5_PATH else mt5.initialize(**kwargs)
+    if not initialized:
         logger.error(f"MT5 initialize failed: {mt5.last_error()}")
         return False
 
@@ -398,10 +403,27 @@ def initialize_mt5() -> bool:
     return True
 
 
+def retry_initialize_mt5() -> None:
+    """Keep trying until a user logs in or the terminal becomes ready."""
+    while True:
+        try:
+            if mt5.terminal_info() is not None:
+                logger.info("MT5 terminal became available")
+                return
+            mt5.shutdown()
+        except Exception:
+            pass
+
+        if initialize_mt5():
+            return
+        time.sleep(15)
+
+
 if __name__ == "__main__":
     import uvicorn
 
     if not initialize_mt5():
         logger.error("MT5 failed to initialize — bridge starting anyway, /health will report status")
+        threading.Thread(target=retry_initialize_mt5, name="mt5-retry", daemon=True).start()
     logger.info(f"Bridge listening on 0.0.0.0:{PORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

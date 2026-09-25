@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-26
+
+- Added MT5 path/portable/account environment wiring to the Docker bridge and
+  automatic initialization retries after the terminal becomes ready or is
+  logged in manually.
+
 ## Unreleased
 
 - The optional Docker/Wine MT5 image now disables the base image's legacy

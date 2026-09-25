@@ -32,6 +32,12 @@ and its rolling package release can be incompatible with the base image's
 Python runtime. The bot should connect through `MT5_MODE=bridge` and
 `BRIDGE_URL`, as shown below.
 
+For the Wine fallback, pass the MT5 account and terminal settings through the
+`mt5-node` environment: `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`, and,
+when needed, `MT5_PATH` plus `MT5_PORTABLE=true`. Never commit those values.
+The terminal must still be logged in or supplied with valid account settings;
+the bridge reports `mt5_initialized: false` until that succeeds.
+
 ## 2. Network: Tailscale (recommended)
 
 Keep the bridge off the public internet. With [Tailscale](https://tailscale.com) (free, 10 min):

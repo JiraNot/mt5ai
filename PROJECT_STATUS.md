@@ -97,6 +97,10 @@ DISABLED
   the persisted `/config/.wine` prefix without Wine ownership errors.
 - The MT5 node pins Wine NumPy below 2 because the bundled MetaTrader5 Windows
   extension is compiled against the NumPy 1.x ABI.
+- The MT5 node passes account/path settings into the HTTP bridge and retries
+  initialization after startup so a manual terminal login can recover without
+  restarting the bridge; production still requires an MT5 account/server
+  configuration.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)
@@ -159,7 +163,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-25
+2026-09-26
 
 
 ## AI audit remediation — 2026-09-10
