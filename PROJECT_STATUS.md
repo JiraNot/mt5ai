@@ -93,6 +93,8 @@ DISABLED
 - The optional `docker/mt5` Wine image uses the project HTTP bridge on port
   8900; the base image's legacy `mt5linux` RPyC startup on port 8001 is
   disabled because its rolling package can fail to parse on Python 3.11
+- The MT5 node custom init runs Wine as LinuxServer's `abc` user so it can use
+  the persisted `/config/.wine` prefix without Wine ownership errors.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)
