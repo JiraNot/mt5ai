@@ -54,7 +54,7 @@ DISABLED
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 258 Tests passing
+- [x] 261 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -90,6 +90,9 @@ DISABLED
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow
+- The optional `docker/mt5` Wine image uses the project HTTP bridge on port
+  8900; the base image's legacy `mt5linux` RPyC startup on port 8001 is
+  disabled because its rolling package can fail to parse on Python 3.11
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)
@@ -152,7 +155,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-15
+2026-09-25
 
 
 ## AI audit remediation — 2026-09-10

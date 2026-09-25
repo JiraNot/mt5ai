@@ -23,6 +23,15 @@ Follow `mt5-bridge/README.md`. Summary:
 4. Verify, then run: `python selftest.py` → `python mt5_bridge.py`.
 5. For boot autostart, use the included `bridge_start.bat.example`.
 
+### Wine/Docker development fallback
+
+The repository's optional `docker/mt5` image runs the standalone HTTP bridge
+on port `8900`. It deliberately does not start the base image's legacy
+`mt5linux` RPyC service on port `8001`; the latter is an unrelated dependency
+and its rolling package release can be incompatible with the base image's
+Python runtime. The bot should connect through `MT5_MODE=bridge` and
+`BRIDGE_URL`, as shown below.
+
 ## 2. Network: Tailscale (recommended)
 
 Keep the bridge off the public internet. With [Tailscale](https://tailscale.com) (free, 10 min):

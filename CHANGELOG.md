@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The optional Docker/Wine MT5 image now disables the base image's legacy
+  `mt5linux` RPyC startup and uses the project HTTP bridge on port 8900,
+  avoiding the Python 3.11-incompatible rolling `mt5linux` package.
 - Started the multi-venue Binance slice with a venue gateway contract and a
   read-only Binance USDT-M Futures REST adapter for klines, book ticker, and
   exchange symbol filters. Binance order execution is intentionally fail-closed
