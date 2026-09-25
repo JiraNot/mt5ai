@@ -32,6 +32,17 @@ replacement = (
     + "# Start the project HTTP bridge instead of the legacy mt5linux server.\n"
     + "show_message \"[7/7] MT5 HTTP bridge is managed by custom init.\"\n"
 )
+replacement = replacement.replace(
+    "    $wine_executable python -m pip install --no-cache-dir MetaTrader5==$metatrader_version\n",
+    "    $wine_executable python -m pip install --no-cache-dir MetaTrader5==$metatrader_version\n",
+)
+replacement = replacement.replace(
+    "fi\n# mt5linux RPyC is intentionally disabled;",
+    "fi\n"
+    + "# MetaTrader5's Windows extension is built against NumPy 1.x.\n"
+    + "$wine_executable python -m pip install --no-cache-dir --force-reinstall \"numpy<2\"\n"
+    + "# mt5linux RPyC is intentionally disabled;",
+)
 replacement = replacement.replace('mt5server_port="8001"\n', "")
 
 path.write_text(replacement, encoding="utf-8")

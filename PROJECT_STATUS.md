@@ -95,6 +95,8 @@ DISABLED
   disabled because its rolling package can fail to parse on Python 3.11
 - The MT5 node custom init runs Wine as LinuxServer's `abc` user so it can use
   the persisted `/config/.wine` prefix without Wine ownership errors.
+- The MT5 node pins Wine NumPy below 2 because the bundled MetaTrader5 Windows
+  extension is compiled against the NumPy 1.x ABI.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)

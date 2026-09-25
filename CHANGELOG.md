@@ -7,6 +7,7 @@
   avoiding the Python 3.11-incompatible rolling `mt5linux` package.
 - Fixed MT5 bridge startup by running Wine commands as the owner of the
   persisted Wine prefix (`abc`, UID 911).
+- Pinned Wine NumPy below 2 so the bundled MetaTrader5 extension can import.
 - Started the multi-venue Binance slice with a venue gateway contract and a
   read-only Binance USDT-M Futures REST adapter for klines, book ticker, and
   exchange symbol filters. Binance order execution is intentionally fail-closed
