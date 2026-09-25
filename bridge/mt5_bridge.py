@@ -29,6 +29,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional, Union
 
 # Optional: load .env from the script's own directory (no dependency needed).
 # Real environment variables always win over .env values.
@@ -75,7 +76,7 @@ app = FastAPI(title="Freebuff MT5 Bridge", version="1.0.0")
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
-def check_token(x_bridge_token: str | None) -> None:
+def check_token(x_bridge_token: Optional[str]) -> None:
     if BRIDGE_TOKEN and x_bridge_token != BRIDGE_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid bridge token")
 
@@ -86,7 +87,7 @@ class OrderIn(BaseModel):
     symbol: str
     direction: str  # BUY / SELL
     volume: float
-    price: float | None = None
+    price: Optional[float] = None
     sl: float
     tp: float
     magic: int = 20240101
@@ -95,18 +96,18 @@ class OrderIn(BaseModel):
 
 
 class ModifyIn(BaseModel):
-    sl: float | None = None
-    tp: float | None = None
+    sl: Optional[float] = None
+    tp: Optional[float] = None
 
 
-def _iso(epoch_seconds: int | float) -> str:
+def _iso(epoch_seconds: Union[int, float]) -> str:
     return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).isoformat()
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 @app.get("/health")
-def health(x_bridge_token: str | None = Header(default=None)):
+def health(x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
     if not MT5_AVAILABLE:
         return JSONResponse(
@@ -132,7 +133,7 @@ def ohlcv(
     symbol: str,
     timeframe: str = Query("M5"),
     count: int = Query(500, le=5000),
-    x_bridge_token: str | None = Header(default=None),
+    x_bridge_token: Optional[str] = Header(default=None),
 ):
     check_token(x_bridge_token)
     tf = TIMEFRAME_MAP.get(timeframe)
@@ -158,7 +159,7 @@ def ohlcv(
 
 
 @app.get("/tick/{symbol}")
-def tick(symbol: str, x_bridge_token: str | None = Header(default=None)):
+def tick(symbol: str, x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
     t = mt5.symbol_info_tick(symbol)
     if t is None:
@@ -175,7 +176,7 @@ def tick(symbol: str, x_bridge_token: str | None = Header(default=None)):
 
 
 @app.get("/symbol/{symbol}")
-def symbol_info(symbol: str, x_bridge_token: str | None = Header(default=None)):
+def symbol_info(symbol: str, x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
     info = mt5.symbol_info(symbol)
     if info is None:
@@ -197,7 +198,7 @@ def symbol_info(symbol: str, x_bridge_token: str | None = Header(default=None)):
 # ─── Account ──────────────────────────────────────────────────────────────────
 
 @app.get("/account")
-def account(x_bridge_token: str | None = Header(default=None)):
+def account(x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
     info = mt5.account_info()
     if info is None:
@@ -224,8 +225,8 @@ def account(x_bridge_token: str | None = Header(default=None)):
 
 @app.get("/positions")
 def positions(
-    symbol: str | None = Query(None),
-    x_bridge_token: str | None = Header(default=None),
+    symbol: Optional[str] = Query(None),
+    x_bridge_token: Optional[str] = Header(default=None),
 ):
     check_token(x_bridge_token)
     raw = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
@@ -256,7 +257,7 @@ def positions(
 # ─── Orders ───────────────────────────────────────────────────────────────────
 
 @app.post("/order")
-def send_order(order: OrderIn, x_bridge_token: str | None = Header(default=None)):
+def send_order(order: OrderIn, x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
 
     # Resolve market price if not provided
@@ -315,7 +316,7 @@ def send_order(order: OrderIn, x_bridge_token: str | None = Header(default=None)
 def modify_position(
     ticket: int,
     body: ModifyIn,
-    x_bridge_token: str | None = Header(default=None),
+    x_bridge_token: Optional[str] = Header(default=None),
 ):
     check_token(x_bridge_token)
     found = mt5.positions_get(ticket=ticket)
@@ -338,7 +339,7 @@ def modify_position(
 
 
 @app.post("/position/{ticket}/close")
-def close_position(ticket: int, x_bridge_token: str | None = Header(default=None)):
+def close_position(ticket: int, x_bridge_token: Optional[str] = Header(default=None)):
     check_token(x_bridge_token)
     found = mt5.positions_get(ticket=ticket)
     if not found:
