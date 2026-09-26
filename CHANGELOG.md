@@ -11,6 +11,13 @@
 
 ## Unreleased
 
+- Added a persistent dashboard runtime execution setting. PAPER/DEMO changes
+  are picked up by the worker without an ENV redeploy; LIVE requires a separate
+  explicit arm confirmation and keeps venue safeguards in force.
+- Binance account/position startup now falls back to public-data-only PAPER
+  behavior after the dashboard explicitly selects PAPER, avoiding a signed
+  account request from blocking BTCUSDT analysis.
+
 - The optional Docker/Wine MT5 image now disables the base image's legacy
   `mt5linux` RPyC startup and uses the project HTTP bridge on port 8900,
   avoiding the Python 3.11-incompatible rolling `mt5linux` package.

@@ -33,6 +33,12 @@ from src.storage.models import (
     ensure_database_parent,
 )
 from src.core.runtime_status import read_runtime_status
+from src.core.runtime_control import (
+    arm_live_trading,
+    get_runtime_trading_mode,
+    is_live_armed,
+    set_runtime_trading_mode,
+)
 from src.ai.openrouter_model_catalog import (
     fetch_models,
     get_selected_model,
@@ -802,14 +808,50 @@ def main():
     binance_status = check_binance_status() if "binance" in configured_venues else None
     ai_status = check_ai_status()
     runtime_status = read_runtime_status()
-    trading_mode = os.getenv("TRADING_MODE", "PAPER").upper()
+    trading_mode = get_runtime_trading_mode(os.getenv("TRADING_MODE", "PAPER")).upper()
+    live_armed = is_live_armed()
 
     # Sidebar: Live Connection Status
     st.sidebar.markdown("### 🔌 Live Connection Status")
     if refresh_seconds:
         st.sidebar.caption(f"Auto refresh: every {refresh_seconds}s")
-    mode_icon = "🟢" if trading_mode == "DEMO" else "🟡"
+    mode_icon = {"DEMO": "🟢", "LIVE": "🔴"}.get(trading_mode, "🟡")
     st.sidebar.caption(f"{mode_icon} Trading mode: `{trading_mode}`")
+    with st.sidebar.expander("⚙️ Runtime execution setting", expanded=False):
+        mode_options = ["PAPER", "DEMO", "LIVE"]
+        selected_mode = st.selectbox(
+            "Trading mode",
+            mode_options,
+            index=mode_options.index(trading_mode),
+            help="This setting is persisted in /app/data and does not require an ENV redeploy.",
+        )
+        if selected_mode == "LIVE":
+            st.warning("LIVE is locked until you explicitly arm it.")
+            confirmation = st.text_input(
+                "Type ENABLE LIVE TRADING to arm",
+                type="password",
+                key="live_mode_confirmation",
+            )
+            if st.button(
+                "Arm LIVE trading",
+                type="secondary",
+                disabled=confirmation != "ENABLE LIVE TRADING",
+                use_container_width=True,
+            ):
+                arm_live_trading()
+                st.rerun()
+            if trading_mode == "LIVE" and live_armed:
+                st.error("LIVE trading is armed. Use PAPER to stop broker execution.")
+        elif selected_mode != trading_mode or (trading_mode == "LIVE" and live_armed):
+            if st.button(
+                f"Apply {selected_mode}",
+                type="primary",
+                use_container_width=True,
+            ):
+                set_runtime_trading_mode(selected_mode.lower())
+                st.rerun()
+        else:
+            st.caption(f"Active runtime mode: `{trading_mode}`")
     if runtime_status:
         st.sidebar.caption(
             f"Loop: `{runtime_status.get('state', 'unknown')}` · "

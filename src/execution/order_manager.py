@@ -8,6 +8,7 @@ from typing import Optional
 
 from src.core.config import settings
 from src.core.events import EventType, event_bus
+from src.core.runtime_control import get_runtime_trading_mode, is_live_armed
 from src.core.types import OrderRequest, OrderResult
 from src.market.venue_gateway import VenueGateway
 
@@ -38,14 +39,27 @@ class OrderManager:
         Returns:
             OrderResult with execution details
         """
-        # This orchestrator may send broker orders only in explicit DEMO mode.
+        # Runtime mode is persisted separately so the dashboard can change it
+        # without restarting the deployment. LIVE additionally requires an
+        # explicit arm action; it must never be enabled by a mode label alone.
+        trading_mode = get_runtime_trading_mode(settings.trading_mode)
+        venue = getattr(self._mt5, "venue", "mt5")
         paper_binance = (
-            getattr(self._mt5, "venue", "mt5") == "binance"
+            venue == "binance"
             and settings.binance_mode == "paper"
-            and settings.trading_mode.lower() == "paper"
+            and trading_mode == "paper"
         )
-        if settings.trading_mode.lower() != "demo" and not paper_binance:
-            return OrderResult(success=False, error_message="Broker execution requires DEMO; PAPER and LIVE are disabled here")
+        if trading_mode == "live" and venue == "binance":
+            return OrderResult(
+                success=False,
+                error_message="Binance LIVE execution is disabled; use DEMO with Binance testnet safeguards",
+            )
+        broker_mode_allowed = trading_mode == "demo" or (trading_mode == "live" and is_live_armed())
+        if not broker_mode_allowed and not paper_binance:
+            return OrderResult(
+                success=False,
+                error_message="Broker execution requires DEMO or explicitly armed LIVE; PAPER is analysis-only",
+            )
 
         # Validate
         validation_error = self._validate_order(request)

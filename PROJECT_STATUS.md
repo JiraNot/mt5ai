@@ -50,6 +50,7 @@ DISABLED
 - [x] Binance USDT-M public market-data gateway (read-only, fail-closed execution)
 - [x] Binance selectable market venue in the main data feed
 - [x] Concurrent MT5 + Binance venue pipelines with independent gateways and caches
+- [x] Persistent dashboard runtime mode setting (PAPER/DEMO without ENV redeploy)
 - [x] Binance paper execution with journal venue/order identity fields
 - [x] Binance WebSocket kline streaming with reconnect and server-time sync
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
@@ -87,7 +88,8 @@ DISABLED
 - Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed and verified in production on 2026-09-15. The AI Council now permits only high-confidence disagreements to proceed to the Risk Engine; Risk Engine remains final authority.
 - Coolify Compose manifests are now kept in sync, including OpenRouter runtime settings and an explicit Streamlit health check, so `trade.onetapweb.com` can be routed only after the dashboard is ready (2026-09-22).
 - OpenRouter DeepSeek is available as the Bull analyst when `OPENROUTER_API_KEY` is configured; without it, the existing Gemini path remains available.
-- Binance integration supports `MARKET_DATA_VENUES=mt5,binance`; each venue runs an independent pipeline. Paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by the execution policy.
+- Binance integration supports `MARKET_DATA_VENUES=mt5,binance`; each venue runs an independent pipeline. Paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by default.
+- Execution mode can be changed from the dashboard and is persisted under `/app/data`; LIVE remains locked behind explicit arming and venue-specific safeguards.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow

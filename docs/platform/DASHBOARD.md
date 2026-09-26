@@ -9,6 +9,7 @@ Dashboard แสดงผล real-time ของระบบ trading
 ### /dashboard (Main)
 ```
 - Mode (PAPER/DEMO/LIVE)
+- Runtime execution setting (persisted in `/app/data`, no redeploy required)
 - MT5 status
 - Account Equity
 - Daily P/L
@@ -18,6 +19,11 @@ Dashboard แสดงผล real-time ของระบบ trading
 - Trades Today
 - Bot status
 ```
+
+The runtime mode selector supports PAPER and DEMO immediately. LIVE is locked
+behind a separate explicit arm confirmation and remains subject to each venue's
+execution safeguards. The deployment `TRADING_MODE` value is only the fallback
+when no dashboard setting has been saved.
 
 ### /markets
 ```

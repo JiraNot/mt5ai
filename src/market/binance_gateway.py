@@ -21,7 +21,8 @@ import httpx
 
 from src.core.config import settings
 from src.core.exceptions import FreebuffError
-from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, OrderResult, OrderStatus, Position, Tick
+from src.core.runtime_control import get_runtime_trading_mode, has_runtime_control
+from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, OrderResult, OrderStatus, Position, Tick, TradingMode
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ class BinanceGateway:
     """Binance USDⓈ-M Futures public REST adapter."""
 
     venue = "binance"
+
+    @staticmethod
+    def _runtime_is_paper() -> bool:
+        """Use public market data only after the dashboard explicitly selects PAPER."""
+        return has_runtime_control() and get_runtime_trading_mode(settings.trading_mode) == "paper"
 
     def __init__(
         self,
@@ -252,6 +258,13 @@ class BinanceGateway:
         raise BinanceConnectionError(f"Symbol not found: {symbol}")
 
     async def get_account_info(self) -> AccountInfo:
+        if self._runtime_is_paper():
+            return AccountInfo(
+                login=0, name="Binance Market Data", server="paper",
+                balance=settings.paper_initial_balance, equity=settings.paper_initial_balance,
+                free_margin=settings.paper_initial_balance, currency="USDT", leverage=1,
+                mode=TradingMode.PAPER,
+            )
         if settings.binance_mode != "testnet":
             raise BinanceConnectionError("Signed Binance account access is restricted to BINANCE_MODE=testnet")
         row = await self._signed_request("GET", "/fapi/v2/account", {})
@@ -266,6 +279,12 @@ class BinanceGateway:
         )
 
     async def send_order(self, request: OrderRequest) -> OrderResult:
+        if get_runtime_trading_mode(settings.trading_mode) == "live":
+            return OrderResult(
+                success=False,
+                venue=self.venue,
+                error_message="Binance LIVE execution is disabled; use DEMO with Binance testnet safeguards",
+            )
         if settings.binance_mode != "testnet":
             return OrderResult(success=False, venue=self.venue, error_message="Binance execution requires BINANCE_MODE=testnet")
         if not settings.binance_api_key or not settings.binance_api_secret:
@@ -308,6 +327,8 @@ class BinanceGateway:
         return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
+        if self._runtime_is_paper():
+            return []
         if settings.binance_mode != "testnet":
             raise BinanceConnectionError("Binance positions require BINANCE_MODE=testnet")
         params = {"symbol": symbol.upper()} if symbol else {}
@@ -336,6 +357,8 @@ class BinanceGateway:
         return positions
 
     async def get_position_deals(self, position_id: int) -> list[Deal]:
+        if self._runtime_is_paper():
+            return []
         if settings.binance_mode != "testnet":
             raise BinanceConnectionError("Binance deal history requires BINANCE_MODE=testnet")
         symbol = self._position_symbols.get(position_id)

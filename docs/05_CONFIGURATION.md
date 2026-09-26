@@ -210,6 +210,13 @@ MARKET_DATA_VENUES=mt5,binance    # run both venues concurrently; use one value 
 MARKET_DATA_VENUE=mt5
 PAPER_INITIAL_BALANCE=100000
 
+# Runtime execution mode
+# The dashboard can change this without an ENV edit or redeploy. The value is
+# persisted in /app/data/runtime_control.json. PAPER is analysis-only, DEMO
+# permits configured demo/testnet broker orders, and LIVE requires an explicit
+# arm confirmation in the dashboard and remains broker-specific.
+TRADING_MODE=PAPER
+
 # AI
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...

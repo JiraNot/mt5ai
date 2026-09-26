@@ -19,6 +19,7 @@ from src.core.config import settings
 from src.core.ratios import reward_risk
 from src.core.events import EventType, event_bus
 from src.core.logger import get_logger, setup_logging
+from src.core.runtime_control import get_runtime_trading_mode
 from src.core.runtime_status import update_runtime_status
 from src.core.types import (
     OrderRequest,
@@ -73,6 +74,11 @@ def configured_market_venues() -> list[str]:
             "No supported market venue configured; use MARKET_DATA_VENUES=mt5,binance"
         )
     return list(dict.fromkeys(selected))
+
+
+def current_trading_mode() -> str:
+    """Read the dashboard-controlled mode, falling back to deployment config."""
+    return get_runtime_trading_mode(settings.trading_mode)
 
 
 
@@ -172,14 +178,15 @@ class TradingPlatform:
     async def _start(self) -> None:
         """Start the trading platform."""
         setup_auth_credentials()
+        trading_mode = current_trading_mode()
         update_runtime_status(
-            state="starting", mode=settings.trading_mode.upper(),
+            state="starting", mode=trading_mode.upper(),
             venue=self._venue_name, symbol=self._trading_symbol,
             cycle_count=0, cycle_errors=0,
         )
         logger.info(
             f"Starting Freebuff Trading Platform v{settings.app.version} "
-            f"(mode={settings.trading_mode}, venue={self._venue_name})"
+            f"(mode={trading_mode}, venue={self._venue_name})"
         )
         logger.info(f"Strategies loaded: {get_strategy_ids()}")
 
@@ -233,10 +240,23 @@ class TradingPlatform:
             except asyncio.CancelledError:
                 return
 
-        account = await self._mt5.get_account_info()
+        while True:
+            try:
+                account = await self._mt5.get_account_info()
+                break
+            except Exception as exc:
+                logger.warning(
+                    "Account sync failed for %s: %s. "
+                    "Change the runtime mode in the dashboard if this is a credentials check; retrying in 10s...",
+                    self._venue_name.upper(), exc,
+                )
+                try:
+                    await asyncio.sleep(10)
+                except asyncio.CancelledError:
+                    return
         self._trade_learner.account_key = f"{account.server}/{account.login}"
         self._running = True
-        update_runtime_status(state="running", last_error=None)
+        update_runtime_status(state="running", mode=current_trading_mode().upper(), last_error=None)
 
         # Initialize data feed
         symbol = self._trading_symbol
@@ -311,7 +331,7 @@ class TradingPlatform:
                 update_runtime_status(
                     state="running", cycle_count=self._cycle_count,
                     cycle_errors=self._cycle_errors, venue=self._venue_name,
-                    symbol=symbol,
+                    symbol=symbol, mode=current_trading_mode().upper(),
                 )
                 # Check session
                 session = get_current_session()
@@ -666,7 +686,7 @@ async def _run_status() -> None:
     print("🏦 Freebuff Trading Platform — Status")
     print("=====================================")
     print(f"Version:        {settings.app.version}")
-    print(f"Mode:           {settings.trading_mode}")
+    print(f"Mode:           {current_trading_mode()}")
     print(f"Venues:         {', '.join(configured_market_venues())}")
     print(f"Symbols:        {settings.primary_symbol}, {settings.binance_symbol}")
     print(f"Database:       {settings.database_url}")
