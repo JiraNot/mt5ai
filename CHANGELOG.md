@@ -5,6 +5,9 @@
 - Added MT5 path/portable/account environment wiring to the Docker bridge and
   automatic initialization retries after the terminal becomes ready or is
   logged in manually.
+- Added concurrent MT5 and Binance pipelines. Configure
+  `MARKET_DATA_VENUES=mt5,binance`; each venue keeps its own gateway, symbol,
+  candle cache, position tracker, and paper execution path.
 
 ## Unreleased
 

@@ -26,8 +26,12 @@ class DataFeed:
     - Track current price via ticks
     """
 
-    def __init__(self, mt5: VenueGateway) -> None:
+    def __init__(self, mt5: VenueGateway, market_data_venue: str | None = None) -> None:
         self._mt5 = mt5
+        self._market_data_venue = (
+            market_data_venue
+            or getattr(mt5, "venue", settings.market_data_venue)
+        ).lower()
         self._cache: dict[str, dict[str, list[Candle]]] = {}  # symbol -> tf -> candles
         self._running = False
         self._poll_interval = 5  # seconds between polls
@@ -46,7 +50,7 @@ class DataFeed:
 
     async def start_polling(self, symbol: str) -> None:
         """Start polling for new candles. Runs until stopped."""
-        if settings.market_data_venue == "binance" and settings.binance_use_websocket:
+        if self._market_data_venue == "binance" and settings.binance_use_websocket:
             await self.start_streaming(symbol)
             return
         self._running = True
@@ -90,7 +94,7 @@ class DataFeed:
                 cached.pop(0)
             await event_bus.publish(EventType.NEW_CANDLE, {
                 "symbol": symbol, "timeframe": timeframe, "candle": candle,
-                "venue": getattr(self._mt5, "venue", settings.market_data_venue),
+                "venue": getattr(self._mt5, "venue", self._market_data_venue),
             })
 
     async def stop_polling(self) -> None:
@@ -128,7 +132,7 @@ class DataFeed:
                     "symbol": symbol,
                     "timeframe": tf,
                     "candle": latest,
-                    "venue": getattr(self._mt5, "venue", settings.market_data_venue),
+                    "venue": getattr(self._mt5, "venue", self._market_data_venue),
                 })
                 logger.debug(f"New {tf} candle for {symbol}: {latest.close:.2f}")
             else:

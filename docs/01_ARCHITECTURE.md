@@ -3,15 +3,17 @@
 ## High-Level Architecture
 
 ```
-                     ┌─────────────────┐
-                     │ MetaTrader 5    │
-                     └────────┬────────┘
-                              │
-                       MT5 Gateway
-                              │
-                              ▼
+              ┌──────────────────┐       ┌─────────────────┐
+              │ MetaTrader 5     │       │ Binance Futures │
+              └────────┬─────────┘       └────────┬────────┘
+                       │                          │
+                  MT5 Gateway                Binance Gateway
+                       │                          │
+                       └──────────┬───────────────┘
+                                  ▼
                    ┌───────────────────┐
                    │ Market Data       │
+                   │ per-venue pipeline│
                    └─────────┬─────────┘
                              ▼
                    ┌───────────────────┐
@@ -94,14 +96,14 @@ src/
 
 ## Data Flow
 
-1. **Market Data** → Raw OHLCV from MT5
+1. **Market Data** → Raw OHLCV from each enabled venue; every venue keeps its own symbol/cache/pipeline
 2. **Structure Engine** → Swing, BOS, CHoCH, FVG, OB, Liquidity
 3. **Feature Engine** → Extract ML-ready features
 4. **Strategy Engine** → Detect setups, score confluences
 5. **Candidate Pool** → TradeCandidate objects
 6. **Decision Engine** → Rule + AI scoring
 7. **Risk Engine** → Validate, position size, approve/reject
-8. **Execution Engine** → Send orders to MT5
+8. **Execution Engine** → Send orders through the same venue gateway that produced the candidate
 9. **Position Manager** → Manage open positions
 10. **Journal** → Log everything for analytics
 

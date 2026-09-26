@@ -205,7 +205,9 @@ BINANCE_API_SECRET=
 BINANCE_TIMEOUT=10
 BINANCE_SYMBOL=BTCUSDT
 BINANCE_USE_WEBSOCKET=false
-MARKET_DATA_VENUE=mt5             # mt5 / binance
+MARKET_DATA_VENUES=mt5,binance    # run both venues concurrently; use one value for a single venue
+# Legacy single-venue setting (used only when MARKET_DATA_VENUES is unset)
+MARKET_DATA_VENUE=mt5
 PAPER_INITIAL_BALANCE=100000
 
 # AI

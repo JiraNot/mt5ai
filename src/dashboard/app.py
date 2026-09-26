@@ -659,6 +659,31 @@ def check_mt5_bridge_status() -> dict:
         }
 
 
+def check_binance_status() -> dict:
+    """Check Binance public market-data connectivity without requiring credentials."""
+    base_url = os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com").rstrip("/")
+    start_time = time.time()
+    try:
+        req = urllib.request.Request(
+            f"{base_url}/fapi/v1/ping",
+            headers={"User-Agent": "freebuff-dashboard/0.1"},
+        )
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            resp.read()
+            return {
+                "online": True,
+                "latency_ms": int((time.time() - start_time) * 1000),
+                "base_url": base_url,
+            }
+    except Exception as e:
+        return {
+            "online": False,
+            "latency_ms": None,
+            "base_url": base_url,
+            "error": str(e),
+        }
+
+
 def check_ai_status() -> dict:
     """Check CLI installation and Codex credential availability.
 
@@ -769,6 +794,12 @@ def main():
 
     # Check live connections
     mt5_status = check_mt5_bridge_status()
+    configured_venues = [
+        venue.strip().lower()
+        for venue in os.getenv("MARKET_DATA_VENUES", os.getenv("MARKET_DATA_VENUE", "mt5")).split(",")
+        if venue.strip()
+    ]
+    binance_status = check_binance_status() if "binance" in configured_venues else None
     ai_status = check_ai_status()
     runtime_status = read_runtime_status()
     trading_mode = os.getenv("TRADING_MODE", "PAPER").upper()
@@ -784,6 +815,7 @@ def main():
             f"Loop: `{runtime_status.get('state', 'unknown')}` · "
             f"cycles: `{runtime_status.get('cycle_count', 0)}`"
         )
+    st.sidebar.caption(f"Enabled venues: `{', '.join(venue.upper() for venue in configured_venues)}`")
     if mt5_status["online"] and mt5_status["mt5_connected"]:
         st.sidebar.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
         if mt5_status.get("account"):
@@ -796,6 +828,13 @@ def main():
     else:
         st.sidebar.error("🔴 **MT5 Disconnected**")
         st.sidebar.caption(f"Bridge `{mt5_status['bridge_url']}` not reachable")
+    if binance_status is not None:
+        if binance_status["online"]:
+            st.sidebar.success(f"🟢 **Binance Market Data Online** ({binance_status['latency_ms']}ms)")
+            st.sidebar.caption(f"Public API: `{binance_status['base_url']}`")
+        else:
+            st.sidebar.error("🔴 **Binance Market Data Disconnected**")
+            st.sidebar.caption(f"API `{binance_status['base_url']}` not reachable")
 
     # AI Council in Sidebar
     st.sidebar.markdown("**AI Council (Debate):**")
@@ -908,6 +947,17 @@ def main():
                     f"🔴 **MT5 Trader Offline**\n\n"
                     f"Cannot reach Bridge at `{mt5_status['bridge_url']}`"
                 )
+            if binance_status is not None:
+                if binance_status["online"]:
+                    st.success(
+                        f"🟢 **Binance Market Data Online**\n\n"
+                        f"Testnet/public API · Latency: `{binance_status['latency_ms']}ms`"
+                    )
+                else:
+                    st.error(
+                        f"🔴 **Binance Market Data Offline**\n\n"
+                        f"Cannot reach `{binance_status['base_url']}`"
+                    )
 
         with s_col2:
             cg_tag = "🟢 ChatGPT" if (ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]) else "🟡 ChatGPT"
@@ -925,10 +975,10 @@ def main():
                 )
 
         with s_col3:
-            symbol = os.getenv("TRADING_SYMBOL", "XAUUSD")
+            symbols = "XAUUSD · BTCUSDT" if "binance" in configured_venues else os.getenv("TRADING_SYMBOL", "XAUUSD")
             st.info(
                 f"⚡ **Active Market & Engine**\n\n"
-                f"Symbol: `{symbol}` · Mode: `{trading_mode}` · "
+                f"Symbols: `{symbols}` · Mode: `{trading_mode}` · "
                 f"Cycles: `{runtime_status.get('cycle_count', 0)}`"
             )
 

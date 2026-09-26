@@ -63,6 +63,18 @@ from src.storage.repository import Repository
 logger = get_logger(__name__)
 
 
+def configured_market_venues() -> list[str]:
+    """Return unique enabled venues in their configured order."""
+    venues = getattr(settings, "market_data_venues", None) or [settings.market_data_venue]
+    supported = {"mt5", "binance"}
+    selected = [venue.lower() for venue in venues if venue.lower() in supported]
+    if not selected:
+        raise ValueError(
+            "No supported market venue configured; use MARKET_DATA_VENUES=mt5,binance"
+        )
+    return list(dict.fromkeys(selected))
+
+
 
 def setup_auth_credentials() -> None:
     """Setup Auth Login credentials on remote server from environment variables."""
@@ -86,18 +98,19 @@ class TradingPlatform:
         MT5 Data → Structure Engine → Strategy Plugins → AI Scorer → Risk Engine → Execute
     """
 
-    def __init__(self, max_cycles: int | None = None) -> None:
+    def __init__(self, max_cycles: int | None = None, venue_name: str | None = None) -> None:
         self._max_cycles = max_cycles
         self._cycle_count = 0
         self._cycle_errors = 0
+        self._venue_name = (venue_name or settings.market_data_venue).lower()
         self._trading_symbol = (
             settings.binance_symbol
-            if settings.market_data_venue == "binance"
+            if self._venue_name == "binance"
             else settings.primary_symbol
         )
-        # Select one venue for the pipeline. Binance PAPER is wrapped so the
-        # same strategies/risk/journal path can be exercised without signing.
-        if settings.market_data_venue == "binance":
+        # Each platform instance owns one gateway and one independent pipeline.
+        # The process can run multiple instances concurrently for multi-venue mode.
+        if self._venue_name == "binance":
             from src.execution.paper_gateway import PaperGateway
             from src.market.binance_gateway import BinanceGateway
 
@@ -105,16 +118,17 @@ class TradingPlatform:
             self._mt5: VenueGateway = (
                 PaperGateway(raw_binance) if settings.binance_mode == "paper" else raw_binance
             )
-            logger.info("Market venue: Binance (%s)", settings.binance_mode)
+            logger.info("Market venue enabled: Binance (%s)", settings.binance_mode)
         elif settings.mt5_mode == "bridge":
             from src.market.bridge_gateway import BridgeGateway
 
             self._mt5 = BridgeGateway()
-            logger.info(f"MT5 mode: bridge ({settings.bridge_url})")
+            logger.info("Market venue enabled: MT5 bridge (%s)", settings.bridge_url)
         else:
             self._mt5 = MT5Connection()
+            logger.info("Market venue enabled: MT5 local")
 
-        self._data_feed = DataFeed(self._mt5)
+        self._data_feed = DataFeed(self._mt5, market_data_venue=self._venue_name)
         self._spread_monitor = SpreadMonitor(self._trading_symbol)
 
         # Structure
@@ -160,11 +174,12 @@ class TradingPlatform:
         setup_auth_credentials()
         update_runtime_status(
             state="starting", mode=settings.trading_mode.upper(),
-            symbol=self._trading_symbol, cycle_count=0, cycle_errors=0,
+            venue=self._venue_name, symbol=self._trading_symbol,
+            cycle_count=0, cycle_errors=0,
         )
         logger.info(
             f"Starting Freebuff Trading Platform v{settings.app.version} "
-            f"(mode={settings.trading_mode})"
+            f"(mode={settings.trading_mode}, venue={self._venue_name})"
         )
         logger.info(f"Strategies loaded: {get_strategy_ids()}")
 
@@ -190,19 +205,25 @@ class TradingPlatform:
         )
         logger.info(f"Database connected: {settings.database_url}")
 
-        # Connect to MT5 (retry loop so the process stays alive)
-        logger.info("Connecting to MT5...")
+        # Connect to the selected venue (retry loop keeps this venue alive).
+        logger.info("Connecting to %s...", self._venue_name.upper())
         while True:
             connected = await self._mt5.connect()
             if connected:
-                update_runtime_status(state="connected", mt5_connected=True)
-                logger.info("✅ MT5 Connected successfully!")
+                update_runtime_status(
+                    state="connected", venue=self._venue_name,
+                    mt5_connected=self._venue_name == "mt5",
+                    binance_connected=self._venue_name == "binance",
+                )
+                logger.info("✅ %s connected successfully!", self._venue_name.upper())
                 break
-            if settings.mt5_mode == "bridge":
+            if self._venue_name == "mt5" and settings.mt5_mode == "bridge":
                 logger.warning(
                     f"⏳ Waiting for MT5 Bridge at {settings.bridge_url}... "
                     "Ensure MT5 terminal is running and logged in. Retrying in 10s..."
                 )
+            elif self._venue_name == "binance":
+                logger.warning("⏳ Waiting for Binance public API... Retrying in 10s...")
             else:
                 logger.warning(
                     "⏳ Waiting for MT5 terminal to start and log in. Retrying in 10s..."
@@ -237,8 +258,10 @@ class TradingPlatform:
     async def stop(self) -> None:
         """Stop the trading platform."""
         self._running = False
-        update_runtime_status(state="stopped", mt5_connected=False)
-        logger.info("Stopping platform...")
+        status_fields: dict[str, Any] = {"state": "stopped", "venue": self._venue_name}
+        status_fields[f"{self._venue_name}_connected"] = False
+        update_runtime_status(**status_fields)
+        logger.info("Stopping %s platform...", self._venue_name.upper())
         await self._data_feed.stop_polling()
         if self._poll_task:
             self._poll_task.cancel()
@@ -253,7 +276,7 @@ class TradingPlatform:
         if hasattr(self, "_engine"):
             await self._engine.dispose()
         await self._mt5.disconnect()
-        logger.info("Platform stopped cleanly")
+        logger.info("%s platform stopped cleanly", self._venue_name.upper())
 
     def _setup_event_handlers(self) -> None:
         """Wire event bus subscriptions."""
@@ -287,7 +310,8 @@ class TradingPlatform:
             try:
                 update_runtime_status(
                     state="running", cycle_count=self._cycle_count,
-                    cycle_errors=self._cycle_errors, symbol=symbol,
+                    cycle_errors=self._cycle_errors, venue=self._venue_name,
+                    symbol=symbol,
                 )
                 # Check session
                 session = get_current_session()
@@ -643,7 +667,8 @@ async def _run_status() -> None:
     print("=====================================")
     print(f"Version:        {settings.app.version}")
     print(f"Mode:           {settings.trading_mode}")
-    print(f"Symbol:         {settings.primary_symbol}")
+    print(f"Venues:         {', '.join(configured_market_venues())}")
+    print(f"Symbols:        {settings.primary_symbol}, {settings.binance_symbol}")
     print(f"Database:       {settings.database_url}")
     print(f"Risk per trade: {settings.risk.risk_per_trade_pct * 100:.1f}%")
     print(f"Max daily loss: {settings.risk.max_daily_loss_pct * 100:.1f}%")
@@ -707,9 +732,25 @@ def main() -> None:
     elif args.backtest:
         asyncio.run(_run_backtest())
     else:
-        platform = TradingPlatform(max_cycles=args.cycles)
         try:
-            asyncio.run(platform.start())
+            venues = configured_market_venues()
+            if len(venues) == 1:
+                asyncio.run(TradingPlatform(max_cycles=args.cycles, venue_name=venues[0]).start())
+            else:
+                async def run_all_venues() -> None:
+                    platforms = [
+                        TradingPlatform(max_cycles=args.cycles, venue_name=venue)
+                        for venue in venues
+                    ]
+                    results = await asyncio.gather(
+                        *(platform.start() for platform in platforms),
+                        return_exceptions=True,
+                    )
+                    for venue, result in zip(venues, results):
+                        if isinstance(result, Exception):
+                            logger.error("%s platform exited: %s", venue.upper(), result)
+
+                asyncio.run(run_all_venues())
         except KeyboardInterrupt:
             logger.info("Interrupted by user")
 

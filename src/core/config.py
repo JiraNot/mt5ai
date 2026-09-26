@@ -128,6 +128,7 @@ class Settings(BaseSettings):
     binance_symbol: str = "BTCUSDT"
     binance_use_websocket: bool = False
     market_data_venue: str = "mt5"
+    market_data_venues: list[str] = Field(default_factory=lambda: ["mt5"])
     paper_initial_balance: float = 100000.0
 
     database_url: str = "sqlite+aiosqlite:///freebuff.db"
@@ -217,6 +218,7 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         binance_symbol=os.getenv("BINANCE_SYMBOL", "BTCUSDT").upper(),
         binance_use_websocket=os.getenv("BINANCE_USE_WEBSOCKET", "false").lower() in {"1", "true", "yes"},
         market_data_venue=os.getenv("MARKET_DATA_VENUE", "mt5").lower(),
+        market_data_venues=_load_market_data_venues(),
         paper_initial_balance=float(os.getenv("PAPER_INITIAL_BALANCE", "100000")),
         database_url=db_url or "sqlite+aiosqlite:///freebuff.db",
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
@@ -236,6 +238,20 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         logging_config=LoggingConfig(**settings_yaml.get("logging", {})),
         symbols=symbols_config,
     )
+
+
+def _load_market_data_venues() -> list[str]:
+    """Read the multi-venue selection while preserving the old single setting."""
+    configured = os.getenv("MARKET_DATA_VENUES", "").strip()
+    if not configured:
+        configured = os.getenv("MARKET_DATA_VENUE", "mt5")
+
+    venues: list[str] = []
+    for value in configured.split(","):
+        venue = value.strip().lower()
+        if venue and venue not in venues:
+            venues.append(venue)
+    return venues or ["mt5"]
 
 
 # Global settings instance
