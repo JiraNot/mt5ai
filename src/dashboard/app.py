@@ -32,11 +32,15 @@ from src.storage.models import (
     Trade,
     ensure_database_parent,
 )
+from src.core.config import settings
+from src.ai.candidate_triage import CandidateTriage
 from src.core.runtime_status import read_runtime_status
 from src.core.runtime_control import (
     arm_live_trading,
+    get_candidate_policy,
     get_runtime_trading_mode,
     is_live_armed,
+    set_candidate_policy,
     set_runtime_trading_mode,
 )
 from src.ai.openrouter_model_catalog import (
@@ -246,21 +250,22 @@ def load_openrouter_models(base_url: str, api_key_configured: bool):
         return []
 
 
-def render_openrouter_model_selector() -> str:
+def render_openrouter_model_selector(container=None) -> str:
     """Render and persist the OpenRouter model choice without exposing secrets."""
+    container = container or st.sidebar
     current_model = get_selected_model()
     api_key_configured = bool(os.getenv("OPENROUTER_API_KEY", "").strip())
     base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
     models = load_openrouter_models(base_url, api_key_configured)
     groups = group_models(models, current_model)
 
-    st.sidebar.markdown("### 🧠 OpenRouter Model")
+    container.markdown("### 🧠 OpenRouter Model")
     if not api_key_configured:
-        st.sidebar.info("ใส่ OPENROUTER_API_KEY เพื่อโหลดรายการโมเดล")
+        container.info("ใส่ OPENROUTER_API_KEY เพื่อโหลดรายการโมเดล")
         return current_model
     if not models:
-        st.sidebar.warning("โหลดรายการโมเดล OpenRouter ไม่สำเร็จ — ใช้โมเดลปัจจุบันต่อไป")
-        st.sidebar.caption(f"Current: `{current_model}`")
+        container.warning("โหลดรายการโมเดล OpenRouter ไม่สำเร็จ — ใช้โมเดลปัจจุบันต่อไป")
+        container.caption(f"Current: `{current_model}`")
         return current_model
 
     category_labels = {
@@ -269,7 +274,7 @@ def render_openrouter_model_selector() -> str:
         "paid": "เสียเงิน",
     }
     available_categories = [key for key in ("current", "free", "paid") if groups[key]]
-    category = st.sidebar.radio(
+    category = container.radio(
         "ประเภทโมเดล",
         available_categories,
         format_func=lambda key: category_labels[key],
@@ -281,7 +286,7 @@ def render_openrouter_model_selector() -> str:
         model.model_id: f"{model.name} · {model.price_label}"
         for model in choices
     }
-    selected = st.sidebar.selectbox(
+    selected = container.selectbox(
         "เลือกโมเดล",
         [model.model_id for model in choices],
         format_func=lambda model_id: labels[model_id],
@@ -291,12 +296,12 @@ def render_openrouter_model_selector() -> str:
     if selected != current_model:
         try:
             save_selected_model(selected)
-            st.sidebar.success(f"บันทึกโมเดลแล้ว: `{selected}`")
+            container.success(f"บันทึกโมเดลแล้ว: `{selected}`")
         except (OSError, ValueError) as exc:
-            st.sidebar.error(f"บันทึกโมเดลไม่สำเร็จ: {exc}")
+            container.error(f"บันทึกโมเดลไม่สำเร็จ: {exc}")
     else:
-        st.sidebar.caption(f"กำลังใช้: `{current_model}`")
-    st.sidebar.caption("การเลือกมีผลกับ Bull Analyst ในการประเมินรอบถัดไป")
+        container.caption(f"กำลังใช้: `{current_model}`")
+    container.caption("การเลือกมีผลกับ Bull Analyst ในการประเมินรอบถัดไป")
     return selected
 
 
@@ -785,6 +790,323 @@ def check_dashboard_auth() -> bool:
     return False
 
 
+def _render_status_chip(label: str, value: str, tone: str = "neutral") -> None:
+    colors = {
+        "good": ("#22c55e", "rgba(34,197,94,.12)"),
+        "warn": ("#f59e0b", "rgba(245,158,11,.12)"),
+        "bad": ("#ef4444", "rgba(239,68,68,.12)"),
+        "neutral": ("#94a3b8", "rgba(148,163,184,.10)"),
+    }
+    foreground, background = colors.get(tone, colors["neutral"])
+    st.markdown(
+        f"<div style='background:{background};border:1px solid {foreground}55;"
+        f"border-radius:10px;padding:10px 12px;margin-bottom:8px'>"
+        f"<div style='font-size:.72rem;color:#94a3b8;text-transform:uppercase;"
+        f"letter-spacing:.08em'>{label}</div>"
+        f"<div style='font-size:1.05rem;font-weight:700;color:{foreground}'>{value}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_redesigned_dashboard(
+    *,
+    mt5_status: dict,
+    binance_status: dict | None,
+    ai_status: dict,
+    runtime_status: dict,
+    trading_mode: str,
+    live_armed: bool,
+    configured_venues: list[str],
+    candidate_policy: dict[str, int],
+    candidate_summary: dict,
+    trades_df: pd.DataFrame,
+    setups_df: pd.DataFrame,
+    equity_df: pd.DataFrame,
+    daily_df: pd.DataFrame,
+    filtered_trades: pd.DataFrame,
+    filtered_metrics: dict,
+) -> None:
+    """Render the task-oriented control center.
+
+    The previous dashboard exposed every chart at the same level. This layout
+    puts the current decision and required action first, then keeps research
+    detail one click deeper.
+    """
+    engine_state = str(runtime_status.get("state", "unknown")).lower()
+    engine_tone = "good" if engine_state == "running" else "warn" if engine_state in {"starting", "degraded"} else "bad"
+    engine_label = {
+        "running": "Running",
+        "starting": "Starting",
+        "error": "Error",
+        "stopped": "Stopped",
+    }.get(engine_state, engine_state.title())
+    observed = int(candidate_summary.get("total", 0) or 0)
+    priorities = candidate_summary.get("by_priority", {}) or {}
+    immediate = int(priorities.get("immediate", 0) or 0)
+    batch = int(priorities.get("batch", 0) or 0)
+    observe = int(priorities.get("observe", 0) or 0)
+
+    st.markdown("# Freebuff Control Center")
+    st.caption("ดูสิ่งที่ระบบกำลังทำอยู่ก่อน แล้วค่อยลงลึกถึง Candidate, AI, Learning และ Risk")
+
+    head = st.columns([1.3, 1.1, 1.1, 1.1, 1.5])
+    with head[0]:
+        _render_status_chip("Engine", engine_label, engine_tone)
+    with head[1]:
+        _render_status_chip("Mode", trading_mode, "bad" if trading_mode == "LIVE" and live_armed else "good" if trading_mode == "DEMO" else "neutral")
+    with head[2]:
+        _render_status_chip("Candidates", str(observed), "good" if observed else "warn")
+    with head[3]:
+        _render_status_chip("AI review now", str(immediate), "good" if immediate else "neutral")
+    with head[4]:
+        last_decision = runtime_status.get("last_decision", "Waiting")
+        raw_reason = runtime_status.get("last_reason") or runtime_status.get("last_error")
+        last_reason = raw_reason if raw_reason not in {None, "", "unknown", "None"} else "รอผลการประเมินรอบถัดไป"
+        st.info(f"**Latest:** `{last_decision}`\n\n{last_reason}")
+
+    if engine_state != "running":
+        st.warning(f"Worker state is `{engine_label}`. ตรวจสอบ health และ logs ก่อนประเมินว่าไม่มี setup")
+
+    tabs = st.tabs([
+        "🎛️ Command Center",
+        "🔎 Candidates & AI",
+        "🧠 Learning",
+        "📈 Performance",
+        "⚙️ Controls & Safety",
+    ])
+
+    with tabs[0]:
+        st.markdown("## ตอนนี้ระบบกำลังทำอะไร")
+        status_cols = st.columns(3)
+        with status_cols[0]:
+            if mt5_status["online"] and mt5_status["mt5_connected"]:
+                st.success(f"**MT5 connected** · {mt5_status.get('server', 'server unknown')}\n\nAccount `{mt5_status.get('account', 'N/A')}`")
+            elif mt5_status["online"]:
+                st.warning("**MT5 bridge online**\n\nกำลังรอ terminal/account")
+            else:
+                st.error("**MT5 disconnected**\n\nตรวจสอบ bridge และ MT5 credentials")
+        with status_cols[1]:
+            if binance_status is None:
+                st.info("**Binance disabled**\n\nVenue นี้ไม่ได้อยู่ใน MARKET_DATA_VENUES")
+            elif binance_status["online"]:
+                st.success(f"**Binance market data online**\n\n{binance_status['latency_ms']}ms · public API")
+            else:
+                st.error("**Binance market data offline**\n\nตรวจสอบ endpoint/network")
+        with status_cols[2]:
+            if ai_status["council_ready"]:
+                st.success("**AI Council ready**\n\nBull + Bear provider พร้อมใช้งาน")
+            else:
+                st.warning("**Rule scorer active**\n\nAI Council ยังไม่ครบ provider")
+
+        st.markdown("## Candidate funnel")
+        funnel = st.columns(4)
+        funnel[0].metric("Observed", observed, "บันทึกทุก setup ที่ผ่าน observation floor")
+        funnel[1].metric("Observe", observe, "เก็บไว้เรียนรู้ ไม่เรียก AI")
+        funnel[2].metric("Batch", batch, "รวมเป็น digest ก่อน")
+        funnel[3].metric("Immediate", immediate, "มีสิทธิ์เข้า AI Council")
+
+        attention: list[str] = []
+        if not runtime_status:
+            attention.append("ยังไม่มี heartbeat จาก worker")
+        if not ai_status["council_ready"]:
+            attention.append("AI Council ยังไม่พร้อมครบทุก provider — ระบบยังใช้ rule scorer ได้")
+        if observed == 0:
+            attention.append("ยังไม่มี Candidate ที่ถูกบันทึก ให้ตรวจ market data และ strategy output")
+        if attention:
+            st.markdown("## สิ่งที่ควรตรวจตอนนี้")
+            for item in attention:
+                st.warning(item)
+        else:
+            st.success("ระบบมี heartbeat, data feed และ candidate triage ทำงานอยู่")
+
+        st.markdown("## กิจกรรมล่าสุด")
+        if setups_df.empty:
+            st.info("ยังไม่มี setup log")
+        else:
+            latest = setups_df.head(12).copy()
+            latest = latest[["created_at", "symbol", "strategy_id", "direction", "rule_score", "ai_score", "decision", "rejection_reason"]]
+            latest.columns = ["Time", "Symbol", "Strategy", "Dir", "Rule", "AI", "Status", "Reason"]
+            st.dataframe(latest, use_container_width=True, hide_index=True)
+
+        st.markdown("## ผลการเทรด")
+        metrics_cols = st.columns(4)
+        metrics_cols[0].metric("Trades", filtered_metrics["total"])
+        metrics_cols[1].metric("Win rate", f"{filtered_metrics['win_rate']}%")
+        metrics_cols[2].metric("Net P&L", f"${filtered_metrics['total_pnl']:,.2f}")
+        metrics_cols[3].metric("Max drawdown", f"{filtered_metrics['max_drawdown']}%")
+        if not equity_df.empty:
+            st.plotly_chart(plot_equity_curve(equity_df), use_container_width=True)
+
+    with tabs[1]:
+        st.markdown("## Candidate inbox")
+        st.caption("Candidate ทุกระดับถูกเก็บไว้ แต่ AI จะถูกเรียกตาม priority เพื่อควบคุมค่าใช้จ่ายและลด noise")
+        policy_cols = st.columns(5)
+        policy_cols[0].metric("Observe floor", candidate_policy["observe_min_score"])
+        policy_cols[1].metric("Batch from", candidate_policy["batch_min_score"])
+        policy_cols[2].metric("Immediate from", candidate_policy["immediate_min_score"])
+        policy_cols[3].metric("AI/bar", candidate_policy["max_immediate_per_bar"])
+        policy_cols[4].metric("Digest window", candidate_policy["summary_window"])
+
+        if setups_df.empty:
+            st.info("ยังไม่มี Candidate")
+        else:
+            c1, c2, c3 = st.columns(3)
+            strategy_options = ["All"] + sorted(setups_df["strategy_id"].dropna().astype(str).unique().tolist())
+            selected_setup_strategy = c1.selectbox("Strategy", strategy_options, key="candidate_strategy_filter")
+            selected_decisions = c2.multiselect(
+                "Status", ["TRADED", "SKIPPED", "REJECTED"], default=["TRADED", "SKIPPED", "REJECTED"],
+                key="candidate_decision_filter",
+            )
+            selected_direction = c3.selectbox("Direction", ["All", "BUY", "SELL"], key="candidate_direction_filter")
+            candidate_df = setups_df.copy()
+            if selected_setup_strategy != "All":
+                candidate_df = candidate_df[candidate_df["strategy_id"] == selected_setup_strategy]
+            if selected_decisions:
+                candidate_df = candidate_df[candidate_df["decision"].isin(selected_decisions)]
+            if selected_direction != "All":
+                candidate_df = candidate_df[candidate_df["direction"] == selected_direction]
+            st.dataframe(
+                candidate_df[["created_at", "symbol", "strategy_id", "direction", "rule_score", "ai_score", "combined_score", "decision", "outcome_r", "rejection_reason"]].head(100),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("### AI Council feed")
+            debates = candidate_df[candidate_df["gemini_verdict"].notna()].head(10)
+            if debates.empty:
+                st.info("ยังไม่มี AI Council debate สำหรับ Candidate ที่เลือก")
+            for _, row in debates.iterrows():
+                status = "✅" if row.get("decision") == "TRADED" else "⏸️"
+                with st.expander(f"{status} {row.get('created_at')} · {row.get('symbol')} {row.get('direction')} · {row.get('strategy_id')}"):
+                    left, right = st.columns(2)
+                    with left:
+                        st.markdown(f"**Bull:** `{row.get('gemini_verdict')}` · {row.get('gemini_score')}/100")
+                        st.info(row.get("gemini_narrative") or "ไม่มี narrative")
+                    with right:
+                        st.markdown(f"**Bear:** `{row.get('gpt_verdict')}` · {row.get('gpt_score')}/100")
+                        st.warning(row.get("gpt_narrative") or "ไม่มี narrative")
+                    if row.get("debate_summary"):
+                        st.markdown(f"**Council summary:** {row.get('debate_summary')}")
+
+        st.markdown("### Candidate digest ที่ส่งประกอบ AI")
+        digest = {
+            key: value for key, value in candidate_summary.items()
+            if key in {"total", "by_priority", "by_strategy", "by_session", "updated_at", "policy"}
+        }
+        st.json(digest)
+
+    with tabs[2]:
+        st.markdown("## Learning Lab")
+        st.caption("ระบบเก็บ evidence และบทเรียนจากผลที่ broker ยืนยันแล้ว ก่อนนำไปใช้ประกอบการตัดสินใจครั้งถัดไป")
+        memories_df = load_memories(get_engine(os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")))
+        if memories_df.empty:
+            st.info("ยังไม่มี memory จากไม้ที่ปิดแล้ว")
+        else:
+            lm = st.columns(4)
+            lm[0].metric("Memories", len(memories_df))
+            lm[1].metric("Wins", int((memories_df["outcome"] == "WIN").sum()))
+            lm[2].metric("Losses", int((memories_df["outcome"] == "LOSS").sum()))
+            lm[3].metric("Root cause known", int((memories_df["root_cause"] != "UNDETERMINED").sum()))
+            st.warning("การบันทึกผลยังเป็น evidence-only: ระบบยังไม่สรุปสาเหตุเชิงเหตุผลจากไม้เดียว และยังไม่แก้กฎเทรดเอง")
+            st.dataframe(
+                memories_df[["created_at", "symbol", "strategy_id", "direction", "outcome", "profit", "rr_achieved", "root_cause", "lesson_learned_th", "rule_recommendation"]].head(50),
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.markdown("### วิธีที่บทเรียนถูกใช้")
+            st.markdown("1. บันทึก snapshot ตอนเข้าไม้  \n2. รอผลปิดที่ยืนยันจาก broker  \n3. ส่งบทเรียนล่าสุดของ symbol/strategy เดียวกันให้ AI Council  \n4. การปรับ strategy ต้องผ่าน dataset และ walk-forward ก่อน")
+
+    with tabs[3]:
+        st.markdown("## Performance & Journal")
+        m = st.columns(6)
+        m[0].metric("Trades", filtered_metrics["total"])
+        m[1].metric("Win rate", f"{filtered_metrics['win_rate']}%")
+        m[2].metric("Profit factor", filtered_metrics["profit_factor"])
+        m[3].metric("Expectancy", f"${filtered_metrics['expectancy']:,.2f}")
+        m[4].metric("Avg R", filtered_metrics["avg_r"])
+        m[5].metric("Net P&L", f"${filtered_metrics['total_pnl']:,.2f}")
+        p1, p2 = st.columns(2)
+        with p1:
+            if not filtered_trades.empty:
+                st.plotly_chart(plot_strategy_performance(filtered_trades), use_container_width=True)
+            else:
+                st.info("ยังไม่มี trade performance")
+        with p2:
+            if not filtered_trades.empty:
+                st.plotly_chart(plot_strategy_pnl(filtered_trades), use_container_width=True)
+            else:
+                st.info("ยังไม่มี P&L data")
+        if not filtered_trades.empty:
+            st.plotly_chart(plot_drawdown(filtered_trades), use_container_width=True)
+            with st.expander("เปิด Trade Journal รายละเอียด"):
+                st.dataframe(filtered_trades, use_container_width=True, hide_index=True)
+        if not daily_df.empty:
+            st.plotly_chart(px.bar(daily_df, x="trade_date", y="total_pnl", color=daily_df["total_pnl"].apply(lambda x: "Win" if x >= 0 else "Loss"), color_discrete_map={"Win": "#22c55e", "Loss": "#ef4444"}, title="Daily P&L").update_layout(template="plotly_dark"), use_container_width=True)
+
+    with tabs[4]:
+        st.markdown("## Controls & Safety")
+        st.caption("ค่าที่เปลี่ยนตรงนี้มีผลกับ runtime หลังบันทึก ไม่ต้อง deploy ENV ใหม่ แต่ Risk Engine และ broker safeguards ยังแก้จากหน้านี้ไม่ได้")
+        control_left, control_right = st.columns(2)
+        with control_left:
+            st.markdown("### Execution mode")
+            selected_mode = st.selectbox("Runtime mode", ["PAPER", "DEMO", "LIVE"], index=["PAPER", "DEMO", "LIVE"].index(trading_mode), key="controls_runtime_mode")
+            if selected_mode == "LIVE":
+                st.error("LIVE ต้องยืนยันแยกต่างหาก และ MT5 ต้องเชื่อมบัญชีจริงที่ถูกต้อง")
+                confirmation = st.text_input("พิมพ์ ENABLE LIVE TRADING", type="password", key="controls_live_confirmation")
+                if st.button("Arm LIVE", type="secondary", disabled=confirmation != "ENABLE LIVE TRADING", key="controls_arm_live"):
+                    arm_live_trading()
+                    st.rerun()
+                if live_armed:
+                    st.error("LIVE ARMED — ใช้ PAPER เพื่อหยุด broker execution")
+            elif selected_mode != trading_mode:
+                if st.button(f"Apply {selected_mode}", type="primary", key="controls_apply_mode"):
+                    set_runtime_trading_mode(selected_mode.lower())
+                    st.rerun()
+            else:
+                st.success(f"Active mode: {trading_mode}")
+
+            st.markdown("### AI candidate triage")
+            st.caption("ต่ำกว่านี้ยังเก็บข้อมูลได้ แต่ไม่เรียก AI ทันที")
+            observe_value = st.number_input("Observe floor", 0, 100, candidate_policy["observe_min_score"], key="policy_observe")
+            batch_value = st.number_input("Batch review from", 0, 100, candidate_policy["batch_min_score"], key="policy_batch")
+            immediate_value = st.number_input("Immediate AI from", 0, 100, candidate_policy["immediate_min_score"], key="policy_immediate")
+            max_ai_value = st.number_input("Max immediate AI reviews / candle", 0, 10, candidate_policy["max_immediate_per_bar"], key="policy_max_ai")
+            window_value = st.number_input("Digest window", 5, 500, candidate_policy["summary_window"], key="policy_window")
+            if st.button("Save candidate policy", type="primary", key="save_candidate_policy"):
+                try:
+                    set_candidate_policy(
+                        observe_min_score=int(observe_value), batch_min_score=int(batch_value),
+                        immediate_min_score=int(immediate_value), max_immediate_per_bar=int(max_ai_value),
+                        summary_window=int(window_value),
+                    )
+                    st.success("บันทึก candidate policy แล้ว")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+
+        with control_right:
+            st.markdown("### Connections")
+            connection_rows = [
+                {"Component": "MT5 bridge", "Status": "Online" if mt5_status["online"] else "Offline", "Detail": mt5_status.get("server") or mt5_status.get("bridge_url", "")},
+                {"Component": "Binance market data", "Status": "Online" if binance_status and binance_status["online"] else "Disabled/Offline", "Detail": binance_status.get("base_url", "not configured") if binance_status else "not configured"},
+                {"Component": "AI Council", "Status": "Ready" if ai_status["council_ready"] else "Rule scorer only", "Detail": "provider credentials are deployment settings"},
+            ]
+            st.dataframe(pd.DataFrame(connection_rows), use_container_width=True, hide_index=True)
+            render_openrouter_model_selector(st)
+
+            st.markdown("### Risk policy (read-only)")
+            risk_rows = [
+                {"Setting": "Risk / trade", "Value": f"{settings.risk.risk_per_trade_pct * 100:.2f}%"},
+                {"Setting": "Max daily loss", "Value": f"{settings.risk.max_daily_loss_pct * 100:.2f}%"},
+                {"Setting": "Max trades / day", "Value": str(settings.risk.max_trades_per_day)},
+                {"Setting": "Max consecutive losses", "Value": str(settings.risk.max_consecutive_losses)},
+                {"Setting": "Minimum RR", "Value": str(settings.risk.min_rr)},
+                {"Setting": "Max spread", "Value": f"{settings.risk.max_spread_pips} pips"},
+            ]
+            st.dataframe(pd.DataFrame(risk_rows), use_container_width=True, hide_index=True)
+            st.info("Risk Engine เป็น authority สุดท้าย และไม่มีปุ่มใดใน dashboard ที่ bypass ได้")
+
+
 def main():
     if not check_dashboard_auth():
         return
@@ -817,41 +1139,13 @@ def main():
         st.sidebar.caption(f"Auto refresh: every {refresh_seconds}s")
     mode_icon = {"DEMO": "🟢", "LIVE": "🔴"}.get(trading_mode, "🟡")
     st.sidebar.caption(f"{mode_icon} Trading mode: `{trading_mode}`")
-    with st.sidebar.expander("⚙️ Runtime execution setting", expanded=False):
-        mode_options = ["PAPER", "DEMO", "LIVE"]
-        selected_mode = st.selectbox(
-            "Trading mode",
-            mode_options,
-            index=mode_options.index(trading_mode),
-            help="This setting is persisted in /app/data and does not require an ENV redeploy.",
-        )
-        if selected_mode == "LIVE":
-            st.warning("LIVE is locked until you explicitly arm it.")
-            confirmation = st.text_input(
-                "Type ENABLE LIVE TRADING to arm",
-                type="password",
-                key="live_mode_confirmation",
-            )
-            if st.button(
-                "Arm LIVE trading",
-                type="secondary",
-                disabled=confirmation != "ENABLE LIVE TRADING",
-                use_container_width=True,
-            ):
-                arm_live_trading()
-                st.rerun()
-            if trading_mode == "LIVE" and live_armed:
-                st.error("LIVE trading is armed. Use PAPER to stop broker execution.")
-        elif selected_mode != trading_mode or (trading_mode == "LIVE" and live_armed):
-            if st.button(
-                f"Apply {selected_mode}",
-                type="primary",
-                use_container_width=True,
-            ):
-                set_runtime_trading_mode(selected_mode.lower())
-                st.rerun()
-        else:
-            st.caption(f"Active runtime mode: `{trading_mode}`")
+    candidate_policy = get_candidate_policy()
+    st.sidebar.caption(
+        "AI triage: "
+        f"batch ≥ {candidate_policy['batch_min_score']} · "
+        f"immediate ≥ {candidate_policy['immediate_min_score']}"
+    )
+    st.sidebar.caption("รายละเอียดและการเปลี่ยนค่าทั้งหมดอยู่ที่แท็บ `Controls & Safety`")
     if runtime_status:
         st.sidebar.caption(
             f"Loop: `{runtime_status.get('state', 'unknown')}` · "
@@ -894,8 +1188,6 @@ def main():
         st.sidebar.markdown("🟢 `DeepSeek (OpenRouter)`: API Key Ready (Bull)")
     else:
         st.sidebar.markdown("⚪ `DeepSeek (OpenRouter)`: Not Configured")
-
-    render_openrouter_model_selector()
 
     st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
     st.sidebar.markdown("---")
@@ -958,6 +1250,28 @@ def main():
 
     # Recalculate metrics for filtered data
     filtered_metrics = calculate_metrics(filtered_trades)
+
+    # New task-oriented dashboard. The legacy tab layout below is retained in
+    # source for reference during migration but is intentionally unreachable.
+    candidate_summary = CandidateTriage().summary()
+    render_redesigned_dashboard(
+        mt5_status=mt5_status,
+        binance_status=binance_status,
+        ai_status=ai_status,
+        runtime_status=runtime_status,
+        trading_mode=trading_mode,
+        live_armed=live_armed,
+        configured_venues=configured_venues,
+        candidate_policy=candidate_policy,
+        candidate_summary=candidate_summary,
+        trades_df=trades_df,
+        setups_df=setups_df,
+        equity_df=equity_df,
+        daily_df=daily_df,
+        filtered_trades=filtered_trades,
+        filtered_metrics=filtered_metrics,
+    )
+    return
 
     # Tabs
     tab_overview, tab_journal, tab_learning, tab_strategy, tab_analysis, tab_risk = st.tabs([

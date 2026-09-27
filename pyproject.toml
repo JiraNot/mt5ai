@@ -23,6 +23,7 @@ dependencies = [
     "httpx>=0.26",
     "websockets>=12.0",
     "openai>=1.0.0",
+    "mcp>=1.30.0,<2.0.0",
 
     # Database
     "sqlalchemy[asyncio]>=2.0",
@@ -64,6 +65,7 @@ mt5 = [
 [project.scripts]
 freebuff = "src.app:main"
 freebuff-trade = "src.live.cli:main"
+freebuff-mcp = "src.control.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/JiraNot/mt5ai"

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from src.core.config import settings
+from src.core.runtime_control import get_candidate_policy
 from src.core.types import StrategyCandidate
 from src.strategies.registry import get_all_strategies
 from src.structure.context import MultiTimeframeContext
@@ -29,7 +30,11 @@ class MetaDecisionEngine:
     VERSION = "2.0.0"
 
     def __init__(self, min_combined_score: int | None = None) -> None:
-        self._min_score = min_combined_score or settings.ai.min_combined_score
+        # The old fixed threshold dropped low-score candidates before they
+        # could be recorded. Runtime triage now keeps observation separate
+        # from immediate AI review; this constructor argument remains as a
+        # backwards-compatible observation floor for tests/tools.
+        self._min_score = min_combined_score if min_combined_score is not None else None
         # strategy_id -> {"score_delta": int, "wins": int, "losses": int, "last_reason": str}
         self._strategy_health: dict[str, dict[str, Any]] = {}
 
@@ -88,10 +93,16 @@ class MetaDecisionEngine:
 
                 candidate.metadata["version"] = strategy.version
 
-                # Apply minimum score filter
-                if candidate.rule_score < self._min_score:
+                # Apply only the observation floor. AI urgency is decided
+                # later from the fully contextual RuleBasedScorer score.
+                observe_floor = (
+                    self._min_score
+                    if self._min_score is not None
+                    else get_candidate_policy()["observe_min_score"]
+                )
+                if candidate.rule_score < observe_floor:
                     logger.debug(
-                        f"{strategy_id}: score {candidate.rule_score} < {self._min_score} — skipped"
+                        f"{strategy_id}: score {candidate.rule_score} < {observe_floor} — not observed"
                     )
                     continue
 

@@ -51,12 +51,14 @@ DISABLED
 - [x] Binance selectable market venue in the main data feed
 - [x] Concurrent MT5 + Binance venue pipelines with independent gateways and caches
 - [x] Persistent dashboard runtime mode setting (PAPER/DEMO without ENV redeploy)
+- [x] Candidate triage and local digest (observe/batch/immediate AI review)
+- [x] Local stdio MCP for runtime settings and candidate summaries
 - [x] Binance paper execution with journal venue/order identity fields
 - [x] Binance WebSocket kline streaming with reconnect and server-time sync
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 261 Tests passing
+- [x] 273 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -90,6 +92,7 @@ DISABLED
 - OpenRouter DeepSeek is available as the Bull analyst when `OPENROUTER_API_KEY` is configured; without it, the existing Gemini path remains available.
 - Binance integration supports `MARKET_DATA_VENUES=mt5,binance`; each venue runs an independent pipeline. Paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by default.
 - Execution mode can be changed from the dashboard and is persisted under `/app/data`; LIVE remains locked behind explicit arming and venue-specific safeguards.
+- Candidate triage records all strategy outputs above the observation floor, sends only immediate candidates to the AI Council, and exposes its policy/status through the local MCP server.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - Wine-based MT5 is dev/fallback only — not recommended for live money flow
@@ -132,7 +135,7 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ```
 Source files: 50+
 Test files: 11
-Total tests: 258 (all passing)
+Total tests: 273 (all passing)
 Documentation files: 40+
 Task files: 13
 ```

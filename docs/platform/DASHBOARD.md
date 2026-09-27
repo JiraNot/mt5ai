@@ -4,7 +4,40 @@
 
 Dashboard แสดงผล real-time ของระบบ trading
 
-## Pages
+## Current Streamlit Layout
+
+The dashboard is organized around five jobs instead of exposing every chart at
+the same level:
+
+### Command Center
+
+The first screen answers: is the worker running, is market data connected, are
+Candidates arriving, and what did the engine decide most recently?
+
+### Candidates & AI
+
+Shows the candidate funnel, observe/batch/immediate counts, filters by strategy
+and direction, recent setup rows, AI Council debates, and the compact digest
+sent alongside immediate AI reviews.
+
+### Learning
+
+Shows broker-verified memories and makes the boundary explicit: memories are
+evidence for future AI context, not automatic strategy mutation.
+
+### Performance
+
+Combines trade metrics, equity/drawdown, strategy comparison, daily P&L, and an
+expandable trade journal.
+
+### Controls & Safety
+
+The canonical place for PAPER/DEMO/LIVE, candidate triage thresholds, AI review
+budget, model selection, connection status, and read-only Risk Engine limits.
+LIVE requires explicit confirmation. Risk limits and broker credentials remain
+outside this runtime control surface.
+
+## Legacy Product Map
 
 ### /dashboard (Main)
 ```

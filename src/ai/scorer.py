@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from src.core.config import settings
+from src.core.runtime_control import get_candidate_policy
 from src.core.types import AIDecision, StrategyCandidate
 from src.structure.context import MultiTimeframeContext
 
@@ -99,7 +100,16 @@ class RuleBasedScorer:
         score = max(0, min(100, score))
 
         # ─── Decision ─────────────────────────────────────────────────────
-        min_threshold = settings.ai.min_combined_score
+        policy = get_candidate_policy()
+        min_threshold = policy["immediate_min_score"]
+        if score >= min_threshold:
+            triage_priority = "immediate"
+        elif score >= policy["batch_min_score"]:
+            triage_priority = "batch"
+        else:
+            triage_priority = "observe"
+        candidate.metadata["triage_priority"] = triage_priority
+        candidate.metadata["triage_score"] = score
         if score >= min_threshold:
             decision = candidate.direction.value  # BUY or SELL
             reasons.append(f"Score {score} >= threshold {min_threshold}")

@@ -19,7 +19,7 @@ from src.core.config import settings
 from src.core.ratios import reward_risk
 from src.core.events import EventType, event_bus
 from src.core.logger import get_logger, setup_logging
-from src.core.runtime_control import get_runtime_trading_mode
+from src.core.runtime_control import get_candidate_policy, get_runtime_trading_mode
 from src.core.runtime_status import update_runtime_status
 from src.core.types import (
     OrderRequest,
@@ -41,6 +41,7 @@ from src.strategies.registry import auto_discover, get_strategy_ids
 
 # Phase 5: AI Scorer
 from src.ai.ai_council import AICouncil
+from src.ai.candidate_triage import CandidateTriage
 from src.ai.trade_learner import TradeLearner
 from src.ai.snapshot import build_snapshot
 from src.structure.equal_highs_lows import EqualHighsLowsDetector
@@ -149,6 +150,7 @@ class TradingPlatform:
         self._eql_detector = EqualHighsLowsDetector()
         self._ai_scorer = RuleBasedScorer()
         self._context_analyzer = ContextAnalyzer()
+        self._candidate_triage = CandidateTriage()
 
         # Execution
         self._order_manager = OrderManager(self._mt5)
@@ -407,12 +409,22 @@ class TradingPlatform:
 
         update_runtime_status(candidate_count=len(candidates))
 
-        # Process top candidate
-        for candidate in candidates[:3]:  # Process top 3 candidates
+        # Run cheap local triage for every candidate. Only the configured
+        # number of immediate candidates may continue to the AI Council;
+        # observe/batch candidates are still recorded for research.
+        max_immediate = get_candidate_policy()["max_immediate_per_bar"]
+        immediate_seen = 0
+        for candidate in candidates:
+            allow_immediate = immediate_seen < max_immediate
             update_runtime_status(
                 last_candidate=f"{candidate.strategy_id}:{candidate.direction.value}",
             )
-            await self._process_candidate(candidate, ctx, current_price, spread, session)
+            await self._process_candidate(
+                candidate, ctx, current_price, spread, session,
+                allow_immediate=allow_immediate,
+            )
+            if candidate.metadata.get("triage_priority") == "immediate":
+                immediate_seen += 1
 
     async def _process_candidate(
         self,
@@ -421,6 +433,7 @@ class TradingPlatform:
         current_price: float,
         spread: float,
         session: str,
+        allow_immediate: bool = True,
     ) -> None:
         """Process a single candidate through AI → Risk → Execute."""
 
@@ -431,6 +444,16 @@ class TradingPlatform:
             sign * (candidate.entry_price - candidate.stop_loss),
         ), 2)
 
+        # Deduplicate every candidate before scoring. This prevents a low-score
+        # setup from being recorded repeatedly while the same candle is open.
+        current_bar_ts = ctx.primary_candle.timestamp if ctx.primary_candle else None
+        bar_key = f"{candidate.symbol}_{candidate.strategy_id}"
+        if current_bar_ts and self._last_evaluated_bar.get(bar_key) == current_bar_ts:
+            logger.debug(f"Candidate {bar_key} already evaluated on bar {current_bar_ts} — skipping repeat")
+            return
+        if current_bar_ts:
+            self._last_evaluated_bar[bar_key] = current_bar_ts
+
         # Step 2a: Rule-based AI Scoring (fast, no API call)
         ai_decision = self._ai_scorer.score(
             candidate=candidate,
@@ -438,31 +461,41 @@ class TradingPlatform:
             spread=spread,
             session=session,
         )
+        triage_priority = self._candidate_triage.observe(
+            candidate, ai_decision.combined_score, session
+        )
 
         if ai_decision.decision == "WAIT":
-            update_runtime_status(last_decision="AI_SKIP", last_reason=f"score={ai_decision.combined_score}")
+            update_runtime_status(
+                last_decision="AI_SKIP",
+                last_reason=f"priority={triage_priority} score={ai_decision.combined_score}",
+            )
             logger.info(
                 f"AI SKIP: {candidate.strategy_id} "
-                f"score={ai_decision.combined_score} — below threshold"
+                f"score={ai_decision.combined_score} priority={triage_priority}"
             )
             if self._setup_logger:
                 await self._setup_logger.log_skipped(
                     candidate,
                     reason=(
                         f"AI score {ai_decision.combined_score} "
-                        f"< {settings.ai.min_combined_score}"
+                        f"< {get_candidate_policy()['immediate_min_score']} "
+                        f"(triage={triage_priority})"
                     ),
                 )
             return
 
-        # Step 2b: Candle Deduplication (ป้องกันเรียก AI ซ้ำในแท่งเดิม)
-        current_bar_ts = ctx.primary_candle.timestamp if ctx.primary_candle else None
-        bar_key = f"{candidate.symbol}_{candidate.strategy_id}"
-        if current_bar_ts and self._last_evaluated_bar.get(bar_key) == current_bar_ts:
-            logger.debug(f"Candidate {bar_key} already evaluated on bar {current_bar_ts} — skipping AI repeat")
+        if not allow_immediate:
+            if self._setup_logger:
+                await self._setup_logger.log_skipped(
+                    candidate,
+                    reason="Immediate AI review budget reached for this candle",
+                )
+            logger.info(
+                "AI SKIP: %s score=%s — immediate review budget reached",
+                candidate.strategy_id, ai_decision.combined_score,
+            )
             return
-        if current_bar_ts:
-            self._last_evaluated_bar[bar_key] = current_bar_ts
 
         # Step 2c: EQH/EQL Detection (ตรวจ Liquidity Pools)
         h1_candles = ctx.candles_by_tf.get("H1", [])
@@ -495,6 +528,10 @@ class TradingPlatform:
             "eql_summary": eql_result.summary,
             "displacement_detected": bool(getattr(candidate, "displacement", False)),
             "past_lessons": past_lessons,
+            "candidate_digest": {
+                key: value for key, value in self._candidate_triage.summary().items()
+                if key in {"total", "by_priority", "by_strategy", "by_session", "updated_at"}
+            },
             "evidence": {
                 "strategy_version": candidate.metadata.get("version", "unknown"),
                 "has_choch": ctx.has_choch, "has_bos": ctx.has_bos,

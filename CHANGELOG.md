@@ -11,6 +11,11 @@
 
 ## Unreleased
 
+- Added candidate triage with persistent observe/batch/immediate summaries and a local stdio MCP for safe runtime policy control.
+- Reorganized the Streamlit dashboard into Command Center, Candidates & AI,
+  Learning, Performance, and Controls & Safety views with explicit runtime and
+  candidate-policy controls.
+
 - Added a persistent dashboard runtime execution setting. PAPER/DEMO changes
   are picked up by the worker without an ENV redeploy; LIVE requires a separate
   explicit arm confirmation and keeps venue safeguards in force.
