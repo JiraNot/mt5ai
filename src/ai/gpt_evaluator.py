@@ -18,6 +18,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from src.core.runtime_provider_settings import get_provider_settings, sync_codex_auth_file
+
 logger = logging.getLogger(__name__)
 
 # รายการ path ที่อาจพบ codex executable
@@ -81,6 +83,7 @@ class GPTEvaluator:
     async def evaluate(self, setup_context: dict) -> GPTVerdict:
         """ส่ง Setup context ให้ GPT/Codex วิเคราะห์ผ่าน Auth Login."""
         prompt = self._build_prompt(setup_context)
+        sync_codex_auth_file()
 
         # 1. รันผ่าน Codex CLI (Auth Login / OAuth - ไม่ต้องใช้ API Token)
         if self._codex_bin:
@@ -113,13 +116,14 @@ class GPTEvaluator:
             except Exception as exc:
                 logger.error("Codex CLI evaluation error: %s", exc)
 
-        # 2. Fallback เฉพาะกรณีมี OPENAI_API_KEY ใน env
-        api_key = os.getenv("OPENAI_API_KEY", "")
+        # 2. Fallback เมื่อผู้ดูแลตั้ง OpenAI API ใน Controls & Safety
+        openai_settings = get_provider_settings()["openai"]
+        api_key = openai_settings["api_key"]
         if api_key:
             try:
                 from openai import AsyncOpenAI
                 client = AsyncOpenAI(api_key=api_key)
-                model = os.getenv("OPENAI_MODEL", "gpt-4o")
+                model = openai_settings["model"]
                 response = await client.chat.completions.create(
                     model=model,
                     messages=[

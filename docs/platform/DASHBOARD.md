@@ -9,6 +9,11 @@ Dashboard แสดงผล real-time ของระบบ trading
 The dashboard is organized around five jobs instead of exposing every chart at
 the same level:
 
+Live connection, worker, execution-mode, and candidate-summary indicators are
+refreshed independently at `DASHBOARD_REFRESH_SECONDS` (10 seconds by default).
+Filters, controls, charts, and the active tab remain in place until the user
+interacts with them, avoiding disruptive whole-page reruns.
+
 ### Command Center
 
 The first screen answers: is the worker running, is market data connected, are
@@ -33,9 +38,18 @@ expandable trade journal.
 ### Controls & Safety
 
 The canonical place for PAPER/DEMO/LIVE, candidate triage thresholds, AI review
-budget, model selection, connection status, and read-only Risk Engine limits.
+budget, AI provider login/API settings, model selection, connection status, and
+read-only Risk Engine limits. Provider secrets are write-only in the dashboard
+and encrypted at rest using the deployment's dashboard password.
 LIVE requires explicit confirmation. Risk limits and broker credentials remain
 outside this runtime control surface.
+
+### CLI Login Console
+
+Controls & Safety includes a bounded terminal-like session for Codex, agy, and
+ClinePass login. It can launch only the exact provider login command, expires
+after ten minutes, retains no transcript or input, and writes metadata-only
+audit events. It is not a general-purpose shell.
 
 ## Legacy Product Map
 

@@ -14,13 +14,13 @@ import sys
 import time
 import shutil
 import urllib.request
+import secrets
 from datetime import datetime, timedelta
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -43,12 +43,19 @@ from src.core.runtime_control import (
     set_candidate_policy,
     set_runtime_trading_mode,
 )
+from src.core.runtime_provider_settings import (
+    clear_provider_secret,
+    get_provider_settings,
+    provider_status,
+    save_provider_settings,
+)
 from src.ai.openrouter_model_catalog import (
     fetch_models,
     get_selected_model,
     group_models,
     save_selected_model,
 )
+from src.dashboard.cli_login_console import CLILoginManager, DEFAULT_COMMANDS
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 
@@ -58,6 +65,17 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+def _dashboard_refresh_seconds() -> int:
+    """Return a safe live-status interval without making the whole app rerun."""
+    try:
+        return max(0, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "10")))
+    except ValueError:
+        return 10
+
+
+DASHBOARD_REFRESH_SECONDS = _dashboard_refresh_seconds()
 
 # ─── Custom CSS ───────────────────────────────────────────────────────────────
 
@@ -128,6 +146,12 @@ def get_engine(db_url: str | None = None):
     except Exception:
         pass
     return engine
+
+
+@st.cache_resource
+def get_cli_login_manager() -> CLILoginManager:
+    """Keep short-lived login processes outside individual Streamlit reruns."""
+    return CLILoginManager()
 
 
 def load_trades(engine) -> pd.DataFrame:
@@ -243,7 +267,7 @@ def load_openrouter_models(base_url: str, api_key_configured: bool):
     try:
         return fetch_models(
             base_url=base_url,
-            api_key=os.getenv("OPENROUTER_API_KEY", "").strip(),
+            api_key=get_provider_settings()["openrouter"]["api_key"],
             timeout=10,
         )
     except Exception:
@@ -254,14 +278,15 @@ def render_openrouter_model_selector(container=None) -> str:
     """Render and persist the OpenRouter model choice without exposing secrets."""
     container = container or st.sidebar
     current_model = get_selected_model()
-    api_key_configured = bool(os.getenv("OPENROUTER_API_KEY", "").strip())
-    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    openrouter_settings = get_provider_settings()["openrouter"]
+    api_key_configured = bool(openrouter_settings["api_key"])
+    base_url = openrouter_settings["base_url"].rstrip("/")
     models = load_openrouter_models(base_url, api_key_configured)
     groups = group_models(models, current_model)
 
     container.markdown("### 🧠 OpenRouter Model")
     if not api_key_configured:
-        container.info("ใส่ OPENROUTER_API_KEY เพื่อโหลดรายการโมเดล")
+        container.info("ใส่ OpenRouter API key ในส่วน AI provider settings เพื่อโหลดรายการโมเดล")
         return current_model
     if not models:
         container.warning("โหลดรายการโมเดล OpenRouter ไม่สำเร็จ — ใช้โมเดลปัจจุบันต่อไป")
@@ -696,18 +721,15 @@ def check_binance_status() -> dict:
 
 
 def check_ai_status() -> dict:
-    """Check CLI installation and Codex credential availability.
-
-    Antigravity's account tokens are held in an OS keyring. In a container we
-    report only the supported API-key deployment configuration.
-    """
+    """Check CLI installation and dashboard-managed provider availability."""
+    configured_providers = provider_status()
     codex_auth_files = [
         os.path.expanduser("~/.codex/auth.json"),
         "/root/.codex/auth.json",
         "/mnt/c/Users/Dulla/.codex/auth.json",
         r"C:\Users\Dulla\.codex\auth.json",
     ]
-    codex_auth_ok = any(os.path.exists(p) for p in codex_auth_files) or bool(os.getenv("CODEX_AUTH_JSON"))
+    codex_auth_ok = any(os.path.exists(p) for p in codex_auth_files) or bool(configured_providers["codex"]["configured"])
     codex_cli_ok = bool(shutil.which("codex")) or any(
         os.path.exists(p) for p in [
             "/usr/local/bin/codex",
@@ -718,10 +740,10 @@ def check_ai_status() -> dict:
         ]
     )
 
-    ai_cli = os.getenv("AI_CLI_BIN", "agy")
+    ai_cli = get_provider_settings()["gemini"]["cli_bin"]
     antigravity_cli_ok = bool(shutil.which(ai_cli) or (os.path.isabs(ai_cli) and os.access(ai_cli, os.X_OK)))
-    antigravity_auth_ok = bool(os.getenv("GEMINI_API_KEY"))
-    openrouter_auth_ok = bool(os.getenv("OPENROUTER_API_KEY"))
+    antigravity_auth_ok = bool(configured_providers["gemini"]["configured"])
+    openrouter_auth_ok = bool(configured_providers["openrouter"]["configured"])
 
     return {
         "chatgpt_auth": codex_auth_ok,
@@ -808,6 +830,281 @@ def _render_status_chip(label: str, value: str, tone: str = "neutral") -> None:
     )
 
 
+def _live_dashboard_state(configured_venues: tuple[str, ...]) -> dict:
+    """Read only the small, volatile dashboard state needed for live indicators."""
+    return {
+        "mt5_status": check_mt5_bridge_status(),
+        "binance_status": check_binance_status() if "binance" in configured_venues else None,
+        "ai_status": check_ai_status(),
+        "runtime_status": read_runtime_status(),
+        "trading_mode": get_runtime_trading_mode(os.getenv("TRADING_MODE", "PAPER")).upper(),
+        "live_armed": is_live_armed(),
+        "candidate_policy": get_candidate_policy(),
+        "candidate_summary": CandidateTriage().summary(),
+    }
+
+
+@st.fragment(run_every=DASHBOARD_REFRESH_SECONDS or None)
+def render_live_sidebar(configured_venues: tuple[str, ...]) -> None:
+    """Refresh only live connection indicators, preserving dashboard controls."""
+    state = _live_dashboard_state(configured_venues)
+    mt5_status = state["mt5_status"]
+    binance_status = state["binance_status"]
+    ai_status = state["ai_status"]
+    runtime_status = state["runtime_status"]
+    trading_mode = state["trading_mode"]
+    candidate_policy = state["candidate_policy"]
+
+    st.markdown("### 🔌 Live Connection Status")
+    if DASHBOARD_REFRESH_SECONDS:
+        st.caption(f"อัปเดตเฉพาะสถานะสดทุก {DASHBOARD_REFRESH_SECONDS} วินาที")
+    mode_icon = {"DEMO": "🟢", "LIVE": "🔴"}.get(trading_mode, "🟡")
+    st.caption(f"{mode_icon} Trading mode: `{trading_mode}`")
+    st.caption(
+        "AI triage: "
+        f"batch ≥ {candidate_policy['batch_min_score']} · "
+        f"immediate ≥ {candidate_policy['immediate_min_score']}"
+    )
+    st.caption("รายละเอียดและการเปลี่ยนค่าทั้งหมดอยู่ที่แท็บ `Controls & Safety`")
+    if runtime_status:
+        st.caption(
+            f"Loop: `{runtime_status.get('state', 'unknown')}` · "
+            f"cycles: `{runtime_status.get('cycle_count', 0)}`"
+        )
+    st.caption(f"Enabled venues: `{', '.join(venue.upper() for venue in configured_venues)}`")
+    if mt5_status["online"] and mt5_status["mt5_connected"]:
+        st.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
+        if mt5_status.get("account"):
+            st.caption(f"📌 Account: `{mt5_status['account']}` | `{mt5_status.get('server', '')}`")
+        if mt5_status.get("balance") is not None:
+            st.caption(f"💰 Balance: `${mt5_status['balance']:,.2f}`")
+    elif mt5_status["online"]:
+        st.warning("🟡 **Bridge UP / Waiting MT5**")
+        st.caption(f"Bridge responsive at `{mt5_status['bridge_url']}`")
+    else:
+        st.error("🔴 **MT5 Disconnected**")
+        st.caption(f"Bridge `{mt5_status['bridge_url']}` not reachable")
+    if binance_status is not None:
+        if binance_status["online"]:
+            st.success(f"🟢 **Binance Market Data Online** ({binance_status['latency_ms']}ms)")
+            st.caption(f"Public API: `{binance_status['base_url']}`")
+        else:
+            st.error("🔴 **Binance Market Data Disconnected**")
+            st.caption(f"API `{binance_status['base_url']}` not reachable")
+
+    st.markdown("**AI Council (Debate):**")
+    if ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]:
+        st.markdown("🟢 `ChatGPT (Codex)`: Auth Ready (Bear)")
+    else:
+        st.markdown("🟡 `ChatGPT (Codex)`: Waiting Session")
+    if ai_status["gemini_auth"]:
+        st.markdown("🟢 `Gemini (Google)`: API Key Ready (Bull)")
+    else:
+        st.markdown("🟡 `Gemini (Google)`: API Key Not Ready")
+    if ai_status["deepseek_auth"]:
+        st.markdown("🟢 `DeepSeek (OpenRouter)`: API Key Ready (Bull)")
+    else:
+        st.markdown("⚪ `DeepSeek (OpenRouter)`: Not Configured")
+    st.markdown("🟢 `Strategy Engine`: 15 SMC Models")
+
+
+@st.fragment(run_every=DASHBOARD_REFRESH_SECONDS or None)
+def render_live_dashboard_header(configured_venues: tuple[str, ...]) -> None:
+    """Keep the decision-critical header current without rerunning tabs or filters."""
+    state = _live_dashboard_state(configured_venues)
+    runtime_status = state["runtime_status"]
+    trading_mode = state["trading_mode"]
+    live_armed = state["live_armed"]
+    candidate_summary = state["candidate_summary"]
+    engine_state = str(runtime_status.get("state", "unknown")).lower()
+    engine_tone = "good" if engine_state == "running" else "warn" if engine_state in {"starting", "degraded"} else "bad"
+    engine_label = {
+        "running": "Running",
+        "starting": "Starting",
+        "error": "Error",
+        "stopped": "Stopped",
+    }.get(engine_state, engine_state.title())
+    priorities = candidate_summary.get("by_priority", {}) or {}
+
+    head = st.columns([1.3, 1.1, 1.1, 1.1, 1.5])
+    with head[0]:
+        _render_status_chip("Engine", engine_label, engine_tone)
+    with head[1]:
+        _render_status_chip("Mode", trading_mode, "bad" if trading_mode == "LIVE" and live_armed else "good" if trading_mode == "DEMO" else "neutral")
+    with head[2]:
+        _render_status_chip("Candidates", str(int(candidate_summary.get("total", 0) or 0)), "good" if candidate_summary.get("total") else "warn")
+    with head[3]:
+        _render_status_chip("AI review now", str(int(priorities.get("immediate", 0) or 0)), "good" if priorities.get("immediate") else "neutral")
+    with head[4]:
+        last_decision = runtime_status.get("last_decision", "Waiting")
+        raw_reason = runtime_status.get("last_reason") or runtime_status.get("last_error")
+        last_reason = raw_reason if raw_reason not in {None, "", "unknown", "None"} else "รอผลการประเมินรอบถัดไป"
+        st.info(f"**Latest:** `{last_decision}`\n\n{last_reason}")
+
+
+def _save_provider_from_form(provider: str, **changes: str | None) -> None:
+    """Save one provider form and keep validation errors inside its panel."""
+    try:
+        save_provider_settings(provider, **changes)
+        st.success("บันทึกแล้ว — worker จะใช้ค่าใหม่นี้ในการประเมินรอบถัดไป")
+    except ValueError as exc:
+        st.error(str(exc))
+
+
+def render_ai_provider_settings() -> None:
+    """Render write-only AI provider credentials for Controls & Safety."""
+    states = provider_status()
+    values = get_provider_settings()
+    st.markdown("### AI provider settings")
+    st.caption(
+        "API key และ Codex login จะถูกเข้ารหัสก่อนบันทึกใน runtime volume; "
+        "หน้าจอนี้แสดงเพียงสถานะ ไม่แสดง secret เดิม"
+    )
+
+    with st.expander("ChatGPT / Codex (Bear Analyst)", expanded=not states["codex"]["configured"]):
+        st.caption(f"Codex login: {'ตั้งค่าแล้ว' if states['codex']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['codex']['source']}")
+        st.caption(f"OpenAI API fallback: {'ตั้งค่าแล้ว' if states['openai']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['openai']['source']}")
+        with st.form("codex_provider_settings"):
+            codex_auth_json = st.text_input(
+                "วางเนื้อหา Codex auth.json เพื่อ login", type="password",
+                help="วางเฉพาะเมื่อเปลี่ยน session; ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
+            )
+            openai_api_key = st.text_input(
+                "OpenAI API key (fallback)", type="password",
+                help="ใช้เมื่อ Codex CLI login ใช้งานไม่ได้; ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
+            )
+            openai_model = st.text_input("OpenAI model", value=values["openai"]["model"])
+            if st.form_submit_button("บันทึก ChatGPT / Codex", type="primary"):
+                _save_provider_from_form(
+                    "codex", auth_json=codex_auth_json or None,
+                )
+                _save_provider_from_form(
+                    "openai", api_key=openai_api_key or None, model=openai_model,
+                )
+        if st.checkbox("ยืนยันลบ Codex login ที่บันทึกไว้", key="clear_codex_auth"):
+            if st.button("ลบ Codex login", key="clear_codex_auth_button"):
+                clear_provider_secret("codex", "auth_json")
+                st.success("ลบ Codex login แล้ว")
+                st.rerun()
+
+    with st.expander("Gemini / Antigravity (Bull Analyst)", expanded=not states["gemini"]["configured"]):
+        st.caption(f"Gemini API: {'ตั้งค่าแล้ว' if states['gemini']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['gemini']['source']}")
+        with st.form("gemini_provider_settings"):
+            gemini_api_key = st.text_input(
+                "Gemini API key", type="password",
+                help="ส่งให้ Antigravity CLI เฉพาะตอนเรียกประเมิน; ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
+            )
+            gemini_cli_bin = st.text_input("Antigravity CLI command", value=values["gemini"]["cli_bin"])
+            if st.form_submit_button("บันทึก Gemini", type="primary"):
+                _save_provider_from_form(
+                    "gemini", api_key=gemini_api_key or None, cli_bin=gemini_cli_bin,
+                )
+        if st.checkbox("ยืนยันลบ Gemini API key ที่บันทึกไว้", key="clear_gemini_key"):
+            if st.button("ลบ Gemini API key", key="clear_gemini_key_button"):
+                clear_provider_secret("gemini", "api_key")
+                st.success("ลบ Gemini API key แล้ว")
+                st.rerun()
+
+    with st.expander("OpenRouter / DeepSeek (Bull Analyst)", expanded=not states["openrouter"]["configured"]):
+        st.caption(f"OpenRouter API: {'ตั้งค่าแล้ว' if states['openrouter']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['openrouter']['source']}")
+        with st.form("openrouter_provider_settings"):
+            openrouter_api_key = st.text_input(
+                "OpenRouter API key", type="password",
+                help="ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
+            )
+            openrouter_base_url = st.text_input("Base URL", value=values["openrouter"]["base_url"])
+            openrouter_site_url = st.text_input("Site URL", value=values["openrouter"]["site_url"])
+            openrouter_app_name = st.text_input("App name", value=values["openrouter"]["app_name"])
+            if st.form_submit_button("บันทึก OpenRouter", type="primary"):
+                _save_provider_from_form(
+                    "openrouter", api_key=openrouter_api_key or None,
+                    base_url=openrouter_base_url, site_url=openrouter_site_url,
+                    app_name=openrouter_app_name,
+                )
+        render_openrouter_model_selector(st)
+        if st.checkbox("ยืนยันลบ OpenRouter API key ที่บันทึกไว้", key="clear_openrouter_key"):
+            if st.button("ลบ OpenRouter API key", key="clear_openrouter_key_button"):
+                clear_provider_secret("openrouter", "api_key")
+                st.success("ลบ OpenRouter API key แล้ว")
+                st.rerun()
+
+
+def _cli_login_owner() -> str:
+    """Use an unguessable Streamlit-session owner token for login sessions."""
+    if "cli_login_owner" not in st.session_state:
+        st.session_state["cli_login_owner"] = secrets.token_urlsafe(24)
+    return st.session_state["cli_login_owner"]
+
+
+@st.fragment(run_every=1)
+def render_cli_login_transcript(session_id: str, owner_id: str) -> None:
+    """Refresh only an active login transcript; never persist its contents."""
+    manager = get_cli_login_manager()
+    try:
+        status = manager.status(session_id, owner_id)
+    except ValueError:
+        st.warning("ไม่พบ session login นี้แล้ว")
+        return
+
+    state = "กำลังรอการยืนยัน" if status["running"] else f"จบแล้ว (exit {status['exit_code']})"
+    st.caption(f"สถานะ: {state} · session หมดอายุภายใน 10 นาที · transcript นี้ไม่ถูกบันทึก")
+    st.code(str(status["transcript"])[-12_000:] or "กำลังเริ่ม CLI…", language=None)
+    if status["running"]:
+        login_input = st.text_input(
+            "ส่งข้อความ/รหัสที่ CLI ขอ", type="password", key="cli_login_input",
+            help="ระบบส่งค่าเข้ากระบวนการ login ที่เลือกเท่านั้น ไม่ได้เปิด shell ทั่วไป",
+        )
+        send_col, stop_col = st.columns(2)
+        if send_col.button("ส่งเข้า CLI", type="primary", key="send_cli_login_input"):
+            try:
+                manager.send(session_id, owner_id, login_input)
+                st.session_state["cli_login_input"] = ""
+                st.rerun(scope="fragment")
+            except (RuntimeError, ValueError) as exc:
+                st.error(str(exc))
+        if stop_col.button("ยกเลิก session", key="stop_cli_login_session"):
+            manager.stop(session_id, owner_id)
+            st.rerun(scope="fragment")
+
+
+def render_cli_login_console() -> None:
+    """Render the constrained CLI authentication console."""
+    st.markdown("### CLI Login Console")
+    st.caption(
+        "ใช้สำหรับ login เท่านั้น ไม่มี shell ทั่วไป; คำสั่งและเวลารันถูกจำกัด "
+        "และระบบไม่เก็บ transcript หรือข้อความที่พิมพ์"
+    )
+    owner_id = _cli_login_owner()
+    manager = get_cli_login_manager()
+    selected = st.selectbox(
+        "CLI agent", list(DEFAULT_COMMANDS),
+        format_func=lambda agent: DEFAULT_COMMANDS[agent].label,
+        key="cli_login_agent",
+    )
+    st.caption({
+        "codex": "เริ่ม `codex login` เพื่อเชื่อม ChatGPT/Codex",
+        "agy": "เริ่ม remote OAuth ของ agy ด้วย sandbox และ prompt คงที่",
+        "clinepass": "เริ่ม `cline auth` แล้วเลือก ClinePass ในหน้าจอ CLI",
+    }[selected])
+    if st.button("เริ่ม login session", type="primary", key="start_cli_login"):
+        previous_session_id = st.session_state.get("cli_login_session_id")
+        if previous_session_id:
+            try:
+                manager.stop(previous_session_id, owner_id)
+            except ValueError:
+                pass
+        try:
+            session = manager.start(selected, owner_id)
+            st.session_state["cli_login_session_id"] = session.session_id
+            st.rerun()
+        except (RuntimeError, ValueError, OSError) as exc:
+            st.error(str(exc))
+
+    session_id = st.session_state.get("cli_login_session_id")
+    if session_id:
+        render_cli_login_transcript(session_id, owner_id)
+
+
 def render_redesigned_dashboard(
     *,
     mt5_status: dict,
@@ -833,7 +1130,6 @@ def render_redesigned_dashboard(
     detail one click deeper.
     """
     engine_state = str(runtime_status.get("state", "unknown")).lower()
-    engine_tone = "good" if engine_state == "running" else "warn" if engine_state in {"starting", "degraded"} else "bad"
     engine_label = {
         "running": "Running",
         "starting": "Starting",
@@ -848,21 +1144,7 @@ def render_redesigned_dashboard(
 
     st.markdown("# Freebuff Control Center")
     st.caption("ดูสิ่งที่ระบบกำลังทำอยู่ก่อน แล้วค่อยลงลึกถึง Candidate, AI, Learning และ Risk")
-
-    head = st.columns([1.3, 1.1, 1.1, 1.1, 1.5])
-    with head[0]:
-        _render_status_chip("Engine", engine_label, engine_tone)
-    with head[1]:
-        _render_status_chip("Mode", trading_mode, "bad" if trading_mode == "LIVE" and live_armed else "good" if trading_mode == "DEMO" else "neutral")
-    with head[2]:
-        _render_status_chip("Candidates", str(observed), "good" if observed else "warn")
-    with head[3]:
-        _render_status_chip("AI review now", str(immediate), "good" if immediate else "neutral")
-    with head[4]:
-        last_decision = runtime_status.get("last_decision", "Waiting")
-        raw_reason = runtime_status.get("last_reason") or runtime_status.get("last_error")
-        last_reason = raw_reason if raw_reason not in {None, "", "unknown", "None"} else "รอผลการประเมินรอบถัดไป"
-        st.info(f"**Latest:** `{last_decision}`\n\n{last_reason}")
+    render_live_dashboard_header(tuple(configured_venues))
 
     if engine_state != "running":
         st.warning(f"Worker state is `{engine_label}`. ตรวจสอบ health และ logs ก่อนประเมินว่าไม่มี setup")
@@ -1089,10 +1371,11 @@ def render_redesigned_dashboard(
             connection_rows = [
                 {"Component": "MT5 bridge", "Status": "Online" if mt5_status["online"] else "Offline", "Detail": mt5_status.get("server") or mt5_status.get("bridge_url", "")},
                 {"Component": "Binance market data", "Status": "Online" if binance_status and binance_status["online"] else "Disabled/Offline", "Detail": binance_status.get("base_url", "not configured") if binance_status else "not configured"},
-                {"Component": "AI Council", "Status": "Ready" if ai_status["council_ready"] else "Rule scorer only", "Detail": "provider credentials are deployment settings"},
+                {"Component": "AI Council", "Status": "Ready" if ai_status["council_ready"] else "Rule scorer only", "Detail": "ตั้งค่า provider ได้ใน Controls & Safety"},
             ]
             st.dataframe(pd.DataFrame(connection_rows), use_container_width=True, hide_index=True)
-            render_openrouter_model_selector(st)
+            render_ai_provider_settings()
+            render_cli_login_console()
 
             st.markdown("### Risk policy (read-only)")
             risk_rows = [
@@ -1110,12 +1393,6 @@ def render_redesigned_dashboard(
 def main():
     if not check_dashboard_auth():
         return
-    refresh_seconds = max(0, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "10")))
-    if refresh_seconds:
-        st_autorefresh(
-            interval=refresh_seconds * 1000,
-            key="dashboard_auto_refresh",
-        )
     # Sidebar
     st.sidebar.title("🏦 Freebuff Trading")
     st.sidebar.markdown("---")
@@ -1133,63 +1410,9 @@ def main():
     trading_mode = get_runtime_trading_mode(os.getenv("TRADING_MODE", "PAPER")).upper()
     live_armed = is_live_armed()
 
-    # Sidebar: Live Connection Status
-    st.sidebar.markdown("### 🔌 Live Connection Status")
-    if refresh_seconds:
-        st.sidebar.caption(f"Auto refresh: every {refresh_seconds}s")
-    mode_icon = {"DEMO": "🟢", "LIVE": "🔴"}.get(trading_mode, "🟡")
-    st.sidebar.caption(f"{mode_icon} Trading mode: `{trading_mode}`")
     candidate_policy = get_candidate_policy()
-    st.sidebar.caption(
-        "AI triage: "
-        f"batch ≥ {candidate_policy['batch_min_score']} · "
-        f"immediate ≥ {candidate_policy['immediate_min_score']}"
-    )
-    st.sidebar.caption("รายละเอียดและการเปลี่ยนค่าทั้งหมดอยู่ที่แท็บ `Controls & Safety`")
-    if runtime_status:
-        st.sidebar.caption(
-            f"Loop: `{runtime_status.get('state', 'unknown')}` · "
-            f"cycles: `{runtime_status.get('cycle_count', 0)}`"
-        )
-    st.sidebar.caption(f"Enabled venues: `{', '.join(venue.upper() for venue in configured_venues)}`")
-    if mt5_status["online"] and mt5_status["mt5_connected"]:
-        st.sidebar.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
-        if mt5_status.get("account"):
-            st.sidebar.caption(f"📌 Account: `{mt5_status['account']}` | `{mt5_status.get('server', '')}`")
-        if mt5_status.get("balance") is not None:
-            st.sidebar.caption(f"💰 Balance: `${mt5_status['balance']:,.2f}`")
-    elif mt5_status["online"]:
-        st.sidebar.warning("🟡 **Bridge UP / Waiting MT5**")
-        st.sidebar.caption(f"Bridge responsive at `{mt5_status['bridge_url']}`")
-    else:
-        st.sidebar.error("🔴 **MT5 Disconnected**")
-        st.sidebar.caption(f"Bridge `{mt5_status['bridge_url']}` not reachable")
-    if binance_status is not None:
-        if binance_status["online"]:
-            st.sidebar.success(f"🟢 **Binance Market Data Online** ({binance_status['latency_ms']}ms)")
-            st.sidebar.caption(f"Public API: `{binance_status['base_url']}`")
-        else:
-            st.sidebar.error("🔴 **Binance Market Data Disconnected**")
-            st.sidebar.caption(f"API `{binance_status['base_url']}` not reachable")
-
-    # AI Council in Sidebar
-    st.sidebar.markdown("**AI Council (Debate):**")
-    if ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]:
-        st.sidebar.markdown("🟢 `ChatGPT (Codex)`: Auth Ready (Bear)")
-    else:
-        st.sidebar.markdown("🟡 `ChatGPT (Codex)`: Waiting Session")
-
-    if ai_status["gemini_auth"]:
-        st.sidebar.markdown("🟢 `Gemini (Google)`: API Key Ready (Bull)")
-    else:
-        st.sidebar.markdown("🟡 `Gemini (Google)`: API Key Not Ready")
-
-    if ai_status["deepseek_auth"]:
-        st.sidebar.markdown("🟢 `DeepSeek (OpenRouter)`: API Key Ready (Bull)")
-    else:
-        st.sidebar.markdown("⚪ `DeepSeek (OpenRouter)`: Not Configured")
-
-    st.sidebar.markdown("🟢 `Strategy Engine`: 15 SMC Models")
+    with st.sidebar:
+        render_live_sidebar(tuple(configured_venues))
     st.sidebar.markdown("---")
     if st.sidebar.button("🔒 Logout", use_container_width=True):
         st.session_state["authenticated"] = False

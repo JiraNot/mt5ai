@@ -66,10 +66,9 @@ Bridge contract tests use mocked MT5 and httpx.MockTransport.
   The evaluator requires schema-validated CLI output and fails closed when that
   output is unavailable or invalid. Vertex AI/gcloud and API-key integration were removed.
   Configure `AI_CLI_BIN=agy` only when the executable is not already on `PATH`.
-- The deployment image installs both `codex` and `agy`. In Coolify, provide
-  `CODEX_AUTH_JSON` as a secret for Codex/ChatGPT and `GEMINI_API_KEY` as a
-  secret for Antigravity. The container entrypoint enables Antigravity's
-  `gemini` provider without writing the API key to disk.
+- The deployment image installs `codex`, `agy`, and `cline`. Configure provider
+  login/API values in Dashboard > Controls & Safety; the dashboard encrypts
+  persisted values and offers a login-only console for interactive CLI OAuth.
 - Compose runs `mt5ai-trainer` once per day by default. It waits for 50
   broker-confirmed outcomes, trains only from verified evidence, and writes
   `/app/models/research_model.pkl`; deployment remains disabled.

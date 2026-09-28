@@ -51,9 +51,8 @@ def test_fetch_models_ignores_non_text_modalities(monkeypatch):
 def test_selected_model_is_persisted_atomically(monkeypatch, tmp_path):
     path = tmp_path / "selection.json"
     monkeypatch.setenv("OPENROUTER_MODEL_CONFIG_PATH", str(path))
-    monkeypatch.setenv("OPENROUTER_MODEL", "fallback/model")
 
-    assert get_selected_model() == "fallback/model"
+    assert get_selected_model() == "deepseek/deepseek-chat"
     save_selected_model("free/model")
 
     assert json.loads(path.read_text()) == {"model": "free/model"}

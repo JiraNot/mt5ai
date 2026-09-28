@@ -11,6 +11,16 @@
 
 ## Unreleased
 
+- Added a bounded CLI Login Console for Codex, agy, and ClinePass. It starts
+  only allow-listed authentication commands, runs in a short-lived PTY session,
+  stores no input/transcript, and writes metadata-only audit records.
+- Moved Codex/ChatGPT, Gemini/Antigravity, and OpenRouter/DeepSeek provider
+  login/API settings into Controls & Safety. Secrets are write-only in the UI,
+  encrypted in the runtime volume, and applied by the worker on its next AI
+  evaluation; Compose no longer injects provider secrets as environment values.
+- Dashboard live status now refreshes as isolated Streamlit fragments instead
+  of rerunning the entire page; filters, active tabs, charts, and safety forms
+  stay in place. This requires Streamlit 1.37 or newer.
 - Added candidate triage with persistent observe/batch/immediate summaries and a local stdio MCP for safe runtime policy control.
 - Reorganized the Streamlit dashboard into Command Center, Candidates & AI,
   Learning, Performance, and Controls & Safety views with explicit runtime and

@@ -58,19 +58,8 @@ services:
       - TRADING_MODE=${TRADING_MODE:-PAPER}
       - DATABASE_URL=sqlite+aiosqlite:////app/data/freebuff.db
       - DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
-      - CODEX_AUTH_JSON=${CODEX_AUTH_JSON:-}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-freebuff2026}
       - DASHBOARD_REFRESH_SECONDS=${DASHBOARD_REFRESH_SECONDS:-10}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
-      - AI_CLI_BIN=${AI_CLI_BIN:-agy}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-deepseek/deepseek-chat}
-      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-https://trade.onetapweb.com}
-      - OPENROUTER_APP_NAME=${OPENROUTER_APP_NAME:-Freebuff Trading}
-      - OPENROUTER_MODEL_CONFIG_PATH=${OPENROUTER_MODEL_CONFIG_PATH:-/app/data/openrouter_model.json}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     volumes:

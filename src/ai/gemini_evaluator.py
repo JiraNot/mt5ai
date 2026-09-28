@@ -12,9 +12,9 @@ import os
 import shutil
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from src.core.runtime_provider_settings import get_provider_settings
 
-AI_CLI_BIN = os.getenv("AI_CLI_BIN", "agy")
+logger = logging.getLogger(__name__)
 
 _VERDICT_SCHEMA = {
     "type": "object",
@@ -75,7 +75,7 @@ Format การตอบ (JSON):
 
     @staticmethod
     def _find_cli() -> str | None:
-        configured = AI_CLI_BIN.strip()
+        configured = get_provider_settings()["gemini"]["cli_bin"]
         if os.path.isabs(configured) and os.access(configured, os.X_OK):
             return configured
         return shutil.which(configured)
@@ -86,6 +86,10 @@ Format การตอบ (JSON):
             return self._fallback_verdict("Antigravity CLI ไม่พร้อมใช้งาน")
 
         prompt = self._build_prompt(setup_context)
+        child_env = os.environ.copy()
+        api_key = get_provider_settings()["gemini"]["api_key"]
+        if api_key:
+            child_env["GEMINI_API_KEY"] = api_key
         try:
             process = await asyncio.create_subprocess_exec(
                 self._cli_bin,
@@ -101,6 +105,7 @@ Format การตอบ (JSON):
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=child_env,
             )
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
             if process.returncode != 0:

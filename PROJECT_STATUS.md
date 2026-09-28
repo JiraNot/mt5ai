@@ -44,9 +44,11 @@ DISABLED
 - [x] Backtester (basic) (Phase 07)
 - [x] Live Monitor MTF (Phase 09)
 - [x] Paper Trader (Phase 09)
-- [x] Dashboard (Streamlit) (Phase 08)
+- [x] Dashboard (Streamlit, partial live-status refresh) (Phase 08)
 - [x] OpenRouter DeepSeek Bull Analyst integration (uses Risk Engine final gate)
 - [x] OpenRouter model catalog selector in dashboard (Current / Free / Paid)
+- [x] Dashboard-managed encrypted AI provider login/API settings (Codex, Gemini, OpenRouter)
+- [x] Restricted dashboard CLI login console (Codex, agy, ClinePass)
 - [x] Binance USDT-M public market-data gateway (read-only, fail-closed execution)
 - [x] Binance selectable market venue in the main data feed
 - [x] Concurrent MT5 + Binance venue pipelines with independent gateways and caches
@@ -58,7 +60,7 @@ DISABLED
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 273 Tests passing
+- [x] 282 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -135,7 +137,7 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ```
 Source files: 50+
 Test files: 11
-Total tests: 273 (all passing)
+Total tests: 282 (all passing)
 Documentation files: 40+
 Task files: 13
 ```
@@ -169,7 +171,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-26
+2026-09-28
 
 
 ## AI audit remediation — 2026-09-10

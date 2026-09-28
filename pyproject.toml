@@ -20,6 +20,7 @@ dependencies = [
     "pyyaml>=6.0",
     "structlog>=24.1",
     "python-dotenv>=1.0",
+    "cryptography>=42",
     "httpx>=0.26",
     "websockets>=12.0",
     "openai>=1.0.0",
@@ -35,8 +36,7 @@ dependencies = [
     "pandas>=2.1",
 
     # Dashboard
-    "streamlit>=1.30",
-    "streamlit-autorefresh>=1.0.1",
+    "streamlit>=1.37",
     "plotly>=5.18",
 
     # MT5 (Windows only)

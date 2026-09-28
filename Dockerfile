@@ -2,15 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install both AI CLIs.  Codex reads ~/.codex/auth.json written from the
-# CODEX_AUTH_JSON Coolify secret; Antigravity is available for a separately
-# authenticated runtime session.
+# Install the AI CLIs used by the restricted dashboard login console. Cline
+# requires Node 20+, so install the supported Node 22 runtime before npm tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
+    gnupg \
     libgomp1 \
-    nodejs \
-    npm \
-    && npm install -g @openai/codex \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @openai/codex cline \
     && curl -fsSL https://antigravity.google/cli/install.sh | bash \
     && rm -rf /var/lib/apt/lists/*
 
@@ -35,6 +36,7 @@ RUN pip install --no-deps -e .
 # Set environment
 ENV PYTHONUNBUFFERED=1
 ENV PATH=/root/.local/bin:${PATH}
+ENV HOME=/app/data/cli-home
 ENV MT5_MODE=bridge
 ENV BRIDGE_URL=http://mt5-node:8900
 ENV DATABASE_URL=sqlite+aiosqlite:////app/data/freebuff.db

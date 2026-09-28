@@ -217,24 +217,31 @@ PAPER_INITIAL_BALANCE=100000
 # arm confirmation in the dashboard and remains broker-specific.
 TRADING_MODE=PAPER
 
-# AI
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# AI providers
+# Configure provider login/API values in Dashboard > Controls & Safety.
+# The dashboard persists encrypted settings under /app/data/provider_settings.json.
+# DASHBOARD_PASSWORD must be a strong deployment secret because it protects the
+# dashboard and encrypts provider settings at rest.
+```
 
-# OpenRouter model selection
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=deepseek/deepseek-chat
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_SITE_URL=https://trade.onetapweb.com
-OPENROUTER_APP_NAME=Freebuff Trading
-OPENROUTER_MODEL_CONFIG_PATH=/app/data/openrouter_model.json
+Provider configuration supports:
 
-The dashboard loads the current OpenRouter text-model catalog and groups it as
-Current, Free, and Paid using the pricing returned by OpenRouter. The selected
-model is persisted at `OPENROUTER_MODEL_CONFIG_PATH` and picked up by the Bull
-Analyst on the next evaluation without a redeploy. The API key is never stored
-in the selection file.
+- Codex `auth.json` login, plus an optional OpenAI API fallback/model
+- Gemini API key and Antigravity CLI command
+- OpenRouter API key, endpoint, application metadata, and model choice
 
+The worker reloads provider configuration on the next AI evaluation. The
+OpenRouter model selector still persists its non-secret selection at
+`OPENROUTER_MODEL_CONFIG_PATH`. Existing provider ENV variables are read only
+as a temporary fallback during migration; new deployments must not set them.
+
+For interactive OAuth, use **Dashboard > Controls & Safety > CLI Login Console**.
+It supports the installed `codex`, `agy`, and `cline auth` flows (choose
+ClinePass in Cline's auth UI). The session is restricted to login commands,
+expires after ten minutes, and stores CLI home/config under `/app/data/cli-home`
+so a redeploy does not discard an authenticated session.
+
+```bash
 # Alerts
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...

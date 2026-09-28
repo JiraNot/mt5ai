@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass
 
 from src.ai.gemini_evaluator import GeminiEvaluator, GeminiVerdict
 from src.ai.gpt_evaluator import GPTEvaluator, GPTVerdict
 from src.ai.openrouter_evaluator import OpenRouterEvaluator
+from src.core.runtime_provider_settings import get_provider_settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +58,22 @@ class AICouncil:
         self.min_combined_score = min_combined_score
         self.min_single_approval_confidence = min_single_approval_confidence
         self.min_single_provider_rule_score = min_single_provider_rule_score
-        # Keep the Bull side contract stable while allowing DeepSeek to replace
-        # the fragile Gemini CLI when an OpenRouter key is configured.
-        self.bull_provider = "deepseek" if os.getenv("OPENROUTER_API_KEY", "").strip() else "gemini"
-        self.gemini = OpenRouterEvaluator() if self.bull_provider == "deepseek" else GeminiEvaluator()
+        self.bull_provider = ""
+        self.gemini: GeminiEvaluator
+        self._refresh_bull_provider()
         self.gpt = GPTEvaluator()
+
+    def _refresh_bull_provider(self) -> None:
+        """Apply dashboard provider changes without restarting the worker."""
+        provider = "deepseek" if get_provider_settings()["openrouter"]["api_key"] else "gemini"
+        if provider == self.bull_provider:
+            return
+        self.bull_provider = provider
+        self.gemini = OpenRouterEvaluator() if provider == "deepseek" else GeminiEvaluator()
 
     async def evaluate(self, setup_context: dict) -> CouncilDecision:
         """รับ Setup context แล้วให้ AI Council ตัดสิน."""
+        self._refresh_bull_provider()
         rule_score = setup_context.get("rule_score", 0)
 
         if rule_score < self.min_rule_score:

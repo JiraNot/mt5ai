@@ -7,12 +7,12 @@ Council, setup journal, and Risk Engine do not need a provider-specific path.
 from __future__ import annotations
 
 import logging
-import os
 
 import httpx
 
 from src.ai.gemini_evaluator import GeminiEvaluator, GeminiVerdict
 from src.ai.openrouter_model_catalog import get_selected_model
+from src.core.runtime_provider_settings import get_provider_settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,23 +22,21 @@ class OpenRouterEvaluator(GeminiEvaluator):
 
     def __init__(self) -> None:
         # Do not initialize or require the Antigravity CLI in this provider.
-        self._api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
         self._model = get_selected_model()
-        self._base_url = os.getenv(
-            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
-        ).rstrip("/")
 
     async def evaluate(self, setup_context: dict) -> GeminiVerdict:
         """Send a setup to DeepSeek and parse the shared Bull verdict schema."""
-        if not self._api_key:
+        settings = get_provider_settings()["openrouter"]
+        api_key = settings["api_key"]
+        if not api_key:
             return self._fallback_verdict("OPENROUTER_API_KEY ไม่พร้อมใช้งาน")
 
         prompt = self._build_prompt(setup_context)
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://trade.onetapweb.com"),
-            "X-Title": os.getenv("OPENROUTER_APP_NAME", "Freebuff Trading"),
+            "HTTP-Referer": settings["site_url"],
+            "X-Title": settings["app_name"],
         }
         payload = {
             # Read the dashboard selection for each request so model changes
@@ -55,7 +53,7 @@ class OpenRouterEvaluator(GeminiEvaluator):
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
-                    f"{self._base_url}/chat/completions",
+                    f"{settings['base_url'].rstrip('/')}/chat/completions",
                     headers=headers,
                     json=payload,
                 )

@@ -66,7 +66,7 @@ def fetch_models(
     timeout: float = 10.0,
 ) -> list[OpenRouterModel]:
     """Fetch text-capable models and return valid entries sorted by name."""
-    url = f"{(base_url or os.getenv('OPENROUTER_BASE_URL', DEFAULT_BASE_URL)).rstrip('/')}/models"
+    url = f"{(base_url or DEFAULT_BASE_URL).rstrip('/')}/models"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     response = httpx.get(url, headers=headers, timeout=timeout)
     response.raise_for_status()
@@ -90,8 +90,8 @@ def selection_path() -> Path:
 
 
 def get_selected_model(default: str | None = None) -> str:
-    """Read the runtime selection, falling back to OPENROUTER_MODEL."""
-    fallback = (default or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)).strip() or DEFAULT_MODEL
+    """Read the runtime selection, falling back to the safe default model."""
+    fallback = (default or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     path = selection_path()
     try:
         value = json.loads(path.read_text(encoding="utf-8")).get("model")

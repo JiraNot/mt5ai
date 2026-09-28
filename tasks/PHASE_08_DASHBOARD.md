@@ -31,6 +31,9 @@
 ### TASK 0803: Dashboard
 
 - [ ] Streamlit prototype
+- [x] Refresh live indicators without rerunning the whole dashboard
+- [x] Dashboard-managed AI provider login/API settings
+- [x] Restricted CLI login console for Codex, agy, and ClinePass
 - [ ] Next.js production (planned)
 
 **Acceptance:**

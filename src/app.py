@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 from datetime import datetime
 from typing import Any
 
@@ -20,6 +19,7 @@ from src.core.ratios import reward_risk
 from src.core.events import EventType, event_bus
 from src.core.logger import get_logger, setup_logging
 from src.core.runtime_control import get_candidate_policy, get_runtime_trading_mode
+from src.core.runtime_provider_settings import sync_codex_auth_file
 from src.core.runtime_status import update_runtime_status
 from src.core.types import (
     OrderRequest,
@@ -84,18 +84,12 @@ def current_trading_mode() -> str:
 
 
 def setup_auth_credentials() -> None:
-    """Setup Auth Login credentials on remote server from environment variables."""
-    codex_auth = os.getenv("CODEX_AUTH_JSON", "").strip()
-    if codex_auth:
-        target_dir = os.path.expanduser("~/.codex")
-        os.makedirs(target_dir, exist_ok=True)
-        target_file = os.path.join(target_dir, "auth.json")
-        try:
-            with open(target_file, "w", encoding="utf-8") as f:
-                f.write(codex_auth)
-            logger.info("✅ CODEX_AUTH_JSON successfully initialized in %s", target_file)
-        except Exception as e:
-            logger.error("Failed writing CODEX_AUTH_JSON: %s", e)
+    """Materialize an existing dashboard-managed Codex login for the CLI."""
+    try:
+        if sync_codex_auth_file():
+            logger.info("Codex auth session loaded from dashboard settings")
+    except OSError as exc:
+        logger.error("Failed to initialize Codex auth session: %s", exc)
 
 class TradingPlatform:
     """
