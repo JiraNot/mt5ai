@@ -37,12 +37,11 @@ RUN pip install --no-deps -e .
 ENV PYTHONUNBUFFERED=1
 ENV PATH=/root/.local/bin:${PATH}
 ENV HOME=/app/data/cli-home
-ENV MT5_MODE=bridge
-ENV BRIDGE_URL=http://mt5-node:8900
 ENV DATABASE_URL=sqlite+aiosqlite:////app/data/freebuff.db
 ENV DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
 
 EXPOSE 8501
+EXPOSE 7681
 
 # Run the trading worker and dashboard under one supervisor so a worker crash
 # cannot leave a healthy-looking dashboard behind with a stale heartbeat.

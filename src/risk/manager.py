@@ -114,6 +114,25 @@ class RiskEngine:
                 total_exposure,
             )
 
+        # Step 3b: Liquidation safety check (for leveraged futures)
+        if candidate.entry_price and candidate.stop_loss:
+            from src.market.binance_gateway import BinanceGateway
+            is_safe = BinanceGateway.is_stop_loss_safe_from_liquidation(
+                entry_price=candidate.entry_price,
+                stop_loss=candidate.stop_loss,
+                leverage=10,
+                direction=candidate.direction,
+                buffer_ratio=0.85,
+            )
+            if not is_safe:
+                return self._reject(
+                    candidate,
+                    "Stop loss is dangerously close to or beyond liquidation price for leverage",
+                    account_balance,
+                    open_positions_count,
+                    total_exposure,
+                )
+
         # Step 4: Position sizing
         position_size = self._calculate_position_size(
             candidate=candidate,

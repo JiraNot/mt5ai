@@ -7,7 +7,7 @@ Kill Switch หยุดระบบเมื่อเกิดสถานก�
 ## Trigger Conditions
 
 ```
-1. MT5 disconnected repeatedly
+1. Binance gateway disconnected repeatedly
 2. Data stale (> 5 minutes)
 3. Database unavailable
 4. Unexpected account
@@ -33,7 +33,7 @@ class KillSwitchLevel(Enum):
 ```yaml
 kill_switch:
   enabled: true
-  mt5_disconnect_threshold: 3
+  exchange_disconnect_threshold: 3
   stale_data_seconds: 300
   abnormal_spread_multiplier: 3.0
   daily_dd_action: PAUSE_NEW_ENTRIES

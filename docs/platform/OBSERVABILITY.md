@@ -45,7 +45,7 @@ KILL_SWITCH_TRIGGERED
 ## Runtime Health Checks
 
 ```
-- MT5 heartbeat
+- Binance gateway heartbeat
 - Latest tick age
 - Latest candle age
 - DB heartbeat

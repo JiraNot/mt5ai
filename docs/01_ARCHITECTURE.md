@@ -3,17 +3,15 @@
 ## High-Level Architecture
 
 ```
-              ┌──────────────────┐       ┌─────────────────┐
-              │ MetaTrader 5     │       │ Binance Futures │
-              └────────┬─────────┘       └────────┬────────┘
-                       │                          │
-                  MT5 Gateway                Binance Gateway
-                       │                          │
-                       └──────────┬───────────────┘
-                                  ▼
+              ┌─────────────────┐
+              │ Binance Futures │
+              └────────┬────────┘
+                       │
+                Binance Gateway
+                       │
+                       ▼
                    ┌───────────────────┐
                    │ Market Data       │
-                   │ per-venue pipeline│
                    └─────────┬─────────┘
                              ▼
                    ┌───────────────────┐
@@ -43,7 +41,7 @@
                    │ Execution Engine  │
                    └─────────┬─────────┘
                              ▼
-                         MetaTrader
+                         Binance
 
                               │
                               ▼
@@ -82,7 +80,7 @@ No layer can bypass Risk Engine.
 ```
 src/
 ├── core/           # Types, config, events, logging
-├── market/         # MT5 connection, data feed, sessions
+├── market/         # Binance gateway, data feed, sessions
 ├── structure/      # Market structure analysis
 ├── strategies/     # Strategy plugin system
 ├── ai/             # AI decision layer
@@ -96,14 +94,14 @@ src/
 
 ## Data Flow
 
-1. **Market Data** → Raw OHLCV from each enabled venue; every venue keeps its own symbol/cache/pipeline
+1. **Market Data** → Binance OHLCV through the Binance gateway and market-data cache
 2. **Structure Engine** → Swing, BOS, CHoCH, FVG, OB, Liquidity
 3. **Feature Engine** → Extract ML-ready features
 4. **Strategy Engine** → Detect setups, score confluences
 5. **Candidate Pool** → TradeCandidate objects
 6. **Decision Engine** → Rule + AI scoring
 7. **Risk Engine** → Validate, position size, approve/reject
-8. **Execution Engine** → Send orders through the same venue gateway that produced the candidate
+8. **Execution Engine** → Send supported orders through Binance after Risk Engine approval
 9. **Position Manager** → Manage open positions
 10. **Journal** → Log everything for analytics
 
@@ -111,7 +109,7 @@ src/
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Language | Python | MT5 integration, ML ecosystem |
+| Language | Python | Trading core, Binance API, ML ecosystem |
 | Database | PostgreSQL | Reliability, JSON support |
 | API | FastAPI | Async, type-safe |
 | Dashboard | Next.js | Real-time updates |
@@ -155,7 +153,7 @@ RISK ENGINE
 EXECUTION
      │
      ▼
-MT5
+Binance
      │
      ▼
 RESULT

@@ -14,7 +14,6 @@ import sys
 import time
 import shutil
 import urllib.request
-import secrets
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -55,7 +54,7 @@ from src.ai.openrouter_model_catalog import (
     group_models,
     save_selected_model,
 )
-from src.dashboard.cli_login_console import CLILoginManager, DEFAULT_COMMANDS
+from src.dashboard.terminal_auth import dashboard_auth_token
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 
@@ -146,12 +145,6 @@ def get_engine(db_url: str | None = None):
     except Exception:
         pass
     return engine
-
-
-@st.cache_resource
-def get_cli_login_manager() -> CLILoginManager:
-    """Keep short-lived login processes outside individual Streamlit reruns."""
-    return CLILoginManager()
 
 
 def load_trades(engine) -> pd.DataFrame:
@@ -657,43 +650,202 @@ def plot_r_distribution(trades_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+@st.cache_data(ttl=15)
+def fetch_binance_klines(symbol: str, timeframe: str = "15m", limit: int = 120) -> pd.DataFrame:
+    """Fetch recent closed klines directly from Binance public REST API."""
+    interval_map = {
+        "M1": "1m", "M5": "5m", "M15": "15m", "H1": "1h", "H4": "4h", "D1": "1d",
+        "1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d",
+    }
+    tf = interval_map.get(timeframe, "15m")
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={tf}&limit={limit}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "freebuff-dashboard/1.0"})
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            data = json.loads(resp.read().decode())
+            rows = []
+            for r in data:
+                rows.append({
+                    "timestamp": pd.to_datetime(r[0], unit="ms", utc=True),
+                    "open": float(r[1]),
+                    "high": float(r[2]),
+                    "low": float(r[3]),
+                    "close": float(r[4]),
+                    "volume": float(r[5]),
+                })
+            return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
+
+
+def plot_candlestick_chart(
+    candles_df: pd.DataFrame,
+    symbol: str,
+    timeframe: str,
+    recent_trades: pd.DataFrame | None = None,
+) -> go.Figure:
+    """Plot interactive Plotly Candlestick chart with trade levels."""
+    if candles_df.empty:
+        return go.Figure()
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Candlestick(
+        x=candles_df["timestamp"],
+        open=candles_df["open"],
+        high=candles_df["high"],
+        low=candles_df["low"],
+        close=candles_df["close"],
+        name=f"{symbol} ({timeframe})",
+        increasing_line_color="#22c55e",
+        decreasing_line_color="#ef4444",
+    ))
+
+    # Overlay recent trade entry / SL / TP if available
+    if recent_trades is not None and not recent_trades.empty and "symbol" in recent_trades.columns:
+        sym_trades = recent_trades[recent_trades["symbol"] == symbol].head(3)
+        for _, trade in sym_trades.iterrows():
+            entry = trade.get("entry_price")
+            sl = trade.get("sl")
+            tp = trade.get("tp1")
+            direction = trade.get("direction", "BUY")
+
+            if entry and float(entry) > 0:
+                fig.add_hline(
+                    y=float(entry),
+                    line_dash="dash",
+                    line_color="#3b82f6",
+                    annotation_text=f"Entry ({direction}): {float(entry):.2f}",
+                    annotation_position="bottom right",
+                )
+            if sl and float(sl) > 0:
+                fig.add_hline(
+                    y=float(sl),
+                    line_dash="dot",
+                    line_color="#ef4444",
+                    annotation_text=f"SL: {float(sl):.2f}",
+                    annotation_position="top right",
+                )
+            if tp and float(tp) > 0:
+                fig.add_hline(
+                    y=float(tp),
+                    line_dash="dot",
+                    line_color="#22c55e",
+                    annotation_text=f"TP: {float(tp):.2f}",
+                    annotation_position="bottom right",
+                )
+
+    fig.update_layout(
+        title=f"🕯️ {symbol} — {timeframe} Binance Futures",
+        xaxis_title="Time (UTC)",
+        yaxis_title="Price ($)",
+        template="plotly_dark",
+        height=520,
+        margin=dict(l=0, r=0, t=40, b=0),
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
+
+
+def render_tradingview_widget(symbol: str = "BTCUSDT", interval: str = "15", height: int = 560) -> None:
+    """Embed TradingView real-time widget for Binance USDT-M Futures."""
+    import streamlit.components.v1 as components
+
+    clean_symbol = symbol.replace("USDT", "USDT").upper()
+    interval_map = {
+        "M1": "1", "M5": "5", "M15": "15", "H1": "60", "H4": "240", "D1": "D",
+        "1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", "1d": "D",
+    }
+    tv_interval = interval_map.get(interval, "15")
+    tv_symbol = f"BINANCE:{clean_symbol}.P"
+
+    html_code = f"""
+    <div class="tradingview-widget-container" style="height:{height}px;width:100%">
+      <div id="tradingview_chart_{clean_symbol}" style="height:calc(100% - 32px);width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget(
+      {{
+        "autosize": true,
+        "symbol": "{tv_symbol}",
+        "interval": "{tv_interval}",
+        "timezone": "Asia/Bangkok",
+        "theme": "dark",
+        "style": "1",
+        "locale": "th",
+        "toolbar_bg": "#1e293b",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "save_image": false,
+        "container_id": "tradingview_chart_{clean_symbol}"
+      }}
+      );
+      </script>
+    </div>
+    """
+    components.html(html_code, height=height)
+
+
+def render_market_chart_section(
+    default_symbol: str = "BTCUSDT",
+    trades_df: pd.DataFrame | None = None,
+    setups_df: pd.DataFrame | None = None,
+) -> None:
+    """Render market chart section with TradingView live feed and Plotly AI setup levels."""
+    from pathlib import Path
+
+    available_symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+    watchlist_path = Path("data/crypto_watchlist.json")
+    if watchlist_path.exists():
+        try:
+            with open(watchlist_path, "r", encoding="utf-8") as f:
+                w_data = json.load(f)
+                for cand in w_data.get("candidates", []):
+                    s = cand.get("symbol")
+                    if s and s not in available_symbols:
+                        available_symbols.append(s)
+        except Exception:
+            pass
+
+    col_sym, col_tf, col_type = st.columns([2, 1.5, 2.5])
+    with col_sym:
+        def_idx = available_symbols.index(default_symbol) if default_symbol in available_symbols else 0
+        selected_symbol = st.selectbox("🪙 เลือกเหรียญ", available_symbols, index=def_idx, key=f"chart_sym_{default_symbol}")
+    with col_tf:
+        timeframe_options = ["M5", "M15", "H1", "H4", "D1"]
+        selected_tf = st.selectbox("⏱️ Timeframe", timeframe_options, index=1, key=f"chart_tf_{default_symbol}")
+    with col_type:
+        chart_type = st.radio("📊 รูปแบบกราฟ", ["TradingView (Live Pro)", "Plotly (AI Setup & SL/TP)"], horizontal=True, key=f"chart_mode_{default_symbol}")
+
+    if chart_type == "TradingView (Live Pro)":
+        render_tradingview_widget(symbol=selected_symbol, interval=selected_tf, height=560)
+    else:
+        with st.spinner(f"กำลังดึงแท่งเทียน {selected_symbol} ({selected_tf})..."):
+            kline_df = fetch_binance_klines(selected_symbol, selected_tf, limit=120)
+            if not kline_df.empty:
+                st.plotly_chart(
+                    plot_candlestick_chart(kline_df, selected_symbol, selected_tf, recent_trades=trades_df),
+                    use_container_width=True,
+                )
+            else:
+                st.warning(f"ไม่สามารถดึงข้อมูลแท่งเทียนของ {selected_symbol} จาก Binance ได้ในขณะนี้ กรุณาใช้มุมมอง TradingView ด้านบน")
+
+    # Show recent trade executions on this symbol
+    if trades_df is not None and not trades_df.empty and "symbol" in trades_df.columns:
+        sym_trades = trades_df[trades_df["symbol"] == selected_symbol].head(5)
+        if not sym_trades.empty:
+            with st.expander(f"📜 ออเดอร์ล่าสุดของ {selected_symbol} (มี Entry/SL/TP ในกราฟ)", expanded=False):
+                st.dataframe(
+                    sym_trades[["open_time", "direction", "entry_price", "sl", "tp1", "net_profit", "status"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+
 # ─── Main App ─────────────────────────────────────────────────────────────────
 
 
 # ─── Live Health Checks ───────────────────────────────────────────────────────
-
-def check_mt5_bridge_status() -> dict:
-    """Check live connectivity to MT5 Bridge server and get account details."""
-    bridge_url = os.getenv("BRIDGE_URL", "http://mt5-node:8900").rstrip("/")
-    token = os.getenv("BRIDGE_TOKEN", "")
-    headers = {"X-Bridge-Token": token} if token else {}
-    
-    start_time = time.time()
-    try:
-        req = urllib.request.Request(f"{bridge_url}/health", headers=headers)
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
-            data = json.loads(resp.read().decode())
-            latency_ms = int((time.time() - start_time) * 1000)
-            is_connected = bool(data.get("mt5_connected") or data.get("mt5_initialized") or data.get("account"))
-            return {
-                "online": True,
-                "latency_ms": latency_ms,
-                "mt5_connected": is_connected,
-                "terminal": data.get("terminal") or "MetaTrader 5",
-                "account": data.get("account"),
-                "server": data.get("server"),
-                "balance": data.get("balance"),
-                "bridge_url": bridge_url,
-            }
-    except Exception as e:
-        return {
-            "online": False,
-            "latency_ms": None,
-            "mt5_connected": False,
-            "error": str(e),
-            "bridge_url": bridge_url,
-        }
-
 
 def check_binance_status() -> dict:
     """Check Binance public market-data connectivity without requiring credentials."""
@@ -760,8 +912,7 @@ def check_ai_status() -> dict:
 # ─── Security & Authentication Gate ──────────────────────────────────────────
 
 def _auth_token(password: str) -> str:
-    import hashlib
-    return hashlib.sha256(f"freebuff_auth:{password}".encode()).hexdigest()[:20]
+    return dashboard_auth_token(password)
 
 def check_dashboard_auth() -> bool:
     """Password protection gate with session persistence across page refreshes."""
@@ -830,11 +981,10 @@ def _render_status_chip(label: str, value: str, tone: str = "neutral") -> None:
     )
 
 
-def _live_dashboard_state(configured_venues: tuple[str, ...]) -> dict:
+def _live_dashboard_state() -> dict:
     """Read only the small, volatile dashboard state needed for live indicators."""
     return {
-        "mt5_status": check_mt5_bridge_status(),
-        "binance_status": check_binance_status() if "binance" in configured_venues else None,
+        "binance_status": check_binance_status(),
         "ai_status": check_ai_status(),
         "runtime_status": read_runtime_status(),
         "trading_mode": get_runtime_trading_mode(os.getenv("TRADING_MODE", "PAPER")).upper(),
@@ -845,10 +995,9 @@ def _live_dashboard_state(configured_venues: tuple[str, ...]) -> dict:
 
 
 @st.fragment(run_every=DASHBOARD_REFRESH_SECONDS or None)
-def render_live_sidebar(configured_venues: tuple[str, ...]) -> None:
+def render_live_sidebar() -> None:
     """Refresh only live connection indicators, preserving dashboard controls."""
-    state = _live_dashboard_state(configured_venues)
-    mt5_status = state["mt5_status"]
+    state = _live_dashboard_state()
     binance_status = state["binance_status"]
     ai_status = state["ai_status"]
     runtime_status = state["runtime_status"]
@@ -871,26 +1020,13 @@ def render_live_sidebar(configured_venues: tuple[str, ...]) -> None:
             f"Loop: `{runtime_status.get('state', 'unknown')}` · "
             f"cycles: `{runtime_status.get('cycle_count', 0)}`"
         )
-    st.caption(f"Enabled venues: `{', '.join(venue.upper() for venue in configured_venues)}`")
-    if mt5_status["online"] and mt5_status["mt5_connected"]:
-        st.success(f"🟢 **MT5 Trader Online** ({mt5_status['latency_ms']}ms)")
-        if mt5_status.get("account"):
-            st.caption(f"📌 Account: `{mt5_status['account']}` | `{mt5_status.get('server', '')}`")
-        if mt5_status.get("balance") is not None:
-            st.caption(f"💰 Balance: `${mt5_status['balance']:,.2f}`")
-    elif mt5_status["online"]:
-        st.warning("🟡 **Bridge UP / Waiting MT5**")
-        st.caption(f"Bridge responsive at `{mt5_status['bridge_url']}`")
+    st.caption("Venue: `Binance USDT-M Futures`")
+    if binance_status["online"]:
+        st.success(f"🟢 **Binance Market Data Online** ({binance_status['latency_ms']}ms)")
+        st.caption(f"Public API: `{binance_status['base_url']}`")
     else:
-        st.error("🔴 **MT5 Disconnected**")
-        st.caption(f"Bridge `{mt5_status['bridge_url']}` not reachable")
-    if binance_status is not None:
-        if binance_status["online"]:
-            st.success(f"🟢 **Binance Market Data Online** ({binance_status['latency_ms']}ms)")
-            st.caption(f"Public API: `{binance_status['base_url']}`")
-        else:
-            st.error("🔴 **Binance Market Data Disconnected**")
-            st.caption(f"API `{binance_status['base_url']}` not reachable")
+        st.error("🔴 **Binance Market Data Disconnected**")
+        st.caption(f"API `{binance_status['base_url']}` not reachable")
 
     st.markdown("**AI Council (Debate):**")
     if ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]:
@@ -909,9 +1045,9 @@ def render_live_sidebar(configured_venues: tuple[str, ...]) -> None:
 
 
 @st.fragment(run_every=DASHBOARD_REFRESH_SECONDS or None)
-def render_live_dashboard_header(configured_venues: tuple[str, ...]) -> None:
+def render_live_dashboard_header() -> None:
     """Keep the decision-critical header current without rerunning tabs or filters."""
-    state = _live_dashboard_state(configured_venues)
+    state = _live_dashboard_state()
     runtime_status = state["runtime_status"]
     trading_mode = state["trading_mode"]
     live_armed = state["live_armed"]
@@ -1029,91 +1165,147 @@ def render_ai_provider_settings() -> None:
                 st.rerun()
 
 
-def _cli_login_owner() -> str:
-    """Use an unguessable Streamlit-session owner token for login sessions."""
-    if "cli_login_owner" not in st.session_state:
-        st.session_state["cli_login_owner"] = secrets.token_urlsafe(24)
-    return st.session_state["cli_login_owner"]
+def render_cli_login_console() -> None:
+    """Link to the raw-keystroke PTY terminal for supported CLI auth flows."""
+    st.markdown("### CLI Login Terminal")
+    st.caption(
+        "Terminal จริงสำหรับ Codex, agy และ ClinePass: รองรับปุ่มลูกศร, เมนู TUI, "
+        "OAuth และการวางข้อความ ระบบเปิดได้เฉพาะคำสั่ง login ที่อนุญาต ไม่ใช่ shell ทั่วไป"
+    )
+    password = os.getenv("DASHBOARD_PASSWORD", "freebuff2026").strip()
+    if not password:
+        st.warning("ต้องตั้ง DASHBOARD_PASSWORD ก่อนใช้ terminal")
+        return
+    st.link_button("เปิด CLI Login Terminal", f"/terminal?auth={dashboard_auth_token(password)}", type="primary")
 
 
-@st.fragment(run_every=1)
-def render_cli_login_transcript(session_id: str, owner_id: str) -> None:
-    """Refresh only an active login transcript; never persist its contents."""
-    manager = get_cli_login_manager()
-    try:
-        status = manager.status(session_id, owner_id)
-    except ValueError:
-        st.warning("ไม่พบ session login นี้แล้ว")
+def render_homework_and_readiness_tab(trades_df: pd.DataFrame) -> None:
+    """Render Agent Homework & Watchlist along with Live Promotion Readiness Gauge."""
+    from pathlib import Path
+    from src.risk.promotion_gate import PromotionGate
+    from src.market.crypto_screener import CryptoScreener
+
+    st.markdown("## 🛡️ Live Promotion Readiness Gauge (เกจวัดความพร้อม Live)")
+    st.caption("ระบบตรวจสอบและรับรองความพร้อมทางสถิติและวินัยความเสี่ยงก่อนอนุญาตให้เลื่อนขั้นสู่โหมด LIVE")
+
+    trades_records = trades_df.to_dict(orient="records") if not trades_df.empty else []
+    eval_result = PromotionGate().evaluate_trades(trades_records)
+
+    passed_count = sum(1 for g in eval_result.gate_checks if g.passed)
+    total_gates = len(eval_result.gate_checks)
+    readiness_pct = (passed_count / total_gates) * 100 if total_gates else 0
+
+    # Readiness Progress Bar
+    bar_color = "🟢" if eval_result.is_promotable else "🟡" if readiness_pct >= 50 else "🔴"
+    st.progress(
+        readiness_pct / 100.0,
+        text=f"{bar_color} ความพร้อมเลื่อนขั้น: {readiness_pct:.0f}% (ผ่าน {passed_count}/{total_gates} เกณฑ์ความปลอดภัย)",
+    )
+
+    # Metric Cards
+    g_cols = st.columns(5)
+    remaining_trades = max(0, 30 - eval_result.total_trades)
+    sample_delta = f"ขาดอีก {remaining_trades} ไม้" if remaining_trades > 0 else "ครบเกณฑ์แล้ว"
+    g_cols[0].metric("Sample Size", f"{eval_result.total_trades} / 30", sample_delta)
+    g_cols[1].metric("Win Rate", f"{eval_result.win_rate_pct:.1f}%", "เกณฑ์ >= 40%")
+    g_cols[2].metric("Profit Factor", f"{eval_result.profit_factor:.2f}", "เกณฑ์ >= 1.50")
+    g_cols[3].metric("Net P&L", f"${eval_result.net_pnl:+,.2f}", "เกณฑ์ > $0")
+    g_cols[4].metric("Max Drawdown", f"{eval_result.max_drawdown_pct:.2f}%", "เกณฑ์ <= 5%")
+
+    # Gate Details Expander
+    with st.expander("📋 รายละเอียดเกณฑ์ความปลอดภัยทั้ง 6 ข้อ (Promotion Gate Audit)", expanded=True):
+        gate_rows = []
+        for g in eval_result.gate_checks:
+            gate_rows.append({
+                "Gate Name": g.name,
+                "Target": g.target,
+                "Actual": g.actual,
+                "Status": "✅ PASS" if g.passed else "❌ FAIL",
+                "Description": g.description,
+            })
+        st.dataframe(pd.DataFrame(gate_rows), use_container_width=True, hide_index=True)
+
+    if eval_result.is_promotable:
+        st.success("🎉 **ยินดีด้วย! ระบบผ่านเกณฑ์ความปลอดภัยครบทั้งหมด 100% พร้อมเปิด Live Trading ได้อย่างมั่นใจ**")
+    else:
+        st.info(f"⏳ **คำแนะนำปัจจุบัน:** {eval_result.summary_th}")
+
+    st.markdown("---")
+    st.markdown("## 📋 Agent Homework & Watchlist (การบ้านประจำวัน & เหรียญคัดสรร)")
+    st.caption("AI ทำการบ้านวิเคราะห์แนวโน้ม Macro ของ Bitcoin และสแกนเหรียญ Futures ที่มี Volume และ Momentum สูง")
+
+    col_btn, col_info = st.columns([1.5, 3.5])
+    with col_btn:
+        if st.button("🔄 Run Screener Now (สั่ง AI ทำการบ้านทันที)", use_container_width=True, type="primary"):
+            with st.spinner("AI กำลังดึงข้อมูล Binance 24h Tickers และวิเคราะห์ BTC Macro..."):
+                try:
+                    import asyncio
+                    asyncio.run(CryptoScreener().run_homework())
+                    st.success("ทำการบ้านและอัปเดต Watchlist เรียบร้อยแล้ว!")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"เกิดข้อผิดพลาดในการรัน Screener: {exc}")
+
+    watchlist_path = Path("data/crypto_watchlist.json")
+    watchlist_data = None
+    if watchlist_path.exists():
+        try:
+            with open(watchlist_path, "r", encoding="utf-8") as f:
+                watchlist_data = json.load(f)
+        except Exception:
+            pass
+
+    if not watchlist_data:
+        st.info("ยังไม่มีข้อมูล Watchlist ล่าสุด คลิกปุ่ม 'Run Screener Now' ด้านบนเพื่อให้ AI ทำการบ้านรอบแรก")
         return
 
-    state = "กำลังรอการยืนยัน" if status["running"] else f"จบแล้ว (exit {status['exit_code']})"
-    st.caption(f"สถานะ: {state} · session หมดอายุภายใน 10 นาที · transcript นี้ไม่ถูกบันทึก")
-    st.code(str(status["transcript"])[-12_000:] or "กำลังเริ่ม CLI…", language=None)
-    if status["running"]:
-        login_input = st.text_input(
-            "ส่งข้อความ/รหัสที่ CLI ขอ", type="password", key="cli_login_input",
-            help="ระบบส่งค่าเข้ากระบวนการ login ที่เลือกเท่านั้น ไม่ได้เปิด shell ทั่วไป",
-        )
-        send_col, stop_col = st.columns(2)
-        if send_col.button("ส่งเข้า CLI", type="primary", key="send_cli_login_input"):
-            try:
-                manager.send(session_id, owner_id, login_input)
-                st.session_state["cli_login_input"] = ""
-                st.rerun(scope="fragment")
-            except (RuntimeError, ValueError) as exc:
-                st.error(str(exc))
-        if stop_col.button("ยกเลิก session", key="stop_cli_login_session"):
-            manager.stop(session_id, owner_id)
-            st.rerun(scope="fragment")
+    with col_info:
+        st.caption(f"🕒 ข้อมูลล่าสุดเมื่อ: `{watchlist_data.get('timestamp', 'Unknown')}`")
 
+    # BTC Macro View
+    btc_report = watchlist_data.get("btc_report")
+    if btc_report:
+        st.markdown("### 👑 Bitcoin Macro Framework")
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("Macro Bias", btc_report.get("macro_bias", "UNKNOWN"))
+        b2.metric("H4 Trend", btc_report.get("h4_trend", "UNKNOWN"))
+        b3.metric("Crowd Bias", btc_report.get("crowd_bias", "UNKNOWN"))
+        b4.metric("Funding Rate", f"{btc_report.get('funding_rate_pct', 0.0):+.4f}%")
 
-def render_cli_login_console() -> None:
-    """Render the constrained CLI authentication console."""
-    st.markdown("### CLI Login Console")
-    st.caption(
-        "ใช้สำหรับ login เท่านั้น ไม่มี shell ทั่วไป; คำสั่งและเวลารันถูกจำกัด "
-        "และระบบไม่เก็บ transcript หรือข้อความที่พิมพ์"
-    )
-    owner_id = _cli_login_owner()
-    manager = get_cli_login_manager()
-    selected = st.selectbox(
-        "CLI agent", list(DEFAULT_COMMANDS),
-        format_func=lambda agent: DEFAULT_COMMANDS[agent].label,
-        key="cli_login_agent",
-    )
-    st.caption({
-        "codex": "เริ่ม `codex login` เพื่อเชื่อม ChatGPT/Codex",
-        "agy": "เริ่ม remote OAuth ของ agy ด้วย sandbox และ prompt คงที่",
-        "clinepass": "เริ่ม `cline auth` แล้วเลือก ClinePass ในหน้าจอ CLI",
-    }[selected])
-    if st.button("เริ่ม login session", type="primary", key="start_cli_login"):
-        previous_session_id = st.session_state.get("cli_login_session_id")
-        if previous_session_id:
-            try:
-                manager.stop(previous_session_id, owner_id)
-            except ValueError:
-                pass
-        try:
-            session = manager.start(selected, owner_id)
-            st.session_state["cli_login_session_id"] = session.session_id
-            st.rerun()
-        except (RuntimeError, ValueError, OSError) as exc:
-            st.error(str(exc))
+        if btc_report.get("ai_context_snippet"):
+            st.caption(f"🧠 **AI Perspective:** {btc_report['ai_context_snippet']}")
 
-    session_id = st.session_state.get("cli_login_session_id")
-    if session_id:
-        render_cli_login_transcript(session_id, owner_id)
+    # Candidates Table
+    candidates = watchlist_data.get("candidates", [])
+    if candidates:
+        st.markdown(f"### 🎯 Top {len(candidates)} Watchlist Candidates")
+        cand_rows = []
+        for idx, c in enumerate(candidates, 1):
+            cand_rows.append({
+                "Rank": f"#{idx}",
+                "Symbol": c.get("symbol"),
+                "Price": f"${c.get('price', 0):,.2f}",
+                "24h Change": f"{c.get('price_change_pct', 0):+.2f}%",
+                "24h Volume": c.get("formatted_volume") or f"${c.get('quote_volume_24h', 0) / 1e6:.1f}M",
+                "Opportunity Score": c.get("score"),
+                "24h Range Spread": f"{c.get('high_low_spread_pct', 0):.2f}%",
+                "Tags": ", ".join(c.get("tags", [])),
+            })
+        st.dataframe(pd.DataFrame(cand_rows), use_container_width=True, hide_index=True)
+        top_symbol = candidates[0].get("symbol", "BTCUSDT")
+        with st.expander(f"📊 ดูกราฟราคาเหรียญใน Watchlist ({top_symbol})", expanded=False):
+            render_market_chart_section(default_symbol=top_symbol, trades_df=trades_df)
+    else:
+        st.info("ไม่มีเหรียญที่ผ่านเกณฑ์ Volume & Opportunity ในรอบนี้")
 
 
 def render_redesigned_dashboard(
     *,
-    mt5_status: dict,
-    binance_status: dict | None,
+    binance_status: dict,
     ai_status: dict,
     runtime_status: dict,
     trading_mode: str,
     live_armed: bool,
-    configured_venues: list[str],
     candidate_policy: dict[str, int],
     candidate_summary: dict,
     trades_df: pd.DataFrame,
@@ -1144,13 +1336,15 @@ def render_redesigned_dashboard(
 
     st.markdown("# Freebuff Control Center")
     st.caption("ดูสิ่งที่ระบบกำลังทำอยู่ก่อน แล้วค่อยลงลึกถึง Candidate, AI, Learning และ Risk")
-    render_live_dashboard_header(tuple(configured_venues))
+    render_live_dashboard_header()
 
     if engine_state != "running":
         st.warning(f"Worker state is `{engine_label}`. ตรวจสอบ health และ logs ก่อนประเมินว่าไม่มี setup")
 
     tabs = st.tabs([
         "🎛️ Command Center",
+        "📊 Live Chart",
+        "📋 Agent Homework & Readiness",
         "🔎 Candidates & AI",
         "🧠 Learning",
         "📈 Performance",
@@ -1161,19 +1355,12 @@ def render_redesigned_dashboard(
         st.markdown("## ตอนนี้ระบบกำลังทำอะไร")
         status_cols = st.columns(3)
         with status_cols[0]:
-            if mt5_status["online"] and mt5_status["mt5_connected"]:
-                st.success(f"**MT5 connected** · {mt5_status.get('server', 'server unknown')}\n\nAccount `{mt5_status.get('account', 'N/A')}`")
-            elif mt5_status["online"]:
-                st.warning("**MT5 bridge online**\n\nกำลังรอ terminal/account")
-            else:
-                st.error("**MT5 disconnected**\n\nตรวจสอบ bridge และ MT5 credentials")
-        with status_cols[1]:
-            if binance_status is None:
-                st.info("**Binance disabled**\n\nVenue นี้ไม่ได้อยู่ใน MARKET_DATA_VENUES")
-            elif binance_status["online"]:
+            if binance_status["online"]:
                 st.success(f"**Binance market data online**\n\n{binance_status['latency_ms']}ms · public API")
             else:
                 st.error("**Binance market data offline**\n\nตรวจสอบ endpoint/network")
+        with status_cols[1]:
+            st.info("**Binance USDT-M Futures**\n\nExchange ที่เปิดใช้งาน")
         with status_cols[2]:
             if ai_status["council_ready"]:
                 st.success("**AI Council ready**\n\nBull + Bear provider พร้อมใช้งาน")
@@ -1201,6 +1388,10 @@ def render_redesigned_dashboard(
         else:
             st.success("ระบบมี heartbeat, data feed และ candidate triage ทำงานอยู่")
 
+        st.markdown("## 📊 Live Market Chart (กราฟราคา Real-Time)")
+        with st.expander("เปิด/ปิด ดูกราฟราคา Real-Time ทันที", expanded=True):
+            render_market_chart_section(default_symbol=settings.binance_symbol, trades_df=trades_df, setups_df=setups_df)
+
         st.markdown("## กิจกรรมล่าสุด")
         if setups_df.empty:
             st.info("ยังไม่มี setup log")
@@ -1220,6 +1411,12 @@ def render_redesigned_dashboard(
             st.plotly_chart(plot_equity_curve(equity_df), use_container_width=True)
 
     with tabs[1]:
+        render_market_chart_section(default_symbol=settings.binance_symbol, trades_df=trades_df, setups_df=setups_df)
+
+    with tabs[2]:
+        render_homework_and_readiness_tab(trades_df)
+
+    with tabs[3]:
         st.markdown("## Candidate inbox")
         st.caption("Candidate ทุกระดับถูกเก็บไว้ แต่ AI จะถูกเรียกตาม priority เพื่อควบคุมค่าใช้จ่ายและลด noise")
         policy_cols = st.columns(5)
@@ -1277,7 +1474,7 @@ def render_redesigned_dashboard(
         }
         st.json(digest)
 
-    with tabs[2]:
+    with tabs[4]:
         st.markdown("## Learning Lab")
         st.caption("ระบบเก็บ evidence และบทเรียนจากผลที่ broker ยืนยันแล้ว ก่อนนำไปใช้ประกอบการตัดสินใจครั้งถัดไป")
         memories_df = load_memories(get_engine(os.getenv("DATABASE_URL_SYNC", "sqlite:////app/data/freebuff.db")))
@@ -1298,7 +1495,7 @@ def render_redesigned_dashboard(
             st.markdown("### วิธีที่บทเรียนถูกใช้")
             st.markdown("1. บันทึก snapshot ตอนเข้าไม้  \n2. รอผลปิดที่ยืนยันจาก broker  \n3. ส่งบทเรียนล่าสุดของ symbol/strategy เดียวกันให้ AI Council  \n4. การปรับ strategy ต้องผ่าน dataset และ walk-forward ก่อน")
 
-    with tabs[3]:
+    with tabs[5]:
         st.markdown("## Performance & Journal")
         m = st.columns(6)
         m[0].metric("Trades", filtered_metrics["total"])
@@ -1325,7 +1522,7 @@ def render_redesigned_dashboard(
         if not daily_df.empty:
             st.plotly_chart(px.bar(daily_df, x="trade_date", y="total_pnl", color=daily_df["total_pnl"].apply(lambda x: "Win" if x >= 0 else "Loss"), color_discrete_map={"Win": "#22c55e", "Loss": "#ef4444"}, title="Daily P&L").update_layout(template="plotly_dark"), use_container_width=True)
 
-    with tabs[4]:
+    with tabs[6]:
         st.markdown("## Controls & Safety")
         st.caption("ค่าที่เปลี่ยนตรงนี้มีผลกับ runtime หลังบันทึก ไม่ต้อง deploy ENV ใหม่ แต่ Risk Engine และ broker safeguards ยังแก้จากหน้านี้ไม่ได้")
         control_left, control_right = st.columns(2)
@@ -1333,7 +1530,7 @@ def render_redesigned_dashboard(
             st.markdown("### Execution mode")
             selected_mode = st.selectbox("Runtime mode", ["PAPER", "DEMO", "LIVE"], index=["PAPER", "DEMO", "LIVE"].index(trading_mode), key="controls_runtime_mode")
             if selected_mode == "LIVE":
-                st.error("LIVE ต้องยืนยันแยกต่างหาก และ MT5 ต้องเชื่อมบัญชีจริงที่ถูกต้อง")
+                st.error("LIVE ต้องยืนยันแยกต่างหาก และ Binance safeguards จะยังบังคับใช้")
                 confirmation = st.text_input("พิมพ์ ENABLE LIVE TRADING", type="password", key="controls_live_confirmation")
                 if st.button("Arm LIVE", type="secondary", disabled=confirmation != "ENABLE LIVE TRADING", key="controls_arm_live"):
                     arm_live_trading()
@@ -1369,8 +1566,7 @@ def render_redesigned_dashboard(
         with control_right:
             st.markdown("### Connections")
             connection_rows = [
-                {"Component": "MT5 bridge", "Status": "Online" if mt5_status["online"] else "Offline", "Detail": mt5_status.get("server") or mt5_status.get("bridge_url", "")},
-                {"Component": "Binance market data", "Status": "Online" if binance_status and binance_status["online"] else "Disabled/Offline", "Detail": binance_status.get("base_url", "not configured") if binance_status else "not configured"},
+                {"Component": "Binance market data", "Status": "Online" if binance_status["online"] else "Offline", "Detail": binance_status["base_url"]},
                 {"Component": "AI Council", "Status": "Ready" if ai_status["council_ready"] else "Rule scorer only", "Detail": "ตั้งค่า provider ได้ใน Controls & Safety"},
             ]
             st.dataframe(pd.DataFrame(connection_rows), use_container_width=True, hide_index=True)
@@ -1398,13 +1594,7 @@ def main():
     st.sidebar.markdown("---")
 
     # Check live connections
-    mt5_status = check_mt5_bridge_status()
-    configured_venues = [
-        venue.strip().lower()
-        for venue in os.getenv("MARKET_DATA_VENUES", os.getenv("MARKET_DATA_VENUE", "mt5")).split(",")
-        if venue.strip()
-    ]
-    binance_status = check_binance_status() if "binance" in configured_venues else None
+    binance_status = check_binance_status()
     ai_status = check_ai_status()
     runtime_status = read_runtime_status()
     trading_mode = get_runtime_trading_mode(os.getenv("TRADING_MODE", "PAPER")).upper()
@@ -1412,7 +1602,7 @@ def main():
 
     candidate_policy = get_candidate_policy()
     with st.sidebar:
-        render_live_sidebar(tuple(configured_venues))
+        render_live_sidebar()
     st.sidebar.markdown("---")
     if st.sidebar.button("🔒 Logout", use_container_width=True):
         st.session_state["authenticated"] = False
@@ -1474,17 +1664,14 @@ def main():
     # Recalculate metrics for filtered data
     filtered_metrics = calculate_metrics(filtered_trades)
 
-    # New task-oriented dashboard. The legacy tab layout below is retained in
-    # source for reference during migration but is intentionally unreachable.
+    # Task-oriented Binance dashboard.
     candidate_summary = CandidateTriage().summary()
     render_redesigned_dashboard(
-        mt5_status=mt5_status,
         binance_status=binance_status,
         ai_status=ai_status,
         runtime_status=runtime_status,
         trading_mode=trading_mode,
         live_armed=live_armed,
-        configured_venues=configured_venues,
         candidate_policy=candidate_policy,
         candidate_summary=candidate_summary,
         trades_df=trades_df,
@@ -1495,533 +1682,6 @@ def main():
         filtered_metrics=filtered_metrics,
     )
     return
-
-    # Tabs
-    tab_overview, tab_journal, tab_learning, tab_strategy, tab_analysis, tab_risk = st.tabs([
-        "📊 Overview",
-        "📋 Trade Journal",
-        "🧠 AI Learning & Memory",
-        "🎯 Strategy Performance",
-        "🔍 Setup Analysis",
-        "⚠️ Risk Management",
-    ])
-
-    # ─── Overview Tab ─────────────────────────────────────────────────────────
-    with tab_overview:
-        # System Live Status Banner
-        s_col1, s_col2, s_col3 = st.columns([1.2, 1.4, 1.0])
-        with s_col1:
-            if mt5_status["online"] and mt5_status["mt5_connected"]:
-                st.success(
-                    f"🟢 **MT5 Trader Online**\n\n"
-                    f"Server: `{mt5_status.get('server', 'MT5')}` · Login: `{mt5_status.get('account', 'N/A')}` · Latency: `{mt5_status['latency_ms']}ms`"
-                )
-            elif mt5_status["online"]:
-                st.warning(
-                    f"🟡 **Bridge Waiting MT5**\n\n"
-                    f"Bridge `{mt5_status['bridge_url']}` is UP, waiting for MT5 terminal connection."
-                )
-            else:
-                st.error(
-                    f"🔴 **MT5 Trader Offline**\n\n"
-                    f"Cannot reach Bridge at `{mt5_status['bridge_url']}`"
-                )
-            if binance_status is not None:
-                if binance_status["online"]:
-                    st.success(
-                        f"🟢 **Binance Market Data Online**\n\n"
-                        f"Testnet/public API · Latency: `{binance_status['latency_ms']}ms`"
-                    )
-                else:
-                    st.error(
-                        f"🔴 **Binance Market Data Offline**\n\n"
-                        f"Cannot reach `{binance_status['base_url']}`"
-                    )
-
-        with s_col2:
-            cg_tag = "🟢 ChatGPT" if (ai_status["chatgpt_auth"] or ai_status["chatgpt_cli"]) else "🟡 ChatGPT"
-            gm_tag = "🟢 Gemini" if ai_status["gemini_auth"] else "🟡 Gemini"
-            ds_tag = "🟢 DeepSeek" if ai_status["deepseek_auth"] else "⚪ DeepSeek"
-            if ai_status["council_ready"]:
-                st.success(
-                    f"🧠 **AI Council Debate: Online**\n\n"
-                    f"{cg_tag} (Bear Trap) · {gm_tag if ai_status['gemini_auth'] else ds_tag} (Bull Confluence) · Auth Ready"
-                )
-            else:
-                st.info(
-                    f"🧠 **AI Council Status**\n\n"
-                    f"{cg_tag} · {gm_tag if ai_status['gemini_auth'] else ds_tag} · Rule Scorer Active"
-                )
-
-        with s_col3:
-            symbols = "XAUUSD · BTCUSDT" if "binance" in configured_venues else os.getenv("TRADING_SYMBOL", "XAUUSD")
-            st.info(
-                f"⚡ **Active Market & Engine**\n\n"
-                f"Symbols: `{symbols}` · Mode: `{trading_mode}` · "
-                f"Cycles: `{runtime_status.get('cycle_count', 0)}`"
-            )
-
-        if runtime_status.get("last_decision"):
-            reason = runtime_status.get("last_reason") or runtime_status.get("last_error") or ""
-            st.caption(
-                f"Last engine decision: `{runtime_status['last_decision']}` "
-                f"{('— ' + reason) if reason else ''}"
-            )
-
-        st.markdown("## 📊 Trading Overview")
-
-        # Summary cards
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-            st.metric(
-                "Total Trades",
-                filtered_metrics["total"],
-                f"{filtered_metrics['winners']}W / {filtered_metrics['losers']}L",
-            )
-        with col2:
-            st.metric(
-                "Win Rate",
-                f"{filtered_metrics['win_rate']}%",
-                delta="Target: >50%",
-                delta_color="normal" if filtered_metrics["win_rate"] >= 50 else "inverse",
-            )
-        with col3:
-            st.metric(
-                "Total P&L",
-                f"${filtered_metrics['total_pnl']:,.2f}",
-                delta_color="normal" if filtered_metrics["total_pnl"] >= 0 else "inverse",
-            )
-        with col4:
-            st.metric(
-                "Profit Factor",
-                filtered_metrics["profit_factor"],
-                delta="Target: >1.5",
-                delta_color="normal" if filtered_metrics["profit_factor"] >= 1.5 else "inverse",
-            )
-        with col5:
-            st.metric(
-                "Max Drawdown",
-                f"{filtered_metrics['max_drawdown']}%",
-                delta_color="inverse",
-            )
-
-        # Second row of metrics
-        col6, col7, col8, col9, col10 = st.columns(5)
-
-        with col6:
-            st.metric("Avg Win", f"${filtered_metrics['avg_win']:,.2f}")
-        with col7:
-            st.metric("Avg Loss", f"${filtered_metrics['avg_loss']:,.2f}")
-        with col8:
-            st.metric("Expectancy", f"${filtered_metrics['expectancy']:,.2f}")
-        with col9:
-            st.metric("Avg R", filtered_metrics["avg_r"])
-        with col10:
-            st.metric("Avg RR", filtered_metrics["avg_rr"])
-
-        st.markdown("---")
-
-        # Charts
-        col_chart1, col_chart2 = st.columns(2)
-
-        with col_chart1:
-            if not equity_df.empty:
-                st.plotly_chart(plot_equity_curve(equity_df), use_container_width=True)
-            else:
-                st.info("No equity data available")
-
-        with col_chart2:
-            if not filtered_trades.empty:
-                st.plotly_chart(plot_r_distribution(filtered_trades), use_container_width=True)
-            else:
-                st.info("No trade data for R-distribution")
-
-        # Drawdown chart
-        if not filtered_trades.empty:
-            st.plotly_chart(plot_drawdown(filtered_trades), use_container_width=True)
-
-    # ─── Trade Journal Tab ────────────────────────────────────────────────────
-    with tab_journal:
-        st.markdown("## 📋 Trade Journal")
-
-        if filtered_trades.empty:
-            st.info("No trades to display")
-        else:
-            # Format the dataframe for display
-            display_df = filtered_trades[[
-                "open_time", "exit_time", "direction", "symbol", "volume",
-                "entry_price", "sl", "tp1", "exit_price",
-                "net_profit", "outcome_r", "outcome_pips", "strategy_id"
-            ]].copy()
-
-            display_df.columns = [
-                "Open Time", "Exit Time", "Dir", "Symbol", "Vol",
-                "Entry", "SL", "TP1", "Exit",
-                "P&L", "R-Multiple", "Pips", "Strategy"
-            ]
-
-            # Style P&L column
-            def color_pnl(val):
-                if isinstance(val, (int, float)):
-                    color = "#22c55e" if val >= 0 else "#ef4444"
-                    return f"color: {color}; font-weight: bold"
-                return ""
-
-            def color_dir(val):
-                if val == "BUY":
-                    return "color: #22c55e; font-weight: bold"
-                elif val == "SELL":
-                    return "color: #ef4444; font-weight: bold"
-                return ""
-
-            styled_df = display_df.style.applymap(color_pnl, subset=["P&L", "R-Multiple", "Pips"])
-            styled_df = styled_df.applymap(color_dir, subset=["Dir"])
-
-            st.dataframe(
-                styled_df,
-                height=500,
-                use_container_width=True,
-                column_config={
-                    "Open Time": st.column_config.DatetimeColumn("Open Time", format="YYYY-MM-DD HH:mm"),
-                    "Exit Time": st.column_config.DatetimeColumn("Exit Time", format="YYYY-MM-DD HH:mm"),
-                    "Entry": st.column_config.NumberColumn("Entry", format="%.2f"),
-                    "SL": st.column_config.NumberColumn("SL", format="%.2f"),
-                    "TP1": st.column_config.NumberColumn("TP1", format="%.2f"),
-                    "Exit": st.column_config.NumberColumn("Exit", format="%.2f"),
-                    "P&L": st.column_config.NumberColumn("P&L", format="$%.2f"),
-                    "R-Multiple": st.column_config.NumberColumn("R-Multiple", format="%.1fR"),
-                    "Pips": st.column_config.NumberColumn("Pips", format="%.1f"),
-                    "Vol": st.column_config.NumberColumn("Vol", format="%.2f"),
-                },
-            )
-
-            # Summary stats
-            st.markdown("---")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Best Trade", f"${filtered_metrics['best_trade']:,.2f}")
-            with col2:
-                st.metric("Worst Trade", f"${filtered_metrics['worst_trade']:,.2f}")
-            with col3:
-                st.metric("Avg P&L", f"${filtered_metrics['total_pnl'] / filtered_metrics['total']:,.2f}" if filtered_metrics['total'] > 0 else "$0")
-            with col4:
-                st.metric("Total Volume", f"{filtered_trades['volume'].sum():.2f} lots")
-
-
-    # ─── AI Learning & Memory Bank Tab ───────────────────────────────────────
-    with tab_learning:
-        st.markdown("## 🧠 AI Brain & Continuous Learning Memory Bank")
-        st.caption("ระบบเรียนรู้และปรับกลยุทธ์อัตโนมัติจากประสบการณ์จริง: ทุกไม้ที่ปิด (โดยเฉพาะไม้ที่ชน SL) จะถูก AI Post-Mortem ชันสูตรหาสาเหตุ สกัดเป็นบทเรียน และ Feed กลับเข้า AI Council เพื่อไม่ให้พลาดท่าเดิมซ้ำสอง")
-
-        memories_df = load_memories(engine)
-
-        if memories_df.empty:
-            st.info("🧠 ยังไม่มีบทเรียนในคลังความจำ ระบบจะทำการวิเคราะห์และบันทึกอัตโนมัติทันทีที่มีออเดอร์ปิด (SL หรือ TP)")
-        else:
-            # Summary Metrics
-            total_lessons = len(memories_df)
-            losses_analyzed = len(memories_df[memories_df["outcome"] == "LOSS"])
-            wins_recorded = len(memories_df[memories_df["outcome"] == "WIN"])
-            
-            top_causes = memories_df["root_cause"].value_counts()
-            top_cause_str = top_causes.index[0] if not top_causes.empty else "N/A"
-
-            m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                st.metric("Total Memories", total_lessons)
-            with m2:
-                st.metric("Losses Reflected (ชน SL)", losses_analyzed, delta="-Learning" if losses_analyzed > 0 else None, delta_color="inverse")
-            with m3:
-                st.metric("Wins Reinforced", wins_recorded, delta="+Good Pattern" if wins_recorded > 0 else None)
-            with m4:
-                st.metric("Top Failure Cause", top_cause_str)
-
-            st.markdown("---")
-
-            # Two columns: Chart & Recent Lessons Feed
-            col_chart, col_feed = st.columns([1, 1.4])
-
-            with col_chart:
-                st.markdown("### 📊 Failure Root Cause Distribution")
-                if losses_analyzed > 0:
-                    loss_df = memories_df[memories_df["outcome"] == "LOSS"]
-                    cause_counts = loss_df["root_cause"].value_counts().reset_index()
-                    cause_counts.columns = ["Root Cause", "Count"]
-                    fig = px.pie(
-                        cause_counts,
-                        names="Root Cause",
-                        values="Count",
-                        hole=0.4,
-                        color_discrete_sequence=["#ef4444", "#f97316", "#eab308", "#8b5cf6", "#06b6d4"],
-                    )
-                    fig.update_layout(
-                        template="plotly_dark",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        margin=dict(l=10, r=10, t=20, b=10),
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.success("🎉 ยังไม่มีประวัติการขาดทุนในระบบ!")
-
-                st.markdown("### ⚙️ How It Feeds the Council")
-                st.info(
-                    "📌 **Experience Injection:** ก่อนที่ Gemini Bull และ GPT Bear จะตัดสินใจ Setup ใดๆ "
-                    "ระบบจะค้นหาบทเรียนที่ตรงกับกลยุทธ์นั้นๆ 3 ข้อล่าสุด และแนบเข้าไปใน Prompt โดยตรง "
-                    "ทำให้ GPT Bear สามารถยกเคสอดีตมาคัดค้าน และ Gemini ต้องตรวจสอบว่าแก้จุดบกพร่องเดิมหรือยัง"
-                )
-
-            with col_feed:
-                st.markdown("### 💡 Latest Lessons Learned (คลังบทเรียนล่าสุด)")
-                for _, row in memories_df.head(15).iterrows():
-                    is_loss = row["outcome"] == "LOSS"
-                    box_color = "#ef4444" if is_loss else "#22c55e"
-                    badge_bg = "rgba(239, 68, 68, 0.15)" if is_loss else "rgba(34, 197, 94, 0.15)"
-                    icon = "⚠️" if is_loss else "✅"
-
-                    pnl_val = float(row["profit"] or 0)
-                    pnl_str = f"+${pnl_val:.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):.2f}"
-
-                    st.markdown(
-                        f"""
-                        <div style="background: rgba(255,255,255,0.03); border-left: 4px solid {box_color}; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <span style="font-weight: bold; font-size: 0.95rem; color: #f1f5f9;">
-                                    {icon} {row['symbol']} {row['direction']} — {row['strategy_id']}
-                                </span>
-                                <span style="background: {badge_bg}; color: {box_color}; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">
-                                    {row['outcome']} ({pnl_str})
-                                </span>
-                            </div>
-                            <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 6px;">
-                                <b>Root Cause:</b> <code>{row['root_cause']}</code> | <b>Time:</b> {str(row['created_at'])[:19]}
-                            </div>
-                            <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.4; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 4px;">
-                                💬 <b>บทเรียน:</b> {row['lesson_learned_th']}
-                            </div>
-                            {f'<div style="font-size: 0.82rem; color: #38bdf8; margin-top: 6px;">🔧 <b>คำแนะนำปรับปรุง:</b> {row["rule_recommendation"]}</div>' if row.get("rule_recommendation") else ""}
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-    # ─── Strategy Performance Tab ─────────────────────────────────────────────
-    with tab_strategy:
-        st.markdown("## 🎯 Strategy Performance")
-
-        if filtered_trades.empty:
-            st.info("No trade data for strategy analysis")
-        else:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.plotly_chart(plot_strategy_performance(filtered_trades), use_container_width=True)
-
-            with col2:
-                st.plotly_chart(plot_strategy_pnl(filtered_trades), use_container_width=True)
-
-            # Monthly P&L
-            st.plotly_chart(plot_monthly_pnl(filtered_trades), use_container_width=True)
-
-            # Strategy detail table
-            st.markdown("### 📊 Strategy Breakdown")
-
-            strat_detail = filtered_trades.groupby("strategy_id").agg(
-                Trades=("id", "count"),
-                Winners=("net_profit", lambda x: (x > 0).sum()),
-                Total_PnL=("net_profit", "sum"),
-                Avg_R=("outcome_r", "mean"),
-                Avg_Pips=("outcome_pips", "mean"),
-                Best=("net_profit", "max"),
-                Worst=("net_profit", "min"),
-            ).reset_index()
-
-            strat_detail["Win Rate"] = (strat_detail["Winners"] / strat_detail["Trades"] * 100).round(1)
-            strat_detail["Avg P&L"] = (strat_detail["Total_PnL"] / strat_detail["Trades"]).round(2)
-
-            st.dataframe(
-                strat_detail.style.applymap(
-                    lambda x: "color: #22c55e" if isinstance(x, (int, float)) and x > 0 else "color: #ef4444" if isinstance(x, (int, float)) and x < 0 else "",
-                    subset=["Total_PnL", "Avg P&L", "Best", "Worst"]
-                ),
-                use_container_width=True,
-                column_config={
-                    "Total_PnL": st.column_config.NumberColumn("Total P&L", format="$%.2f"),
-                    "Avg P&L": st.column_config.NumberColumn("Avg P&L", format="$%.2f"),
-                    "Best": st.column_config.NumberColumn("Best", format="$%.2f"),
-                    "Worst": st.column_config.NumberColumn("Worst", format="$%.2f"),
-                    "Avg_R": st.column_config.NumberColumn("Avg R", format="%.2f"),
-                    "Avg_Pips": st.column_config.NumberColumn("Avg Pips", format="%.1f"),
-                },
-            )
-
-    # ─── Setup Analysis Tab ───────────────────────────────────────────────────
-    with tab_analysis:
-        st.markdown("## 🔍 Setup Analysis")
-
-        if setups_df.empty:
-            st.info("No setup data available")
-        else:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.plotly_chart(plot_setup_analysis(setups_df), use_container_width=True)
-
-            with col2:
-                # AI Score vs Outcome
-                traded_setups = setups_df[setups_df["decision"] == "TRADED"].copy()
-                if not traded_setups.empty:
-                    fig = go.Figure()
-
-                    fig.add_trace(go.Box(
-                        y=traded_setups["ai_score"],
-                        name="AI Score",
-                        marker_color="#3b82f6",
-                    ))
-
-                    fig.update_layout(
-                        title="🤖 AI Score Distribution (Traded Setups)",
-                        template="plotly_dark",
-                        height=350,
-                        margin=dict(l=0, r=0, t=40, b=0),
-                        yaxis_title="AI Score",
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No traded setups for AI score analysis")
-
-            # Setup decision breakdown by strategy
-            st.markdown("### 📊 Setup Decisions by Strategy")
-
-            setup_by_strategy = setups_df.groupby(["strategy_id", "decision"]).size().unstack(fill_value=0)
-            if not setup_by_strategy.empty:
-                fig = go.Figure()
-
-                for decision in setup_by_strategy.columns:
-                    color = {"TRADED": "#22c55e", "SKIPPED": "#f59e0b", "REJECTED": "#ef4444"}.get(decision, "#3b82f6")
-                    fig.add_trace(go.Bar(
-                        name=decision,
-                        x=setup_by_strategy.index,
-                        y=setup_by_strategy[decision],
-                        marker_color=color,
-                    ))
-
-                fig.update_layout(
-                    barmode="stack",
-                    title="📋 Setup Decisions by Strategy",
-                    template="plotly_dark",
-                    height=400,
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    yaxis_title="Count",
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            # Rejection reasons
-            rejected = setups_df[setups_df["decision"] == "REJECTED"]
-            if not rejected.empty:
-                st.markdown("### ❌ Rejection Reasons")
-                reasons = rejected["rejection_reason"].value_counts()
-                fig = go.Figure(go.Bar(
-                    x=reasons.values,
-                    y=reasons.index,
-                    orientation="h",
-                    marker_color="#ef4444",
-                ))
-                fig.update_layout(
-                    template="plotly_dark",
-                    height=300,
-                    margin=dict(l=0, r=0, t=0, b=0),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            # AI Council Debate Feed (Gemini vs GPT)
-            has_debates = "gemini_verdict" in setups_df.columns and setups_df["gemini_verdict"].notna().any()
-            if has_debates:
-                st.markdown("### 🤖 AI Council Debate Feed (Gemini 🟢 vs GPT 🔴)")
-                recent_debates = setups_df[setups_df["gemini_verdict"].notna()].head(10)
-                for _, row in recent_debates.iterrows():
-                    d_icon = "🟢" if row.get("decision") == "TRADED" else ("🟡" if row.get("decision") == "SKIPPED" else "🔴")
-                    with st.expander(f"{d_icon} {row.get('created_at')} — {row.get('symbol')} {row.get('direction')} | Verdict: {row.get('decision')} (Rule: {row.get('rule_score')}, Combined: {row.get('combined_score')})"):
-                        d_c1, d_c2 = st.columns(2)
-                        with d_c1:
-                            st.markdown(f"**Gemini (Bull Analyst):** `{row.get('gemini_verdict')}` ({row.get('gemini_score')}/100)")
-                            st.info(row.get("gemini_narrative") or "No narrative")
-                        with d_c2:
-                            st.markdown(f"**GPT/Codex (Bear Analyst):** `{row.get('gpt_verdict')}` ({row.get('gpt_score')}/100)")
-                            st.warning(row.get("gpt_narrative") or "No narrative")
-                        if row.get("debate_summary"):
-                            st.markdown(f"**⚖️ Council Summary:** {row.get('debate_summary')}")
-                        if row.get("eql_summary"):
-                            st.caption(f"**💧 Liquidity Pools:** {row.get('eql_summary')}")
-
-    # ─── Risk Management Tab ──────────────────────────────────────────────────
-    with tab_risk:
-        st.markdown("## ⚠️ Risk Management")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("Max Drawdown", f"{filtered_metrics['max_drawdown']}%")
-            st.caption("Emergency threshold: 5%")
-
-        with col2:
-            st.metric("Circuit Breaker", "OFF" if daily_df["circuit_breaker"].sum() == 0 else "ON")
-
-        with col3:
-            st.metric("Consecutive Losses", "0")
-
-        st.markdown("---")
-
-        # Daily P&L
-        if not daily_df.empty:
-            st.plotly_chart(
-                px.bar(
-                    daily_df,
-                    x="trade_date",
-                    y="total_pnl",
-                    color=daily_df["total_pnl"].apply(lambda x: "Win" if x >= 0 else "Loss"),
-                    color_discrete_map={"Win": "#22c55e", "Loss": "#ef4444"},
-                    title="📅 Daily P&L",
-                ).update_layout(
-                    template="plotly_dark",
-                    height=350,
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    yaxis_title="P&L ($)",
-                ),
-                use_container_width=True,
-            )
-
-            # Daily trade count
-            st.plotly_chart(
-                px.bar(
-                    daily_df,
-                    x="trade_date",
-                    y="total_trades",
-                    title="📊 Daily Trade Count",
-                ).update_layout(
-                    template="plotly_dark",
-                    height=250,
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    yaxis_title="Trades",
-                ),
-                use_container_width=True,
-            )
-
-        # Risk limits
-        st.markdown("### 🛡️ Risk Limits Status")
-
-        risk_limits = {
-            "Max Daily Loss": {"value": "3%", "status": "OK", "threshold": "5%"},
-            "Max Trades/Day": {"value": "5", "status": "OK", "threshold": "10"},
-            "Max Consecutive Losses": {"value": "3", "status": "OK", "threshold": "3"},
-            "Min RR Ratio": {"value": "2.0", "status": "OK", "threshold": "1.5"},
-            "Max Spread": {"value": "5.0 pips", "status": "OK", "threshold": "8.0"},
-        }
-
-        risk_df = pd.DataFrame(risk_limits).T
-        st.dataframe(risk_df, use_container_width=True)
-
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 

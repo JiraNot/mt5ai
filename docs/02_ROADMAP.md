@@ -10,20 +10,15 @@
 - [x] Database models
 - [x] Docker environment
 
-## Phase 01 — MT5 Gateway
+## Phase 01 — Binance Gateway
 
-**Status:** ⚠️ Mock Only
+**Status:** ✅ Binance gateway implemented
 
-- [x] MT5 connection (mock)
-- [ ] Real MT5 connection
-- [ ] Account info
-- [ ] Symbol info
-- [ ] Candle reading
-- [ ] Tick reading
-- [ ] Order send
-- [ ] Order modify
-- [ ] Order close
-- [ ] Position reading
+- [x] Binance USDT-M public market data
+- [x] Exchange information and symbol metadata
+- [x] Paper execution path
+- [x] Explicitly configured Testnet order path with protective stops
+- [ ] Production DEMO acceptance and operational validation
 
 ## Phase 02 — Market Data
 
@@ -185,11 +180,11 @@
 - [ ] Advanced ML
 - [ ] Ensemble engine
 
-## Phase 15 — Multi-Venue Binance (new)
+## Phase 15 — Binance Execution Hardening
 
 **Status:** 🟡 Market-data, paper, and testnet execution foundation implemented (2026-09-15)
 
-- [x] Venue gateway contract
+- [x] Binance gateway contract
 - [x] Binance USDT-M public REST: ping, klines, book ticker, exchange info
 - [x] Binance config with paper/testnet/live modes (LIVE remains disabled)
 - [x] Mock transport tests

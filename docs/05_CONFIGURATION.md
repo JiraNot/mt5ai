@@ -143,7 +143,7 @@ position_management:
 
 kill_switch:
   enabled: true
-  mt5_disconnect_threshold: 3
+  exchange_disconnect_threshold: 3
   stale_data_seconds: 300
   abnormal_spread_multiplier: 3.0
   daily_dd_action: PAUSE_NEW_ENTRIES
@@ -182,20 +182,8 @@ dashboard:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/mt5trader
+DATABASE_URL=postgresql://user:pass@localhost:5432/trading
 DATABASE_URL_DEV=sqlite:///./dev.db
-
-# MT5
-MT5_LOGIN=your_login
-MT5_PASSWORD=your_password
-MT5_SERVER=your_server
-MT5_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
-
-# MT5 connection mode: local (package on this machine / Wine) or bridge (remote Windows host)
-MT5_MODE=local
-BRIDGE_URL=http://100.x.y.z:8900
-BRIDGE_TOKEN=your-shared-secret
-BRIDGE_TIMEOUT=10
 
 # Binance USDT-M Futures
 BINANCE_MODE=paper              # paper / testnet / live (live disabled by design)
@@ -205,9 +193,6 @@ BINANCE_API_SECRET=
 BINANCE_TIMEOUT=10
 BINANCE_SYMBOL=BTCUSDT
 BINANCE_USE_WEBSOCKET=false
-MARKET_DATA_VENUES=mt5,binance    # run both venues concurrently; use one value for a single venue
-# Legacy single-venue setting (used only when MARKET_DATA_VENUES is unset)
-MARKET_DATA_VENUE=mt5
 PAPER_INITIAL_BALANCE=100000
 
 # Runtime execution mode
@@ -235,11 +220,12 @@ OpenRouter model selector still persists its non-secret selection at
 `OPENROUTER_MODEL_CONFIG_PATH`. Existing provider ENV variables are read only
 as a temporary fallback during migration; new deployments must not set them.
 
-For interactive OAuth, use **Dashboard > Controls & Safety > CLI Login Console**.
-It supports the installed `codex`, `agy`, and `cline auth` flows (choose
-ClinePass in Cline's auth UI). The session is restricted to login commands,
-expires after ten minutes, and stores CLI home/config under `/app/data/cli-home`
-so a redeploy does not discard an authenticated session.
+For interactive OAuth, use **Dashboard > Controls & Safety > CLI Login
+Terminal**. It is a real browser terminal (raw keystrokes, TUI menus and paste)
+for the installed `codex`, `agy`, and `cline auth` flows; choose ClinePass in
+Cline's auth UI. It still starts only those login commands, expires after ten
+minutes, and stores CLI home/config under `/app/data/cli-home` so a redeploy
+does not discard an authenticated session.
 
 ```bash
 # Alerts

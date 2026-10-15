@@ -237,6 +237,82 @@ class BinanceGateway:
         bid, ask = float(row["bidPrice"]), float(row["askPrice"])
         return Tick(timestamp=datetime.now(timezone.utc), bid=bid, ask=ask, last=(bid + ask) / 2)
 
+    async def get_funding_rate(self, symbol: str) -> float:
+        """Fetch current funding rate from Binance premiumIndex endpoint."""
+        client = self._ensure_connected()
+        response = await client.get("/fapi/v1/premiumIndex", params={"symbol": symbol.upper()})
+        response.raise_for_status()
+        row = response.json()
+        return float(row.get("lastFundingRate", 0.0))
+
+    async def get_24hr_tickers(self) -> list[dict[str, Any]]:
+        """Fetch 24hr ticker price change statistics for all futures symbols."""
+        client = self._ensure_connected()
+        response = await client.get("/fapi/v1/ticker/24hr")
+        response.raise_for_status()
+        return response.json()
+
+    async def set_leverage(self, symbol: str, leverage: int = 5) -> dict[str, Any]:
+        """Set symbol leverage on Binance Futures (signed request)."""
+        if self._runtime_is_paper():
+            return {"symbol": symbol.upper(), "leverage": leverage, "mode": "paper"}
+        return await self._signed_request("POST", "/fapi/v1/leverage", {
+            "symbol": symbol.upper(),
+            "leverage": max(1, min(leverage, 125)),
+        })
+
+    async def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> dict[str, Any]:
+        """Set symbol margin type (ISOLATED or CROSSED) on Binance Futures."""
+        if self._runtime_is_paper():
+            return {"symbol": symbol.upper(), "marginType": margin_type.upper(), "mode": "paper"}
+        try:
+            return await self._signed_request("POST", "/fapi/v1/marginType", {
+                "symbol": symbol.upper(),
+                "marginType": margin_type.upper(),
+            })
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 400:
+                try:
+                    if int(exc.response.json().get("code", 0)) == -4046:
+                        return {"code": 200, "msg": "already set", "symbol": symbol.upper()}
+                except (TypeError, ValueError):
+                    pass
+            raise
+
+    @staticmethod
+    def calculate_estimated_liquidation_price(
+        entry_price: float,
+        leverage: int,
+        direction: Direction,
+        maintenance_margin_rate: float = 0.005,
+    ) -> float:
+        """Estimate liquidation price for isolated position."""
+        if leverage <= 0 or entry_price <= 0:
+            return 0.0
+        if direction == Direction.BUY:
+            return entry_price * (1.0 - (1.0 / leverage) + maintenance_margin_rate)
+        else:
+            return entry_price * (1.0 + (1.0 / leverage) - maintenance_margin_rate)
+
+    @staticmethod
+    def is_stop_loss_safe_from_liquidation(
+        entry_price: float,
+        stop_loss: float,
+        leverage: int,
+        direction: Direction,
+        buffer_ratio: float = 0.7,
+    ) -> bool:
+        """Verify that stop loss triggers well before liquidation price is reached."""
+        liq_price = BinanceGateway.calculate_estimated_liquidation_price(entry_price, leverage, direction)
+        if direction == Direction.BUY:
+            sl_distance = entry_price - stop_loss
+            liq_distance = entry_price - liq_price
+            return stop_loss > liq_price and sl_distance <= (liq_distance * buffer_ratio)
+        else:
+            sl_distance = stop_loss - entry_price
+            liq_distance = liq_price - entry_price
+            return stop_loss < liq_price and sl_distance <= (liq_distance * buffer_ratio)
+
     async def get_symbol_info(self, symbol: str) -> dict[str, Any]:
         client = self._ensure_connected()
         response = await client.get("/fapi/v1/exchangeInfo")
@@ -323,7 +399,7 @@ class BinanceGateway:
     async def modify_position(self, ticket: int, sl: float | None = None, tp: float | None = None) -> OrderResult:
         return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
 
-    async def close_position(self, ticket: int) -> OrderResult:
+    async def close_position(self, ticket: int, volume: float | None = None) -> OrderResult:
         return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:

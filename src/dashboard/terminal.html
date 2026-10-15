@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Freebuff CLI Login Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; background: #020617; color: #e2e8f0; font-family: system-ui, sans-serif; }
+    header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #0f172a; border-bottom: 1px solid #334155; }
+    select, button { border: 1px solid #475569; border-radius: 6px; background: #1e293b; color: #f8fafc; padding: 8px 10px; font: inherit; }
+    button { cursor: pointer; } button.primary { background: #2563eb; border-color: #2563eb; } #status { margin-left: auto; color: #94a3b8; font-size: .9rem; }
+    #terminal { height: calc(100vh - 72px); padding: 12px; } .xterm { height: 100%; }
+  </style>
+</head>
+<body>
+  <header>
+    <select id="agent"><option value="codex">Codex / ChatGPT</option><option value="agy">Antigravity / Gemini</option><option value="clinepass">ClinePass</option></select>
+    <button class="primary" id="start">เริ่ม login</button><button id="stop">หยุด</button>
+    <span id="status">กำลังเชื่อมต่อ…</span>
+  </header>
+  <main id="terminal" aria-label="Interactive CLI terminal"></main>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+  <script>
+    const status = document.getElementById('status');
+    const terminal = new Terminal({ cursorBlink: true, convertEol: true, fontSize: 15, theme: { background: '#020617', foreground: '#e2e8f0' } });
+    terminal.open(document.getElementById('terminal')); terminal.focus();
+    const auth = new URLSearchParams(location.search).get('auth') || '';
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${scheme}://${location.host}/terminal/ws?auth=${encodeURIComponent(auth)}`);
+    const dimensions = () => ({ cols: Math.max(20, Math.floor(document.getElementById('terminal').clientWidth / 9)), rows: Math.max(5, Math.floor(document.getElementById('terminal').clientHeight / 18)) });
+    const send = (message) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); };
+    terminal.onData(data => send({ type: 'input', data }));
+    document.getElementById('start').onclick = () => { terminal.clear(); terminal.focus(); send({ type: 'start', agent: document.getElementById('agent').value, ...dimensions() }); };
+    document.getElementById('stop').onclick = () => send({ type: 'stop' });
+    new ResizeObserver(() => send({ type: 'resize', ...dimensions() })).observe(document.getElementById('terminal'));
+    socket.onopen = () => { status.textContent = 'พร้อม — เลือก CLI แล้วกดเริ่ม login'; };
+    socket.onmessage = event => { const message = JSON.parse(event.data); if (message.type === 'output') terminal.write(message.data); if (message.type === 'error') { terminal.writeln(`\r\n[Error] ${message.message}`); status.textContent = 'เกิดข้อผิดพลาด'; } if (message.type === 'exit') status.textContent = `สิ้นสุด (exit ${message.code})`; };
+    socket.onclose = () => { status.textContent = 'การเชื่อมต่อ terminal ถูกปิด'; };
+  </script>
+</body>
+</html>

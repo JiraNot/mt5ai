@@ -19,8 +19,7 @@ DISABLED
 ## Implemented
 
 - [x] Core types, config, events, logging (Phase 00)
-- [x] MT5 connection (mock mode) (Phase 01)
-- [x] MT5 Bridge mode — remote MT5 via standalone mt5-bridge server, E2E-proven under Wine (2026-09-09)
+- [x] Binance USDT-M gateway for market data and supported execution modes
 - [x] Market Data Engine (Phase 02)
 - [x] Swing Detection (Phase 03)
 - [x] BOS/CHoCH Detection (Phase 03)
@@ -48,10 +47,9 @@ DISABLED
 - [x] OpenRouter DeepSeek Bull Analyst integration (uses Risk Engine final gate)
 - [x] OpenRouter model catalog selector in dashboard (Current / Free / Paid)
 - [x] Dashboard-managed encrypted AI provider login/API settings (Codex, Gemini, OpenRouter)
-- [x] Restricted dashboard CLI login console (Codex, agy, ClinePass)
+- [x] Real PTY dashboard CLI login terminal (Codex, agy, ClinePass)
 - [x] Binance USDT-M public market-data gateway (read-only, fail-closed execution)
-- [x] Binance selectable market venue in the main data feed
-- [x] Concurrent MT5 + Binance venue pipelines with independent gateways and caches
+- [x] Binance market data feed and cache
 - [x] Persistent dashboard runtime mode setting (PAPER/DEMO without ENV redeploy)
 - [x] Candidate triage and local digest (observe/batch/immediate AI review)
 - [x] Local stdio MCP for runtime settings and candidate summaries
@@ -60,15 +58,28 @@ DISABLED
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
-- [x] 282 Tests passing
+- [x] Bitcoin Macro Regime Analyzer (H4/D1 SMC trend + funding rate crowd detection)
+- [x] Crypto Screener & Homework engine for 24h Binance USDT-M Futures watchlists
+- [x] Post-trade retrospective and contextual lesson generation in TradeLearner
+- [x] Promotion Gate statistical readiness auditor for safe Demo -> Live transition
+- [x] Macro News Filter with high-impact economic blackout windows (TradeFilter)
+- [x] Safe Leverage (5-10x) and Isolated Margin enforcement with liquidation distance safety
+- [x] Multi-Symbol Watchlist execution loop in TradingPlatform with portfolio-wide concurrency limits
+- [x] Telegram Morning Briefing and Evening Reflection alerts
+- [x] Streamlit Dashboard "Agent Homework & Readiness" tab with 0-100% Readiness Gauge
+- [x] Streamlit Dashboard Live Charts: TradingView Pro real-time widget + Plotly AI Candlestick with SL/TP overlays
+- [x] Automated Background Scheduler (08:00 UTC+7 Morning Brief, 20:00 UTC+7 Daily Reflection, 4H BTC Macro refresh)
+- [x] Smart Position Management (Break-Even auto-lock at >= 1.0R, Partial Take-Profit 50% volume at >= 1.5R, Telegram alerts)
+- [x] Two-Way Interactive Telegram Bot (/status, /homework, /panic emergency shutdown, /readiness, /help)
+- [x] Multimodal AI Vision Confirmation (TradingView-style dark candlestick renderer + Rejection/Displacement/Trap analysis)
+- [x] Walk-Forward Backtesting Suite (Rolling in-sample/out-of-sample windows, Walk-Forward Efficiency WFE calculation)
+- [x] 311 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
 
 ## In Progress
 
-- [ ] Real MT5 connection in production (bridge code done — needs the Windows host machine set up)
-- [ ] Walk-forward backtesting (Phase 07)
 - [ ] Paper trading full loop (Phase 09)
 
 ## Pending
@@ -88,27 +99,14 @@ DISABLED
 
 ## Known Issues
 
-- Native `MetaTrader5` package unavailable on Linux — solved by bridge mode (proven E2E via Wine); awaiting Windows host for production
 - Production dashboard previously showed `Loop: starting · cycles: 0` when the background worker exited; Docker supervision, explicit bridge-token wiring, root startup permissions for Coolify persistent volumes, and defensive normalization of legacy SQLite URLs are fixed and verified in production on 2026-09-15. The AI Council now permits only high-confidence disagreements to proceed to the Risk Engine; Risk Engine remains final authority.
 - Coolify Compose manifests are now kept in sync, including OpenRouter runtime settings and an explicit Streamlit health check, so `trade.onetapweb.com` can be routed only after the dashboard is ready (2026-09-22).
 - OpenRouter DeepSeek is available as the Bull analyst when `OPENROUTER_API_KEY` is configured; without it, the existing Gemini path remains available.
-- Binance integration supports `MARKET_DATA_VENUES=mt5,binance`; each venue runs an independent pipeline. Paper mode is the default safe path. Testnet signing is restricted to `BINANCE_MODE=testnet` with explicit credentials, while LIVE remains disabled by default.
-- Execution mode can be changed from the dashboard and is persisted under `/app/data`; LIVE remains locked behind explicit arming and venue-specific safeguards.
+- Binance is the only supported exchange. Paper mode is the safe default; Testnet signing requires `BINANCE_MODE=testnet` and explicit credentials. LIVE remains disabled by default.
+- Execution mode can be changed from the dashboard and is persisted under `/app/data`; LIVE remains locked behind explicit arming and Binance safeguards.
 - Candidate triage records all strategy outputs above the observation floor, sends only immediate candidates to the AI Council, and exposes its policy/status through the local MCP server.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
-- Wine-based MT5 is dev/fallback only — not recommended for live money flow
-- The optional `docker/mt5` Wine image uses the project HTTP bridge on port
-  8900; the base image's legacy `mt5linux` RPyC startup on port 8001 is
-  disabled because its rolling package can fail to parse on Python 3.11
-- The MT5 node custom init runs Wine as LinuxServer's `abc` user so it can use
-  the persisted `/config/.wine` prefix without Wine ownership errors.
-- The MT5 node pins Wine NumPy below 2 because the bundled MetaTrader5 Windows
-  extension is compiled against the NumPy 1.x ABI.
-- The MT5 node passes account/path settings into the HTTP bridge and retries
-  initialization after startup so a manual terminal login can recover without
-  restarting the bridge; production still requires an MT5 account/server
-  configuration.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
 - CHoCH+OB strategy has low win rate (16.7%)

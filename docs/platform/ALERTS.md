@@ -28,8 +28,8 @@ Alert System แจ้งเตือนเมื่อเกิดเหตุ�
 ### System Alerts
 
 ```
-- MT5 Disconnected
-- MT5 Reconnected
+- Binance API Disconnected
+- Binance API Reconnected
 - Database Error
 - Data Stale
 - Worker Error

@@ -25,7 +25,7 @@ class OrderIntent(BaseModel):
 ก่อน order ทุกครั้ง:
 
 ```
-[ ] MT5 connected
+[ ] Binance gateway connected
 [ ] Account matches config
 [ ] Trading allowed
 [ ] Symbol tradable

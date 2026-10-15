@@ -16,16 +16,15 @@ Acceptance Tests ตรวจสอบว่าระบบทำงานตา
 - [ ] Database migration works
 ```
 
-## Phase 1: MT5 Gateway
+## Phase 1: Binance Gateway
 
 ```
-- [ ] Connect demo MT5
-- [ ] Read XAUUSD data
-- [ ] Open controlled demo trade
-- [ ] SL works
-- [ ] TP works
-- [ ] Close trade
-- [ ] Journal execution
+- [ ] Public Binance USDT-M market data loads through a mocked transport
+- [ ] Paper execution creates an auditable order without exchange credentials
+- [ ] Testnet execution requires explicit configuration and valid risk approval
+- [ ] Non-paper order includes a protective server-side stop
+- [ ] Duplicate order retry is rejected or reconciled safely
+- [ ] Execution outcome is recorded in the journal
 ```
 
 ## Phase 2: Market Data

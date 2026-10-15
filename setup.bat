@@ -52,7 +52,7 @@ echo ⚙️  Setting up configuration...
 if not exist ".env" (
     copy .env.example .env >nul
     echo ✅ .env created from .env.example
-    echo 📝 Edit .env with your MT5 credentials
+    echo 📝 Configure Binance API credentials only for Testnet; Paper mode needs none
 ) else (
     echo ⚠️  .env already exists
 )

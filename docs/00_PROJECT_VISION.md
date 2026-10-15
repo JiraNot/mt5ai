@@ -2,14 +2,14 @@
 
 ## Mission
 
-สร้างระบบ Automated Trading Platform สำหรับ MetaTrader 5 ที่สามารถ:
+สร้างระบบ Automated Trading Platform สำหรับ Binance USDT-M Futures ที่สามารถ:
 
 - อ่านตลาด (Market Data)
 - วิเคราะห์ Market Structure (Swing, BOS, CHoCH, FVG, OB, Liquidity)
 - ตรวจจับ Trading Setup จากหลายกลยุทธ์
 - ใช้ AI ช่วยประเมินคุณภาพของ Setup
 - ควบคุม Risk อย่างเข้มงวด
-- Execute ผ่าน MT5
+- Execute ผ่าน Binance Gateway หลัง Risk Engine อนุมัติ
 - เก็บผล Trade ทุกรายการ
 - Backtest และวิเคราะห์ Strategy
 - เรียนรู้จากข้อมูลจริง (ML)
@@ -37,7 +37,7 @@ Risk Engine มี Authority สูงสุด ไม่มีใคร overrid
 | Backtest | ✅ Working |
 | Replay | ❌ Planned |
 | Paper Trading | ✅ Working |
-| Demo Trading | ⚠️ Needs MT5 |
+| Testnet Trading | ⚠️ Needs acceptance validation |
 | Live Trading | ❌ Locked |
 | AI Scoring | ⚠️ Rule-based only |
 | ML Model | ⚠️ Feature engine ready |
@@ -90,7 +90,7 @@ timeframes:
 ### Milestone B — Safe Automation
 - [ ] Rule Strategy working
 - [ ] Risk Engine validated
-- [ ] MT5 Demo trading functional
+- [ ] Binance Testnet trading validated
 - [ ] Trade Journal complete
 
 ### Milestone C — Intelligence Layer

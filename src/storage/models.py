@@ -67,7 +67,7 @@ class SetupLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(20), nullable=False, index=True)
-    venue = Column(String(20), nullable=False, default="mt5", index=True)
+    venue = Column(String(20), nullable=False, default="binance", index=True)
     timeframe = Column(String(5), nullable=False)
     strategy_id = Column(String(50), nullable=False, index=True)
     direction = Column(String(5), nullable=False)
@@ -107,7 +107,7 @@ class Trade(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     setup_id = Column(Integer, ForeignKey("setup_log.id"))
     symbol = Column(String(20), nullable=False, index=True)
-    venue = Column(String(20), nullable=False, default="mt5", index=True)
+    venue = Column(String(20), nullable=False, default="binance", index=True)
     direction = Column(String(5), nullable=False)
     volume = Column(Numeric(8, 4), nullable=False)
     entry_price = Column(Numeric(12, 5), nullable=False)

@@ -33,7 +33,7 @@
 - [ ] Streamlit prototype
 - [x] Refresh live indicators without rerunning the whole dashboard
 - [x] Dashboard-managed AI provider login/API settings
-- [x] Restricted CLI login console for Codex, agy, and ClinePass
+- [x] Real PTY browser login terminal for Codex, agy, and ClinePass
 - [ ] Next.js production (planned)
 
 **Acceptance:**
@@ -87,7 +87,7 @@
 
 ### TASK 0808: System Health
 
-- [ ] MT5 status
+- [ ] Binance gateway status
 - [ ] Database health
 - [ ] Worker status
 

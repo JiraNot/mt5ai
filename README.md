@@ -1,6 +1,6 @@
-# 🏦 Freebuff Trading Platform
+# Binance AI Trading Platform
 
-AI-powered Trading Decision Platform for MetaTrader 5.
+AI-assisted trading platform for Binance USDT-M Futures. Paper trading is the default; LIVE execution is disabled by default.
 
 **[English](#english) | [ภาษาไทย](#ภาษาไทย)**
 
@@ -55,31 +55,17 @@ make help         # See all commands
 | **Risk Engine** | Circuit breaker, filters, position sizing |
 | **AI Scoring** | Rule-based context analysis |
 | **Dashboard** | Interactive Streamlit UI |
-| **MT5 Bridge Mode** | Real MT5 on a separate Windows machine, over HTTP |
-| **181 Tests** | Unit + integration tests |
+| **Binance Futures** | Binance USDT-M market data, paper execution, and explicitly configured Testnet execution |
 | **Demo Data** | Pre-seeded 100 trades |
 
-### 🔌 MT5 Connection Modes
+### 🔌 Binance Connection
 
-Set `MT5_MODE` in `.env`:
-
-| Mode | Behavior |
-|------|----------|
-| `local` (default) | `MetaTrader5` package directly — Windows (or Wine). Without it, MT5 features are mocked (safe paper mode). |
-| `bridge` | Connects to a standalone [mt5-bridge](https://github.com/JiraNot/mt5-bridge) server on the Windows machine hosting the real MT5 terminal — real data and order execution from a Linux server. |
-
-```ini
-MT5_MODE=bridge
-BRIDGE_URL=http://100.x.y.z:8900   # Tailscale/WireGuard IP recommended
-BRIDGE_TOKEN=your-shared-secret
-```
-
-Full setup guide: [docs/bridge_deployment.md](docs/bridge_deployment.md).
+Binance USDT-M Futures is the only supported exchange. `BINANCE_MODE=paper` is the safe default; testnet execution requires explicit configuration. Live trading stays disabled by default.
 
 ### 🏗️ Architecture
 
 ```
-MT5 Data → Market Structure → Strategy Plugins → AI Scorer → Risk Engine → MT5 Execution
+Binance Market Data → Market Structure → Strategy Plugins → AI Scorer → Risk Engine → Binance Execution
 ```
 
 ### 📁 Project Structure
@@ -87,7 +73,7 @@ MT5 Data → Market Structure → Strategy Plugins → AI Scorer → Risk Engine
 ```
 src/
 ├── core/           # Types, config, events, logging
-├── market/         # MT5 connection, data feed
+├── market/         # Binance gateway, data feed
 ├── structure/      # Market structure (BOS, CHoCH, FVG, OB)
 ├── strategies/     # 3 strategy plugins
 ├── ai/             # AI scoring layer
@@ -185,14 +171,12 @@ make help         # ดูคำสั่งทั้งหมด
 | **Risk Engine** | Circuit breaker, filters, คำนวณขนาด position |
 | **AI Scoring** | วิเคราะห์บริบทแบบ rule-based |
 | **Dashboard** | Streamlit UI แบบ interactive |
-| **MT5 Bridge Mode** | ต่อ MT5 จริงบนเครื่อง Windows แยก ผ่าน HTTP |
-| **181 Tests** | Unit + integration tests |
 | **ข้อมูล Demo** | มีข้อมูลเทรด 100 รายการให้ลอง |
 
 ### 🏗️ สถาปัตยกรรม
 
 ```
-ข้อมูล MT5 → โครงสร้างตลาด → Strategy Plugins → AI Scorer → Risk Engine → MT5 Execution
+ข้อมูล Binance USDT-M → โครงสร้างตลาด → Strategy Plugins → AI Scorer → Risk Engine → Binance Execution
 ```
 
 ### 📁 โครงสร้างโปรเจกต์
@@ -200,7 +184,7 @@ make help         # ดูคำสั่งทั้งหมด
 ```
 src/
 ├── core/           # Types, config, events, logging
-├── market/         # เชื่อมต่อ MT5 (local/bridge), ดึงข้อมูล
+├── market/         # Binance gateway และดึงข้อมูลตลาด
 ├── structure/      # โครงสร้างตลาด (BOS, CHoCH, FVG, OB)
 ├── strategies/     # 3 strategy plugins
 ├── ai/             # ชั้น AI scoring
@@ -250,11 +234,9 @@ make dashboard      # เริ่ม Streamlit
 
 การเทรดด้วยเงินจริงต้องมีการตั้งค่าโดยเฉพาะ
 
-### 🔌 โหมดการเชื่อมต่อ MT5
+### 🔌 การเชื่อมต่อ Binance
 
-ตั้ง `MT5_MODE` ใน `.env`: `local` (MT5 บนเครื่องนี้/Wine, ไม่มีจริง = mock) หรือ `bridge`
-(ต่อ MT5 จริงบน Windows ผ่านโปรเจกต์แยก [mt5-bridge](https://github.com/JiraNot/mt5-bridge)) —
-ดูคู่มือที่ [docs/bridge_deployment.md](docs/bridge_deployment.md)
+ระบบรองรับ Binance USDT-M Futures เท่านั้น โดยค่าเริ่มต้นใช้ `BINANCE_MODE=paper`; การส่งคำสั่งไป testnet ต้องตั้งค่าแยก และ LIVE ถูกปิดไว้โดยค่าเริ่มต้น
 
 ---
 

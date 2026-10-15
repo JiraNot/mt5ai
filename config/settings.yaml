@@ -1,17 +1,22 @@
 app:
   name: "Freebuff Trading Platform"
   version: "0.1.0"
-  mode: "paper"  # paper / live
+  mode: "paper"  # paper / testnet / live
 
-mt5:
-  timeout: 10000
-  magic: 20240101
-  deviation: 10
+binance:
+  mode: "paper"
+  symbol: "BTCUSDT"
+  base_url: "https://testnet.binancefuture.com"
+  timeout: 10.0
 
 symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - SOLUSDT
+  - BNBUSDT
   - XAUUSD
 
-primary_symbol: XAUUSD
+primary_symbol: BTCUSDT
 
 data:
   timeframes:

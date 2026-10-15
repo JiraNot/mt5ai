@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-- MT5 data acquisition (candles, ticks, spread)
+- Binance USDT-M market-data acquisition (klines, book ticker, exchange info)
 - Historical data loading
 - Multi-timeframe candle cache
 - New candle detection

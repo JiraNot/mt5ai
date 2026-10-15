@@ -2,15 +2,14 @@
 
 ## Overview
 
-ระบบ部署 2 ส่วน: Trading Node (Windows) และ Server (Linux)
+ระบบประกอบด้วย Binance-connected Trading Worker และ Dashboard/บริการสนับสนุน
 
-## Trading Node (Windows)
+## Trading Worker
 
 ```
-Windows Trading Node
-├── MetaTrader 5 Terminal
+Trading Worker
 ├── Python Trading Worker
-└── MT5 Gateway
+└── Binance Gateway
 ```
 
 ## Server (Linux)

@@ -168,7 +168,7 @@ MarketContext
 └── spread
 ```
 
-**Rule:** Strategy must never query MT5 directly. Strategy must use MarketContext.
+**Rule:** Strategy must never query an exchange directly. Strategy must use MarketContext.
 
 ## Lifecycle States
 

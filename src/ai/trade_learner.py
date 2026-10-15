@@ -75,9 +75,26 @@ class TradeLearner:
                 label = "WIN" if profit > 0 else "LOSS" if profit < 0 else "BREAKEVEN"
                 risk = float(evidence.initial_risk or 0)
                 r_multiple = profit / risk if risk > 0 else None
-                # Facts only: a winner does not prove confluence; a loss does not prove a trap.
-                lesson = (f"ผลปิดยืนยันจาก broker: {label}, กำไรสุทธิ {profit:.2f}; "
-                          "ผลรายไม้ยังไม่ยืนยันสาเหตุหรือความได้เปรียบของกลยุทธ์")
+                lesson_parts = [f"ผลปิดยืนยันจาก broker: {label}, กำไรสุทธิ {profit:.2f}"]
+                if r_multiple is not None:
+                    lesson_parts.append(f"R-Multiple: {r_multiple:+.2f}")
+                context_info = snapshot.get("market_context") or {}
+                htf_trend = context_info.get("htf_trend") or snapshot.get("h4_bias")
+                if htf_trend:
+                    aligned = (
+                        (str(htf_trend).upper() in ("UPTREND", "STRONG_UPTREND", "BULLISH") and snapshot.get("direction") == "BUY") or
+                        (str(htf_trend).upper() in ("DOWNTREND", "STRONG_DOWNTREND", "BEARISH") and snapshot.get("direction") == "SELL")
+                    )
+                    lesson_parts.append(f"โครงสร้าง HTF: {htf_trend} ({'ตามเทรนด์' if aligned else 'สวนเทรนด์'})")
+                lesson = " | ".join(lesson_parts)
+
+                if label == "LOSS":
+                    rule_rec = "ตรวจสอบการยืนยัน CHoCH/BOS และหลีกเลี่ยงการเปิดออเดอร์สวนเทรนด์หลักของ BTC"
+                elif label == "WIN":
+                    rule_rec = "รักษาความได้เปรียบ: รักษาวินัยตาม SMC และบริหาร R:R ให้ได้อย่างน้อย 1:2"
+                else:
+                    rule_rec = "ตรวจสอบหลายตัวอย่างและ walk-forward ก่อนปรับกลยุทธ์"
+
                 pip_size = snapshot.get("pip_size")
                 movement = outcome.close_price - (snapshot.get("fill_price") or snapshot["entry_price"])
                 if snapshot["direction"] == "SELL":
@@ -89,7 +106,7 @@ class TradeLearner:
                     pips=movement / pip_size if pip_size and pip_size > 0 else None,
                     rr_achieved=r_multiple, root_cause="UNDETERMINED",
                     lesson_learned_th=lesson,
-                    rule_recommendation="ตรวจสอบหลายตัวอย่างและ walk-forward ก่อนปรับกลยุทธ์",
+                    rule_recommendation=rule_rec,
                     setup_snapshot=json.dumps({"version": self.VERSION, "entry": snapshot,
                                                "outcome": outcome.model_dump(mode="json")}),
                 )

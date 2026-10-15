@@ -68,7 +68,7 @@ echo "⚙️  Setting up configuration..."
 if [ ! -f ".env" ]; then
     cp .env.example .env
     echo -e "${GREEN}✅ .env created from .env.example${NC}"
-    echo -e "${YELLOW}📝 Edit .env with your MT5 credentials${NC}"
+    echo -e "${YELLOW}📝 Configure Binance API credentials only when using Testnet; Paper mode needs none${NC}"
 else
     echo -e "${YELLOW}⚠️  .env already exists${NC}"
 fi

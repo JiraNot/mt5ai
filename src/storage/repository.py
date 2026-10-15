@@ -59,7 +59,7 @@ class Repository:
         """
         setup = SetupLog(
             symbol=candidate.symbol,
-            venue=str(candidate.metadata.get("venue", "mt5")),
+            venue=str(candidate.metadata.get("venue", "binance")),
             timeframe=candidate.timeframe,
             strategy_id=candidate.strategy_id,
             direction=candidate.direction.value,

@@ -1,144 +1,69 @@
-"""
-CLI entry point for the auto-trading system.
+"""Compatibility CLI that delegates trading commands to the Binance runtime."""
 
-Usage:
-    # Start auto-trader in paper mode
-    python -m src.live.cli start --mode PAPER
-
-    # Run single scan
-    python -m src.live.cli scan
-
-    # Check status
-    python -m src.live.cli status
-
-    # Train ML model
-    python -m src.live.cli train
-
-    # Backtest
-    python -m src.live.cli backtest --period 6mo
-"""
+from __future__ import annotations
 
 import argparse
-import logging
 import sys
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+
+def _run_platform(*arguments: str) -> None:
+    """Run the current platform entrypoint with the requested runtime flags."""
+    from src.app import main as platform_main
+
+    original_argv = sys.argv
+    try:
+        sys.argv = ["freebuff-trade", *arguments]
+        platform_main()
+    finally:
+        sys.argv = original_argv
 
 
-def cmd_start(args):
-    """Start auto-trading loop."""
-    from src.live.auto_trader import AutoTrader
-
-    trader = AutoTrader(
-        mode=args.mode,
-        symbol=args.symbol,
-        scan_interval=args.interval,
-    )
-    trader.start()
-
-
-def cmd_scan(args):
-    """Run single market scan."""
-    from src.live.auto_trader import AutoTrader
-
-    trader = AutoTrader(mode=args.mode, symbol=args.symbol)
-    trader.run_once()
-
-
-def cmd_status(args):
-    """Show trading status."""
-    from src.live.auto_trader import AutoTrader
-
-    trader = AutoTrader(mode=args.mode, symbol=args.symbol)
-    trader.initialize()
-    status = trader.get_status()
-
-    print("\n" + "=" * 50)
-    print("AUTO TRADER STATUS")
-    print("=" * 50)
-    for key, value in status.items():
-        print(f"  {key:25s}: {value}")
-    print("=" * 50)
-
-    trader.stop()
-
-
-def cmd_train(args):
-    """Train ML model on trade history."""
+def _train(args: argparse.Namespace) -> None:
     from src.ai.ml_trainer import MLTrainer
 
     trainer = MLTrainer()
-
     if args.csv:
-        X, y = trainer.load_from_csv(args.csv)
+        features, labels = trainer.load_from_csv(args.csv)
     else:
-        X, y = trainer.load_dataset(args.db)
-
-    if len(X) == 0:
+        features, labels = trainer.load_dataset(args.db)
+    if len(features) == 0:
         print("No training data found. Run paper trading first to collect data.")
         return
-
-    results = trainer.train(X, y)
+    if trainer.train(features, labels):
+        trainer.save_model()
+        print("\nModel saved to models/model.pkl")
     print(trainer.generate_report())
 
-    if results:
-        trainer.save_model()
-        print(f"\nModel saved to models/model.pkl")
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Binance AI Trading Platform")
+    commands = parser.add_subparsers(dest="command")
 
-def cmd_backtest(args):
-    """Run backtest."""
-    from scripts.backtest_real import run_backtest
-    run_backtest(args.period, args.strategies)
+    start = commands.add_parser("start", help="Start the Binance trading runtime")
+    start.add_argument("--cycles", type=int, default=None)
+    commands.add_parser("scan", help="Run one evaluation cycle")
+    commands.add_parser("status", help="Show Binance platform status")
 
+    train = commands.add_parser("train", help="Train the ML model")
+    train.add_argument("--db", default="trading.db", help="Dataset path")
+    train.add_argument("--csv", help="CSV dataset path")
 
-def main():
-    parser = argparse.ArgumentParser(description="MT5 AI Auto Trader")
-    subparsers = parser.add_subparsers(dest="command", help="Command to run")
-
-    # Start command
-    start_parser = subparsers.add_parser("start", help="Start auto-trading loop")
-    start_parser.add_argument("--mode", default="PAPER", choices=["PAPER", "DEMO", "LIVE"])
-    start_parser.add_argument("--symbol", default="XAUUSD")
-    start_parser.add_argument("--interval", type=int, default=60, help="Scan interval in seconds")
-
-    # Scan command
-    scan_parser = subparsers.add_parser("scan", help="Run single market scan")
-    scan_parser.add_argument("--mode", default="PAPER", choices=["PAPER", "DEMO", "LIVE"])
-    scan_parser.add_argument("--symbol", default="XAUUSD")
-
-    # Status command
-    status_parser = subparsers.add_parser("status", help="Show trading status")
-    status_parser.add_argument("--mode", default="PAPER")
-    status_parser.add_argument("--symbol", default="XAUUSD")
-
-    # Train command
-    train_parser = subparsers.add_parser("train", help="Train ML model")
-    train_parser.add_argument("--db", default="trading.db", help="Database path")
-    train_parser.add_argument("--csv", help="CSV file path")
-
-    # Backtest command
-    bt_parser = subparsers.add_parser("backtest", help="Run backtest")
-    bt_parser.add_argument("--period", default="6mo", help="Data period (1mo, 3mo, 6mo, 1y, 2y)")
-    bt_parser.add_argument("--strategies", nargs="+", default=["fvg_final"])
+    backtest = commands.add_parser("backtest", help="Run the configured backtest")
+    backtest.add_argument("--period", default="6mo")
+    backtest.add_argument("--strategies", nargs="+", default=["fvg_final"])
 
     args = parser.parse_args()
-
     if args.command == "start":
-        cmd_start(args)
+        flags = ("--cycles", str(args.cycles)) if args.cycles is not None else ()
+        _run_platform(*flags)
     elif args.command == "scan":
-        cmd_scan(args)
+        _run_platform("--cycles", "1")
     elif args.command == "status":
-        cmd_status(args)
-    elif args.command == "train":
-        cmd_train(args)
+        _run_platform("--status")
     elif args.command == "backtest":
-        cmd_backtest(args)
+        _run_platform("--backtest")
+    elif args.command == "train":
+        _train(args)
     else:
         parser.print_help()
 

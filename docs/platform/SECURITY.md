@@ -4,17 +4,18 @@
 
 ระบบรักษาความปลอดภัยของข้อมูลและการเข้าถึง
 
-## MT5 Credentials
+## Binance API Credentials
 
 ```
-เก็บใน .env หรือ Secret Manager
+เก็บใน Secret Manager หรือ Dashboard settings ที่เข้ารหัส
 ห้ามลง Git
 
 .env.example:
-MT5_LOGIN=your_login
-MT5_PASSWORD=your_password
-MT5_SERVER=your_server
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
 ```
+
+ใช้สิทธิ์ API ขั้นต่ำที่จำเป็น และปิดการถอนเงินบน API key เสมอ
 
 ## API Authentication
 

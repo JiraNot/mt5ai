@@ -8,6 +8,8 @@ from src.core.types import StrategyCandidate, AIDecision
 from src.market.session_tracker import get_current_session, is_preferred_session
 from src.market.spread_monitor import SpreadMonitor
 
+from src.market.news_filter import NewsFilter
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,8 +19,13 @@ class TradeFilter:
     Each filter returns (passed: bool, reason: str).
     """
 
-    def __init__(self, spread_monitor: SpreadMonitor | None = None) -> None:
+    def __init__(
+        self,
+        spread_monitor: SpreadMonitor | None = None,
+        news_filter: NewsFilter | None = None,
+    ) -> None:
         self._spread_monitor = spread_monitor
+        self._news_filter = news_filter or NewsFilter()
 
     def check_rr(self, candidate: StrategyCandidate) -> tuple[bool, str | None]:
         """Minimum risk-reward ratio check."""
@@ -79,6 +86,13 @@ class TradeFilter:
             )
         return True, None
 
+    def check_news(self, dt: datetime | None = None) -> tuple[bool, str | None]:
+        """Check if trading is blocked by a high-impact economic news window."""
+        res = self._news_filter.check_news_window(dt)
+        if res.is_blocked:
+            return False, res.reason
+        return True, None
+
     def check_all(
         self,
         candidate: StrategyCandidate,
@@ -91,6 +105,7 @@ class TradeFilter:
             self.check_rr(candidate),
             self.check_session(session),
             self.check_spread(current_spread),
+            self.check_news(candidate.timestamp),
         ]
 
         if decision:

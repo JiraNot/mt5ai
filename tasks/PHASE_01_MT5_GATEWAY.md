@@ -1,5 +1,9 @@
 # PHASE 01 — MT5 Gateway
 
+> **Superseded:** This historical task is retained for project history. The
+> platform now supports Binance USDT-M Futures only; use the Binance Gateway
+> phase in `docs/02_ROADMAP.md` for current connectivity scope.
+
 ## Objective
 
 เชื่อมต่อ Python กับ MetaTrader 5 Terminal

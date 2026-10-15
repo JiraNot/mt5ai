@@ -10,14 +10,14 @@ from typing import Optional
 from src.core.config import settings
 from src.core.events import EventType, event_bus
 from src.core.types import Candle, Tick
-from src.market.venue_gateway import VenueGateway
+from src.market.binance_gateway import BinanceGateway
 
 logger = logging.getLogger(__name__)
 
 
 class DataFeed:
     """
-    Manages market data acquisition from MT5.
+    Manages market data acquisition from Binance.
 
     Responsibilities:
     - Fetch OHLCV across multiple timeframes
@@ -26,12 +26,8 @@ class DataFeed:
     - Track current price via ticks
     """
 
-    def __init__(self, mt5: VenueGateway, market_data_venue: str | None = None) -> None:
-        self._mt5 = mt5
-        self._market_data_venue = (
-            market_data_venue
-            or getattr(mt5, "venue", settings.market_data_venue)
-        ).lower()
+    def __init__(self, gateway: BinanceGateway) -> None:
+        self._gateway = gateway
         self._cache: dict[str, dict[str, list[Candle]]] = {}  # symbol -> tf -> candles
         self._running = False
         self._poll_interval = 5  # seconds between polls
@@ -44,13 +40,13 @@ class DataFeed:
         self._cache.setdefault(symbol, {})
 
         for tf in timeframes:
-            candles = await self._mt5.get_ohlcv(symbol, tf, count)
+            candles = await self._gateway.get_ohlcv(symbol, tf, count)
             self._cache[symbol][tf] = candles
             logger.info(f"Loaded {len(candles)} candles for {symbol} {tf}")
 
     async def start_polling(self, symbol: str) -> None:
         """Start polling for new candles. Runs until stopped."""
-        if self._market_data_venue == "binance" and settings.binance_use_websocket:
+        if settings.binance_use_websocket:
             await self.start_streaming(symbol)
             return
         self._running = True
@@ -66,9 +62,9 @@ class DataFeed:
 
     async def start_streaming(self, symbol: str) -> None:
         """Stream closed Binance candles for all configured timeframes."""
-        stream = getattr(self._mt5, "stream_klines", None)
+        stream = getattr(self._gateway, "stream_klines", None)
         if stream is None:
-            raise RuntimeError("Selected gateway does not support Binance WebSocket streaming")
+            raise RuntimeError("Binance gateway does not support WebSocket streaming")
         self._running = True
         timeframes = settings.data.timeframes.get("structure", ["H4", "H1", "M15", "M5"])
         tasks = [asyncio.create_task(self._stream_timeframe(stream, symbol, tf)) for tf in timeframes]
@@ -94,7 +90,7 @@ class DataFeed:
                 cached.pop(0)
             await event_bus.publish(EventType.NEW_CANDLE, {
                 "symbol": symbol, "timeframe": timeframe, "candle": candle,
-                "venue": getattr(self._mt5, "venue", self._market_data_venue),
+                "venue": "binance",
             })
 
     async def stop_polling(self) -> None:
@@ -107,7 +103,7 @@ class DataFeed:
         timeframes = settings.data.timeframes.get("structure", ["H4", "H1", "M15", "M5"])
 
         for tf in timeframes:
-            candles = await self._mt5.get_ohlcv(symbol, tf, count=3)
+            candles = await self._gateway.get_ohlcv(symbol, tf, count=3)
 
             if not candles:
                 continue
@@ -132,7 +128,7 @@ class DataFeed:
                     "symbol": symbol,
                     "timeframe": tf,
                     "candle": latest,
-                    "venue": getattr(self._mt5, "venue", self._market_data_venue),
+                    "venue": "binance",
                 })
                 logger.debug(f"New {tf} candle for {symbol}: {latest.close:.2f}")
             else:
@@ -140,7 +136,7 @@ class DataFeed:
                 self._cache.setdefault(symbol, {})[tf] = [latest]
 
     def get_cached_candles(self, timeframe: str, symbol: Optional[str] = None) -> list[Candle]:
-        sym = symbol or settings.primary_symbol
+        sym = symbol or settings.binance_symbol
         return self.get_candles(sym, timeframe)
 
     def get_candles(

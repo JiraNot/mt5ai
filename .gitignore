@@ -41,7 +41,11 @@ htmlcov/
 Thumbs.db
 
 # Freebuff
-data/history/
+data/
 models/*.pkl
 models/*.joblib
 dashboard.html
+candidate_triage.json
+cli_login_audit.jsonl
+.mobileide/
+query_db.mjs

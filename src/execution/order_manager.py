@@ -10,7 +10,8 @@ from src.core.config import settings
 from src.core.events import EventType, event_bus
 from src.core.runtime_control import get_runtime_trading_mode, is_live_armed
 from src.core.types import OrderRequest, OrderResult
-from src.market.venue_gateway import VenueGateway
+from src.execution.paper_gateway import PaperGateway
+from src.market.binance_gateway import BinanceGateway
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,13 @@ class OrderManager:
     Manages order lifecycle.
 
     - Validates orders before sending
-    - Sends orders to MT5
+    - Sends orders to Binance
     - Publishes events on success/failure
     - Tracks order history
     """
 
-    def __init__(self, mt5: VenueGateway) -> None:
-        self._mt5 = mt5
+    def __init__(self, gateway: BinanceGateway | PaperGateway) -> None:
+        self._gateway = gateway
         self._order_history: list[OrderResult] = []
 
     async def send_market_order(self, request: OrderRequest) -> OrderResult:
@@ -43,7 +44,7 @@ class OrderManager:
         # without restarting the deployment. LIVE additionally requires an
         # explicit arm action; it must never be enabled by a mode label alone.
         trading_mode = get_runtime_trading_mode(settings.trading_mode)
-        venue = getattr(self._mt5, "venue", "mt5")
+        venue = getattr(self._gateway, "venue", "binance")
         paper_binance = (
             venue == "binance"
             and settings.binance_mode == "paper"
@@ -75,17 +76,13 @@ class OrderManager:
             })
             return result
 
-        # Set magic from config
-        if request.magic == 20240101:  # Default
-            request.magic = settings.mt5.magic
-
-        # Send to MT5
+        # Send through the Binance gateway
         logger.info(
             f"Sending order: {request.direction.value} {request.volume} "
             f"{request.symbol} @ market, SL={request.sl:.2f}, TP={request.tp:.2f}"
         )
 
-        result = await self._mt5.send_order(request)
+        result = await self._gateway.send_order(request)
 
         if result.success:
             logger.info(
@@ -116,7 +113,7 @@ class OrderManager:
         tp: Optional[float] = None,
     ) -> OrderResult:
         """Modify SL/TP of an existing position."""
-        result = await self._mt5.modify_position(ticket, sl, tp)
+        result = await self._gateway.modify_position(ticket, sl, tp)
 
         if result.success:
             logger.info(f"Position {ticket} modified: SL={sl}, TP={tp}")
@@ -125,9 +122,14 @@ class OrderManager:
 
         return result
 
-    async def close_position(self, ticket: int) -> OrderResult:
+    async def close_position(self, ticket: int, volume: Optional[float] = None) -> OrderResult:
         """Close a specific position."""
-        result = await self._mt5.close_position(ticket)
+        import inspect
+        sig = inspect.signature(self._gateway.close_position)
+        if "volume" in sig.parameters:
+            result = await self._gateway.close_position(ticket, volume=volume)
+        else:
+            result = await self._gateway.close_position(ticket)
 
         if result.success:
             logger.info(f"Position {ticket} closed")

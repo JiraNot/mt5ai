@@ -2,7 +2,7 @@
 
 ## Overview
 
-Testing Pyramid สำหรับ MT5 AI Trading Platform
+Testing Pyramid สำหรับ Binance AI Trading Platform
 
 ## Testing Levels
 

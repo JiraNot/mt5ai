@@ -14,7 +14,7 @@
 3. Risk Engine validated
 4. Kill Switch tested
 5. No duplicate execution
-6. MT5 reconnect tested
+6. Binance Testnet reconnect behavior validated
 ```
 
 ## Demo Trading Gate
@@ -25,7 +25,7 @@ Paper stable ✓
 Risk Engine validated ✓
 Kill Switch tested ✓
 No duplicate execution ✓
-MT5 reconnect tested ✓
+Binance Testnet reconnect behavior validated ✓
 → ALLOW DEMO
 ```
 

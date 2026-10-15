@@ -39,6 +39,7 @@ class LimitChecker:
             self.check_consecutive_losses(),
             self.check_exposure(balance, total_exposure),
             self.check_spread(current_spread),
+            self.check_max_open_positions(open_positions_count),
         ]
 
         for passed, reason in checks:
@@ -104,6 +105,14 @@ class LimitChecker:
                 f"Spread too wide: {current_spread:.1f} "
                 f"> {settings.risk.max_spread_pips} pips"
             )
+        return True, None
+
+    def check_max_open_positions(
+        self, open_positions_count: int, max_open: int = 10
+    ) -> tuple[bool, str | None]:
+        """Check concurrent open positions limit."""
+        if open_positions_count >= max_open:
+            return False, f"Max concurrent open positions reached: {open_positions_count} >= {max_open}"
         return True, None
 
     def record_win(self) -> None:

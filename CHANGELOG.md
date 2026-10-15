@@ -1,6 +1,43 @@
 # Changelog
 
-## 2026-09-26
+## 2026-10-15 (Binance AI Platform Full-Suite Enhancement)
+
+- **Web Dashboard "Agent Homework & Readiness" Tab**:
+  - Live Promotion Readiness Gauge (0–100%) with 6-gate safety audit checklist (Sample size >= 30, Profit Factor >= 1.5, Net PnL > 0, Win Rate >= 40%, Max DD <= 5%, 100% Server SL compliance).
+  - Agent Homework & Watchlist section showing BTC Macro Framework (Bias, Trend, Crowd Sentiment, Funding Rate) and Top 5 curated Binance Futures picks.
+  - Interactive on-demand "Run Screener Now" button to execute homework live from the browser.
+- **Automated Background Scheduler (`src/live/scheduler.py`)**:
+  - Automatically runs at **08:00 (UTC+7)** Bangkok time: executes `CryptoScreener.run_homework()`, updates `data/crypto_watchlist.json`, and dispatches `alert_morning_brief` to Telegram.
+  - Automatically runs at **20:00 (UTC+7)** Bangkok time: audits closed trades against `PromotionGate`, calculates readiness percentage, and dispatches `alert_evening_reflection` to Telegram.
+  - Periodic **4-Hour BTC Macro Refresh** on H4 candle closes to maintain fresh BTC structural and funding crowd sentiment.
+  - Full lifecycle support with graceful start/stop in `TradingPlatform`.
+- **Two-Way Interactive Telegram Bot (`src/notification/telegram_bot.py`)**:
+  - Implemented long-polling command listener with chat ID authentication.
+  - Commands supported:
+    - `/status`: Displays live balance, equity, mode (PAPER/DEMO/LIVE), and open positions with current PnL and R-multiples.
+    - `/homework`: Runs on-demand `CryptoScreener` and delivers Top 5 watchlist picks with 24h volume and BTC Macro bias.
+    - `/panic`: Emergency shutdown button — closes all open positions across all symbols, halts platform execution, and triggers circuit breaker.
+    - `/readiness`: Displays 0–100% Promotion Gate progress and checklist status.
+    - `/help`: Displays available command directory.
+- **Multimodal AI Vision Confirmation (`src/ai/vision_analyst.py`)**:
+  - High-definition dark-mode candlestick chart renderer (Pillow-based, pure Python, fast and headless).
+  - Overlays Entry, Stop Loss, and Take Profit reference lines.
+  - Candlestick pattern heuristic engine: detects lower/upper rejection wicks (liquidity sweeps), institutional displacement candle bodies, and false breakout exhaustion traps.
+  - Emits `VisionVerdict` (score 0–100, verdict `APPROVE`/`CAUTION`/`REJECT`) feeding directly into candidate risk flags and AI Council debate.
+- **Walk-Forward Backtesting Suite (`src/analytics/walk_forward.py`)**:
+  - Rolling multi-window In-Sample (Train) and Out-of-Sample (Test) validation for Binance USDT-M Futures.
+  - Computes Walk-Forward Efficiency (WFE), Out-of-Sample Profit Factor, Expectancy, Win Rate, and Max Drawdown.
+  - Exports comprehensive markdown report evaluating model robustness against overfitting.
+- **Test Coverage**: 311 total automated tests passing (0 failures).
+
+## 2026-10-14
+
+- Complete Binance-Only Refactoring: purged legacy `src/mt5` folder, replaced `yfinance` gold proxy with native Binance Futures gateway in `src/live/monitor_mtf.py` and `src/live/paper_trader.py`.
+- Added `BTCRegimeAnalyzer` (`src/market/btc_regime.py`) to analyze Bitcoin macro bias (H4/D1 trend, market regime, and funding rate crowd status) and feed into trade context.
+- Added `CryptoScreener` (`src/market/crypto_screener.py`) for agent "homework" scanning 24h Binance USDT-M Futures tickers to generate curated watchlists (Top Volume, Volatility, Momentum).
+- Enhanced `TradeLearner` (`src/ai/trade_learner.py`) with structured post-trade retrospectives and contextual lesson generation fed into AI Council decision prompts.
+- Added `PromotionGate` (`src/risk/promotion_gate.py`) implementing the 6-point statistical readiness checklist (sample size >= 30, Profit Factor >= 1.5, Max DD <= 5%, 100% SL compliance) before permitting LIVE mode.
+- Added CLI entrypoints `freebuff-homework` and `freebuff-gate` in `pyproject.toml`.
 
 - Added MT5 path/portable/account environment wiring to the Docker bridge and
   automatic initialization retries after the terminal becomes ready or is
@@ -11,9 +48,12 @@
 
 ## Unreleased
 
-- Added a bounded CLI Login Console for Codex, agy, and ClinePass. It starts
-  only allow-listed authentication commands, runs in a short-lived PTY session,
-  stores no input/transcript, and writes metadata-only audit records.
+- Removed MetaTrader 5 and bridge connectivity; Binance USDT-M Futures is now the only supported exchange. Paper remains the safe default, Testnet requires explicit configuration, and LIVE remains disabled by default.
+- Replaced the line-based CLI Login Console with a real WebSocket PTY browser
+  terminal for Codex, agy, and ClinePass. It transports raw keystrokes, paste,
+  terminal resize, and OAuth/TUI output while still launching only allow-listed
+  login commands; input/output are never persisted and audit records contain
+  metadata only.
 - Moved Codex/ChatGPT, Gemini/Antigravity, and OpenRouter/DeepSeek provider
   login/API settings into Controls & Safety. Secrets are write-only in the UI,
   encrypted in the runtime volume, and applied by the worker on its next AI

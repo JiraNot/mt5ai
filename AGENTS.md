@@ -2,11 +2,11 @@
 
 ## Project
 
-MT5 AI Trading Platform
+Binance AI Trading Platform
 
 ## Primary Objective
 
-Build a deterministic, testable automated trading platform for MetaTrader 5.
+Build a deterministic, testable automated trading platform for Binance USDT-M Futures.
 
 AI may evaluate trading candidates but must never bypass Risk Engine.
 
@@ -26,24 +26,12 @@ Market Data
 
 Do not bypass layers.
 
-## MT5 Connectivity (Bridge Mode)
+## Binance Connectivity
 
-The bot talks to MetaTrader 5 through a gateway selected by `MT5_MODE` in `.env`:
-
-- `local` (default) — `MetaTrader5` package on this machine (Windows/Wine). If the package is absent, MT5 features are mocked — this is the normal state on Linux and tests must keep passing without it.
-- `bridge` — real MT5 terminal on a separate Windows machine, reached over HTTP via `src/market/bridge_gateway.py`.
-
-**The bridge server is a separate project:** `~/projects/mt5-bridge`
-(GitHub: `JiraNot/mt5-bridge`, private). It is intentionally NOT in this repo —
-do not re-create or duplicate it here; edit it in its own repo.
-
-Rules:
-
-1. `BridgeGateway` must implement the same interface as `MT5Connection` — strategies, AI, and Risk Engine must stay gateway-agnostic.
-2. New MT5-related behavior on the server side goes in `mt5-bridge/mt5_bridge.py`; both sides of the HTTP contract must change together.
-3. Bridge behavior is tested with `httpx.MockTransport` in `tests/unit/test_bridge_gateway.py` — no real server needed.
-4. Bridge settings: `MT5_MODE`, `BRIDGE_URL`, `BRIDGE_TOKEN`, `BRIDGE_TIMEOUT` (see `.env.example` and `docs/bridge_deployment.md`).
-5. A Wine-hosted MT5 terminal (`~/.mt5` prefix) exists on this machine and can run the bridge for E2E testing — Wine is dev/fallback only, never the production path.
+- `BINANCE_MODE=paper` is the safe default; live exchange calls are disabled unless an explicitly supported mode is configured.
+- Market data and execution use the Binance gateway in `src/market/binance_gateway.py`.
+- Credentials must stay out of source control. Tests use mocked HTTP transports and must not require exchange credentials or a real account.
+- Keep execution fail-closed and preserve broker-side protective stops for every supported non-paper order.
 
 ## Safety Rules
 
@@ -92,7 +80,7 @@ Read:
 3. docs/02_ROADMAP.md
 4. Current task file
 5. Relevant module specification
-6. When touching MT5 connectivity: docs/bridge_deployment.md and the mt5-bridge repo's README.md
+6. When touching Binance connectivity: the relevant gateway specification and current Binance configuration docs
 
 ## After Coding
 

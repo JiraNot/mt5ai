@@ -27,8 +27,6 @@ from src.core.types import (
     StrategyCandidate,
 )
 from src.market.data_feed import DataFeed
-from src.market.mt5_connection import MT5Connection
-from src.market.venue_gateway import VenueGateway
 from src.market.session_tracker import get_current_session
 from src.market.spread_monitor import SpreadMonitor
 
@@ -65,18 +63,6 @@ from src.storage.repository import Repository
 logger = get_logger(__name__)
 
 
-def configured_market_venues() -> list[str]:
-    """Return unique enabled venues in their configured order."""
-    venues = getattr(settings, "market_data_venues", None) or [settings.market_data_venue]
-    supported = {"mt5", "binance"}
-    selected = [venue.lower() for venue in venues if venue.lower() in supported]
-    if not selected:
-        raise ValueError(
-            "No supported market venue configured; use MARKET_DATA_VENUES=mt5,binance"
-        )
-    return list(dict.fromkeys(selected))
-
-
 def current_trading_mode() -> str:
     """Read the dashboard-controlled mode, falling back to deployment config."""
     return get_runtime_trading_mode(settings.trading_mode)
@@ -96,41 +82,27 @@ class TradingPlatform:
     Main orchestrator — wires all components together.
 
     Pipeline on each new candle:
-        MT5 Data → Structure Engine → Strategy Plugins → AI Scorer → Risk Engine → Execute
+        Binance Data → Structure Engine → Strategy Plugins → AI Scorer → Risk Engine → Execute
     """
 
-    def __init__(self, max_cycles: int | None = None, venue_name: str | None = None) -> None:
+    def __init__(self, max_cycles: int | None = None) -> None:
         self._max_cycles = max_cycles
         self._cycle_count = 0
         self._cycle_errors = 0
-        self._venue_name = (venue_name or settings.market_data_venue).lower()
-        self._trading_symbol = (
-            settings.binance_symbol
-            if self._venue_name == "binance"
-            else settings.primary_symbol
+        self._venue_name = "binance"
+        self._trading_symbol = settings.binance_symbol
+        from src.execution.paper_gateway import PaperGateway
+        from src.market.binance_gateway import BinanceGateway
+
+        raw_binance = BinanceGateway()
+        self._gateway = (
+            PaperGateway(raw_binance) if settings.binance_mode == "paper" else raw_binance
         )
-        # Each platform instance owns one gateway and one independent pipeline.
-        # The process can run multiple instances concurrently for multi-venue mode.
-        if self._venue_name == "binance":
-            from src.execution.paper_gateway import PaperGateway
-            from src.market.binance_gateway import BinanceGateway
+        logger.info("Market venue enabled: Binance (%s)", settings.binance_mode)
 
-            raw_binance = BinanceGateway()
-            self._mt5: VenueGateway = (
-                PaperGateway(raw_binance) if settings.binance_mode == "paper" else raw_binance
-            )
-            logger.info("Market venue enabled: Binance (%s)", settings.binance_mode)
-        elif settings.mt5_mode == "bridge":
-            from src.market.bridge_gateway import BridgeGateway
-
-            self._mt5 = BridgeGateway()
-            logger.info("Market venue enabled: MT5 bridge (%s)", settings.bridge_url)
-        else:
-            self._mt5 = MT5Connection()
-            logger.info("Market venue enabled: MT5 local")
-
-        self._data_feed = DataFeed(self._mt5, market_data_venue=self._venue_name)
+        self._data_feed = DataFeed(self._gateway)
         self._spread_monitor = SpreadMonitor(self._trading_symbol)
+        self._spread_monitors: dict[str, SpreadMonitor] = {self._trading_symbol: self._spread_monitor}
 
         # Structure
         self._context_builder = ContextBuilder()
@@ -146,9 +118,24 @@ class TradingPlatform:
         self._context_analyzer = ContextAnalyzer()
         self._candidate_triage = CandidateTriage()
 
+        # BTC Macro Homework
+        from src.market.btc_regime import BTCRegimeAnalyzer
+        self._btc_analyzer = BTCRegimeAnalyzer()
+        self._btc_macro_context: dict[str, Any] = {}
+
         # Execution
-        self._order_manager = OrderManager(self._mt5)
-        self._position_tracker = PositionTracker(self._mt5)
+        self._order_manager = OrderManager(self._gateway)
+        self._position_tracker = PositionTracker(self._gateway)
+        from src.execution.position_manager import PositionManager
+        self._position_manager = PositionManager(gateway=self._gateway, order_manager=self._order_manager)
+
+        # Scheduler & Telegram Bot
+        self._scheduler: Any | None = None
+        self._telegram_bot: Any | None = None
+
+        # AI Vision Confirmation
+        from src.ai.vision_analyst import AIVisionAnalyst
+        self._vision_analyst = AIVisionAnalyst()
 
         # Risk (initialized after DB connection)
         self._risk_engine: RiskEngine | None = None
@@ -162,7 +149,44 @@ class TradingPlatform:
 
         self._running = False
         self._poll_task = None
+        self._poll_tasks: list[asyncio.Task] = []
         self._event_handlers = []
+
+    def _get_spread_monitor(self, symbol: str) -> SpreadMonitor:
+        """Get or initialize SpreadMonitor for a given symbol."""
+        if symbol not in self._spread_monitors:
+            try:
+                self._spread_monitors[symbol] = SpreadMonitor(symbol)
+            except Exception:
+                return self._spread_monitor
+        return self._spread_monitors[symbol]
+
+    def _get_active_trading_symbols(self) -> list[str]:
+        """Resolve active symbols to monitor: primary symbol + top Watchlist candidates."""
+        from pathlib import Path
+        import json
+
+        symbols = [self._trading_symbol]
+        watchlist_file = Path("data/crypto_watchlist.json")
+        if watchlist_file.exists():
+            try:
+                with open(watchlist_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    candidates = data.get("candidates", [])
+                    for cand in candidates:
+                        sym = cand.get("symbol")
+                        if sym and sym not in symbols and len(symbols) < 5:
+                            symbols.append(sym)
+            except Exception as exc:
+                logger.warning("Failed to load watchlist for active symbols: %s", exc)
+
+        # Fallback to configured Binance symbols if watchlist has only 1
+        if len(symbols) == 1:
+            for s in ["ETHUSDT", "SOLUSDT"]:
+                if s not in symbols and s in settings.symbols and len(symbols) < 3:
+                    symbols.append(s)
+
+        return symbols
 
     async def start(self) -> None:
         """Always release sessions/tasks, including failures during startup."""
@@ -211,26 +235,15 @@ class TradingPlatform:
         # Connect to the selected venue (retry loop keeps this venue alive).
         logger.info("Connecting to %s...", self._venue_name.upper())
         while True:
-            connected = await self._mt5.connect()
+            connected = await self._gateway.connect()
             if connected:
                 update_runtime_status(
                     state="connected", venue=self._venue_name,
-                    mt5_connected=self._venue_name == "mt5",
-                    binance_connected=self._venue_name == "binance",
+                    binance_connected=True,
                 )
                 logger.info("✅ %s connected successfully!", self._venue_name.upper())
                 break
-            if self._venue_name == "mt5" and settings.mt5_mode == "bridge":
-                logger.warning(
-                    f"⏳ Waiting for MT5 Bridge at {settings.bridge_url}... "
-                    "Ensure MT5 terminal is running and logged in. Retrying in 10s..."
-                )
-            elif self._venue_name == "binance":
-                logger.warning("⏳ Waiting for Binance public API... Retrying in 10s...")
-            else:
-                logger.warning(
-                    "⏳ Waiting for MT5 terminal to start and log in. Retrying in 10s..."
-                )
+            logger.warning("⏳ Waiting for Binance API... Retrying in 10s...")
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:
@@ -238,7 +251,7 @@ class TradingPlatform:
 
         while True:
             try:
-                account = await self._mt5.get_account_info()
+                account = await self._gateway.get_account_info()
                 break
             except Exception as exc:
                 logger.warning(
@@ -254,18 +267,41 @@ class TradingPlatform:
         self._running = True
         update_runtime_status(state="running", mode=current_trading_mode().upper(), last_error=None)
 
-        # Initialize data feed
-        symbol = self._trading_symbol
-        logger.info(f"Initializing data feed for {symbol}...")
-        await self._data_feed.initialize(symbol)
-        self._poll_task = asyncio.create_task(self._data_feed.start_polling(symbol))
+        # Initialize data feeds for active trading symbols
+        active_symbols = self._get_active_trading_symbols()
+        logger.info(f"Initializing data feeds for active symbols: {active_symbols}")
+        for sym in active_symbols:
+            await self._data_feed.initialize(sym)
+            task = asyncio.create_task(self._data_feed.start_polling(sym))
+            self._poll_tasks.append(task)
+        if self._poll_tasks:
+            self._poll_task = self._poll_tasks[0]
+
+        # Background Scheduler (08:00 Morning Briefing, 20:00 Daily Reflection, 4H BTC Macro)
+        from src.live.scheduler import BackgroundScheduler
+        self._scheduler = BackgroundScheduler(
+            gateway=self._gateway,
+            db_session_factory=self._session_factory,
+            btc_analyzer=self._btc_analyzer,
+        )
+        await self._scheduler.start()
+
+        # Interactive Telegram Bot Listener (2-way remote commands)
+        from src.notification.telegram_bot import TelegramBotListener
+        self._telegram_bot = TelegramBotListener(
+            gateway=self._gateway,
+            order_manager=self._order_manager,
+            screener=self._scheduler.screener if self._scheduler else None,
+            platform_stop_callback=self.stop,
+        )
+        await self._telegram_bot.start()
 
         # Start main loop
         session = get_current_session()
         logger.info(f"Current session: {session}")
 
         try:
-            await self._main_loop(symbol)
+            await self._main_loop(active_symbols)
         except asyncio.CancelledError:
             logger.info("Platform shutdown requested")
         except Exception as e:
@@ -279,7 +315,12 @@ class TradingPlatform:
         update_runtime_status(**status_fields)
         logger.info("Stopping %s platform...", self._venue_name.upper())
         await self._data_feed.stop_polling()
-        if self._poll_task:
+        for task in self._poll_tasks:
+            task.cancel()
+        if self._poll_tasks:
+            await asyncio.gather(*self._poll_tasks, return_exceptions=True)
+        self._poll_tasks.clear()
+        if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
             await asyncio.gather(self._poll_task, return_exceptions=True)
         for event, handler in self._event_handlers:
@@ -287,11 +328,15 @@ class TradingPlatform:
         self._event_handlers.clear()
         if self._trade_learner:
             self._trade_learner.close()
+        if getattr(self, "_telegram_bot", None):
+            await self._telegram_bot.stop()
+        if getattr(self, "_scheduler", None):
+            await self._scheduler.stop()
         if self._db_session:
             await self._db_session.close()
         if hasattr(self, "_engine"):
             await self._engine.dispose()
-        await self._mt5.disconnect()
+        await self._gateway.disconnect()
         logger.info("%s platform stopped cleanly", self._venue_name.upper())
 
     def _setup_event_handlers(self) -> None:
@@ -317,57 +362,80 @@ class TradingPlatform:
         self._event_handlers = [(EventType.CIRCUIT_BREAKER, on_circuit_breaker),
                                 (EventType.ORDER_FILLED, on_order_filled)]
 
-    async def _main_loop(self, symbol: str) -> None:
-        """Main evaluation loop: runs on each polling cycle."""
-        logger.info(f"Main trading loop started for {symbol}")
+    async def _main_loop(self, symbols: str | list[str] | None = None) -> None:
+        """Main evaluation loop: runs on each polling cycle across active symbols."""
+        if isinstance(symbols, str):
+            target_symbols = [symbols]
+        elif isinstance(symbols, list):
+            target_symbols = symbols
+        else:
+            target_symbols = self._get_active_trading_symbols()
+
+        logger.info(f"Main trading loop started for symbols: {target_symbols}")
 
         while self._running and (self._max_cycles is None or self._cycle_count < self._max_cycles):
             self._cycle_count += 1
             try:
+                session = get_current_session()
                 update_runtime_status(
                     state="running", cycle_count=self._cycle_count,
                     cycle_errors=self._cycle_errors, venue=self._venue_name,
-                    symbol=symbol, mode=current_trading_mode().upper(),
-                )
-                # Check session
-                session = get_current_session()
-
-                # Get current tick & spread
-                tick = await self._mt5.get_current_price(symbol)
-                spread_pips = self._spread_monitor.get_spread_pips(
-                    tick.bid, tick.ask
+                    symbol=",".join(target_symbols), mode=current_trading_mode().upper(),
                 )
 
-                # Build multi-timeframe context
-                candles_by_tf = {
-                    "M5": self._data_feed.get_cached_candles("M5", symbol)[:-1],
-                    "M15": self._data_feed.get_cached_candles("M15", symbol)[:-1],
-                    "H1": self._data_feed.get_cached_candles("H1", symbol)[:-1],
-                    "H4": self._data_feed.get_cached_candles("H4", symbol)[:-1],
-                }
+                for symbol in target_symbols:
+                    try:
+                        tick = await self._gateway.get_current_price(symbol)
+                        monitor = self._get_spread_monitor(symbol)
+                        spread_pips = monitor.get_spread_pips(tick.bid, tick.ask)
 
-                if not all(candles_by_tf.get(tf) for tf in ("M5", "M15", "H1")):
-                    update_runtime_status(last_decision="WAITING_FOR_CANDLES")
-                    await asyncio.sleep(5)
-                    continue
+                        candles_by_tf = {
+                            "M5": self._data_feed.get_cached_candles("M5", symbol)[:-1],
+                            "M15": self._data_feed.get_cached_candles("M15", symbol)[:-1],
+                            "H1": self._data_feed.get_cached_candles("H1", symbol)[:-1],
+                            "H4": self._data_feed.get_cached_candles("H4", symbol)[:-1],
+                        }
 
-                ctx = self._context_builder.build(
-                    symbol=symbol,
-                    candles_by_tf=candles_by_tf,
-                    primary_tf="M5",
-                    htf="H1",
-                )
-                ctx.current_price = tick.mid
-                ctx.spread = spread_pips
+                        if not all(candles_by_tf.get(tf) for tf in ("M5", "M15", "H1")):
+                            update_runtime_status(last_decision=f"WAITING_FOR_CANDLES_{symbol}")
+                            continue
 
-                # Run strategy pipeline
-                await self._process_strategies(ctx, tick.mid, spread_pips, session)
+                        ctx = self._context_builder.build(
+                            symbol=symbol,
+                            candles_by_tf=candles_by_tf,
+                            primary_tf="M5",
+                            htf="H1",
+                        )
+                        ctx.current_price = tick.mid
+                        ctx.spread = spread_pips
+
+                        if symbol == "BTCUSDT" and candles_by_tf.get("H4"):
+                            try:
+                                btc_report = self._btc_analyzer.analyze(candles_by_tf["H4"])
+                                self._btc_macro_context = btc_report.to_context_dict()
+                            except Exception as exc:
+                                logger.debug("BTC macro update skipped: %s", exc)
+
+                        # Run strategy pipeline
+                        await self._process_strategies(ctx, tick.mid, spread_pips, session)
+
+                        # Sync and manage positions (Break-Even & Partial TP)
+                        positions = await self._position_tracker.sync_positions(symbol)
+                        if positions:
+                            try:
+                                await self._position_manager.manage_active_positions(
+                                    positions=positions,
+                                    current_prices={symbol: tick.mid},
+                                    order_manager=self._order_manager,
+                                )
+                            except Exception as pm_err:
+                                logger.warning("Position manager error for %s: %s", symbol, pm_err)
+
+                    except Exception as sym_err:
+                        logger.warning("Error evaluating symbol %s: %s", symbol, sym_err)
 
                 if self._trade_learner:
-                    await self._trade_learner.reconcile_pending(self._mt5)
-
-                # Sync positions
-                await self._position_tracker.sync_positions(symbol)
+                    await self._trade_learner.reconcile_pending(self._gateway)
 
                 await asyncio.sleep(5)
 
@@ -505,7 +573,25 @@ class TradingPlatform:
                 limit=3,
             )
 
-        # Step 2e: AI Council Debate (Gemini Bull vs GPT Bear)
+        # Step 2e: Candlestick Visual Confirmation (AI Vision Analyst)
+        primary_candles = ctx.candles_by_tf.get("M5", [])
+        vision_verdict = self._vision_analyst.analyze_candlestick_setup(
+            candles=primary_candles,
+            direction=candidate.direction,
+            entry_price=float(candidate.entry_price or current_price),
+            sl=float(candidate.stop_loss or 0),
+            tp=float(candidate.take_profit_1 or 0),
+            symbol=candidate.symbol,
+            timeframe="M5",
+        )
+        if vision_verdict.trap_risk and vision_verdict.risks:
+            candidate.risk_flags.append(f"Vision Trap Warning: {vision_verdict.risks[0]}")
+        if vision_verdict.rejection_wick:
+            candidate.confluences.append("Vision Confirmed: Rejection Wick")
+        if vision_verdict.displacement:
+            candidate.confluences.append("Vision Confirmed: Displacement Body")
+
+        # Step 2f: AI Council Debate (Gemini Bull vs GPT Bear)
         setup_context = {
             "symbol": candidate.symbol,
             "direction": candidate.direction.value,
@@ -521,7 +607,17 @@ class TradingPlatform:
             "m5_entry": candidate.strategy_id,
             "eql_summary": eql_result.summary,
             "displacement_detected": bool(getattr(candidate, "displacement", False)),
+            "vision_confirmation": {
+                "verdict": vision_verdict.verdict,
+                "score": vision_verdict.vision_score,
+                "rejection_wick": vision_verdict.rejection_wick,
+                "displacement": vision_verdict.displacement,
+                "trap_risk": vision_verdict.trap_risk,
+                "summary_th": vision_verdict.summary_th,
+                "chart_image": vision_verdict.chart_image_path,
+            },
             "past_lessons": past_lessons,
+            "btc_macro": self._btc_macro_context,
             "candidate_digest": {
                 key: value for key, value in self._candidate_triage.summary().items()
                 if key in {"total", "by_priority", "by_strategy", "by_session", "updated_at"}
@@ -575,8 +671,9 @@ class TradingPlatform:
             return
 
         # Step 3: Risk Engine Evaluation
-        account = await self._mt5.get_account_info()
+        account = await self._gateway.get_account_info()
         positions = await self._position_tracker.sync_positions(candidate.symbol)
+        all_open_positions = self._position_tracker.get_all_positions()
 
         risk_decision = RiskDecision(approved=False)  # Default rejection
         if self._risk_engine:
@@ -585,7 +682,7 @@ class TradingPlatform:
                 ai_decision=ai_decision,
                 account_balance=account.balance,
                 account_equity=account.equity,
-                open_positions_count=len(positions),
+                open_positions_count=len(all_open_positions),
                 total_exposure=self._position_tracker.get_total_exposure(),
                 current_spread=spread,
                 session=session,
@@ -609,8 +706,8 @@ class TradingPlatform:
                 sl=risk_decision.adjusted_sl or candidate.stop_loss,
                 tp=risk_decision.adjusted_tp1 or candidate.take_profit_1,
                 comment=f"{candidate.strategy_id}",
-                venue=getattr(self._mt5, "venue", "mt5"),
-                execution_key=f"{candidate.id}:{candidate.strategy_version}:{getattr(self._mt5, 'venue', 'mt5')}",
+                venue="binance",
+                execution_key=f"{candidate.id}:{candidate.strategy_version}:binance",
             )
             candidate.metadata["venue"] = request.venue
             snapshot = build_snapshot(candidate, ctx, spread, session)
@@ -718,8 +815,8 @@ async def _run_status() -> None:
     print("=====================================")
     print(f"Version:        {settings.app.version}")
     print(f"Mode:           {current_trading_mode()}")
-    print(f"Venues:         {', '.join(configured_market_venues())}")
-    print(f"Symbols:        {settings.primary_symbol}, {settings.binance_symbol}")
+    print("Venue:          Binance USDT-M Futures")
+    print(f"Symbol:         {settings.binance_symbol}")
     print(f"Database:       {settings.database_url}")
     print(f"Risk per trade: {settings.risk.risk_per_trade_pct * 100:.1f}%")
     print(f"Max daily loss: {settings.risk.max_daily_loss_pct * 100:.1f}%")
@@ -784,24 +881,7 @@ def main() -> None:
         asyncio.run(_run_backtest())
     else:
         try:
-            venues = configured_market_venues()
-            if len(venues) == 1:
-                asyncio.run(TradingPlatform(max_cycles=args.cycles, venue_name=venues[0]).start())
-            else:
-                async def run_all_venues() -> None:
-                    platforms = [
-                        TradingPlatform(max_cycles=args.cycles, venue_name=venue)
-                        for venue in venues
-                    ]
-                    results = await asyncio.gather(
-                        *(platform.start() for platform in platforms),
-                        return_exceptions=True,
-                    )
-                    for venue, result in zip(venues, results):
-                        if isinstance(result, Exception):
-                            logger.error("%s platform exited: %s", venue.upper(), result)
-
-                asyncio.run(run_all_venues())
+            asyncio.run(TradingPlatform(max_cycles=args.cycles).start())
         except KeyboardInterrupt:
             logger.info("Interrupted by user")
 

@@ -105,7 +105,7 @@ session not in preferred_sessions
 
 ### Triggers
 
-- MT5 disconnected repeatedly
+- Binance gateway disconnected repeatedly
 - Data stale
 - Database unavailable
 - Unexpected account

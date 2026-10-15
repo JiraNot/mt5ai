@@ -1,33 +1,4 @@
 services:
-  mt5-node:
-    build:
-      context: .
-      dockerfile: docker/mt5/Dockerfile
-    container_name: mt5-node
-    restart: unless-stopped
-    expose:
-      - 3000
-      - 8900
-    environment:
-      - CUSTOM_USER=admin
-      - PASSWORD=freebuff2026
-      - MT5_LOGIN=${MT5_LOGIN:-}
-      - MT5_PASSWORD=${MT5_PASSWORD:-}
-      - MT5_SERVER=${MT5_SERVER:-}
-      - MT5_PATH=${MT5_PATH:-}
-      - MT5_PORTABLE=${MT5_PORTABLE:-false}
-    volumes:
-      - mt5_config:/config
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
-      - "traefik.http.routers.freebuff-mt5.rule=Host(`mt5.onetapweb.com`)"
-      - "traefik.http.routers.freebuff-mt5.entrypoints=http,https"
-      - "traefik.http.routers.freebuff-mt5.tls=true"
-      - "traefik.http.routers.freebuff-mt5.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.freebuff-mt5.service=freebuff-mt5"
-      - "traefik.http.services.freebuff-mt5.loadbalancer.server.port=3000"
-
   mt5ai:
     build:
       context: .
@@ -38,15 +9,10 @@ services:
     # SQLite and the worker open the shared database.
     user: "0:0"
     restart: unless-stopped
-    depends_on:
-      - mt5-node
     expose:
       - 8501
+      - 7681
     environment:
-      - MT5_MODE=bridge
-      - BRIDGE_URL=http://mt5-node:8900
-      - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
-      - MARKET_DATA_VENUES=${MARKET_DATA_VENUES:-mt5,binance}
       - BINANCE_MODE=${BINANCE_MODE:-paper}
       - BINANCE_BASE_URL=${BINANCE_BASE_URL:-https://testnet.binancefuture.com}
       - BINANCE_API_KEY=${BINANCE_API_KEY:-}
@@ -74,6 +40,13 @@ services:
       - "traefik.http.routers.freebuff-bot.tls.certresolver=letsencrypt"
       - "traefik.http.routers.freebuff-bot.service=freebuff-bot"
       - "traefik.http.services.freebuff-bot.loadbalancer.server.port=8501"
+      - "traefik.http.routers.freebuff-terminal.rule=Host(`trade.onetapweb.com`) && PathPrefix(`/terminal`)"
+      - "traefik.http.routers.freebuff-terminal.priority=100"
+      - "traefik.http.routers.freebuff-terminal.entrypoints=http,https"
+      - "traefik.http.routers.freebuff-terminal.tls=true"
+      - "traefik.http.routers.freebuff-terminal.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.freebuff-terminal.service=freebuff-terminal"
+      - "traefik.http.services.freebuff-terminal.loadbalancer.server.port=7681"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8501/_stcore/health"]
       interval: 30s
@@ -101,6 +74,5 @@ services:
       - mt5ai_models:/app/models
 
 volumes:
-  mt5_config:
   mt5ai_data:
   mt5ai_models:

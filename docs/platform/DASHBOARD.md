@@ -44,12 +44,14 @@ and encrypted at rest using the deployment's dashboard password.
 LIVE requires explicit confirmation. Risk limits and broker credentials remain
 outside this runtime control surface.
 
-### CLI Login Console
+### CLI Login Terminal
 
-Controls & Safety includes a bounded terminal-like session for Codex, agy, and
-ClinePass login. It can launch only the exact provider login command, expires
-after ten minutes, retains no transcript or input, and writes metadata-only
-audit events. It is not a general-purpose shell.
+Controls & Safety links to a real browser terminal for Codex, agy, and
+ClinePass login. It transports raw keystrokes, paste, TUI resize, and OAuth
+output over a WebSocket PTY, so the providers' normal interactive flows work.
+It can launch only the exact provider login command, expires after ten minutes,
+retains no transcript or input, and writes metadata-only audit events. It is
+not a general-purpose shell.
 
 ## Legacy Product Map
 
@@ -57,7 +59,7 @@ audit events. It is not a general-purpose shell.
 ```
 - Mode (PAPER/DEMO/LIVE)
 - Runtime execution setting (persisted in `/app/data`, no redeploy required)
-- MT5 status
+- Binance gateway status
 - Account Equity
 - Daily P/L
 - Daily Risk Used
@@ -67,9 +69,9 @@ audit events. It is not a general-purpose shell.
 - Bot status
 ```
 
-The runtime mode selector supports PAPER and DEMO immediately. LIVE is locked
-behind a separate explicit arm confirmation and remains subject to each venue's
-execution safeguards. The deployment `TRADING_MODE` value is only the fallback
+The runtime mode selector supports PAPER and configured Binance Testnet
+execution. LIVE is disabled by default and remains locked behind a separate
+explicit arm confirmation and Binance execution safeguards. The deployment `TRADING_MODE` value is only the fallback
 when no dashboard setting has been saved.
 
 ### /markets
@@ -142,7 +144,7 @@ when no dashboard setting has been saved.
 
 ### /system
 ```
-- MT5 connection
+- Binance gateway connection
 - Database health
 - Worker status
 - Logs

@@ -7,14 +7,6 @@ class FreebuffError(Exception):
     """Base exception for all Freebuff errors."""
 
 
-class MT5ConnectionError(FreebuffError):
-    """MT5 connection failed."""
-
-
-class MT5OrderError(FreebuffError):
-    """MT5 order execution failed."""
-
-
 class DataFeedError(FreebuffError):
     """Market data feed error."""
 

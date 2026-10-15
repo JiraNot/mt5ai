@@ -268,7 +268,7 @@ class OrderRequest(BaseModel):
     magic: int = 20240101
     comment: str = ""
     deviation: int = 10  # Max slippage in points
-    venue: str = "mt5"
+    venue: str = "binance"
     execution_key: str = ""
 
 
@@ -281,7 +281,7 @@ class OrderResult(BaseModel):
     volume: Optional[float] = None
     error_code: Optional[int] = None
     error_message: Optional[str] = None
-    venue: str = "mt5"
+    venue: str = "binance"
     external_order_id: Optional[str] = None
     status: OrderStatus = OrderStatus.FILLED
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -289,7 +289,7 @@ class OrderResult(BaseModel):
 
 
 class Position(BaseModel):
-    """Live position from MT5."""
+    """Live position from Binance execution."""
 
     ticket: int
     identifier: int | None = None
@@ -309,7 +309,7 @@ class Position(BaseModel):
 
 
 class AccountInfo(BaseModel):
-    """MT5 account information."""
+    """Trading account information."""
 
     login: int = 0
     name: str = ""
@@ -350,7 +350,7 @@ class TradeRecord(BaseModel):
     status: PositionStatus = PositionStatus.OPEN
     magic: int = 0
     comment: str = ""
-    venue: str = "mt5"
+    venue: str = "binance"
     external_order_id: Optional[str] = None
     execution_key: str = ""
     open_time: datetime = Field(default_factory=datetime.utcnow)
@@ -393,7 +393,7 @@ class DailyRisk(BaseModel):
 
 
 class Deal(BaseModel):
-    """Broker deal history, version 1; MT5 numeric entry/type codes."""
+    """Normalized broker deal history."""
     model_config = {"allow_inf_nan": False}
     ticket: int
     order: int

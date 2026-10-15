@@ -250,7 +250,7 @@ CREATE TABLE orders (
     status VARCHAR(20) DEFAULT 'CREATED',
     -- CREATED, VALIDATED, SUBMITTED, FILLED, ACTIVE
     -- PARTIAL, CLOSED, REJECTED, EXPIRED, CANCELLED, FAILED
-    mt5_ticket BIGINT,
+    external_order_id VARCHAR(100),
     filled_price DECIMAL(20,8),
     filled_at TIMESTAMP,
     execution_key VARCHAR(100) UNIQUE,
@@ -279,7 +279,7 @@ CREATE TABLE positions (
     closed_at TIMESTAMP,
     status VARCHAR(20) DEFAULT 'OPEN',
     -- OPEN, CLOSED, PARTIAL
-    mt5_ticket BIGINT
+    external_order_id VARCHAR(100)
 );
 ```
 

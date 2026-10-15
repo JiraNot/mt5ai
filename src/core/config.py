@@ -11,15 +11,6 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 
-class MT5Config(BaseModel):
-    login: int = 0
-    password: str = ""
-    server: str = ""
-    timeout: int = 10000
-    magic: int = 20240101
-    deviation: int = 10
-
-
 class DataConfig(BaseModel):
     timeframes: dict[str, Any] = Field(default_factory=lambda: {
         "execution": "M5",
@@ -107,19 +98,7 @@ class SymbolConfig(BaseModel):
 class Settings(BaseSettings):
     """Application settings — loaded from env + YAML files."""
 
-    # Env vars (override YAML)
-    mt5_login: int = 0
-    mt5_password: str = ""
-    mt5_server: str = ""
-
-    # MT5 connection mode: "local" (MetaTrader5 pkg / Wine) or "bridge" (remote Windows bridge)
-    mt5_mode: str = "local"
-    bridge_url: str = "http://127.0.0.1:8900"
-    bridge_token: str = ""
-    bridge_timeout: float = 10.0
-
-    # Binance USDT-M Futures. The first phase is public market data only;
-    # execution remains fail-closed until paper/testnet safeguards are ready.
+    # Binance USDT-M Futures; paper is the safe default.
     binance_mode: str = "paper"
     binance_base_url: str = "https://testnet.binancefuture.com"
     binance_api_key: str = ""
@@ -127,8 +106,6 @@ class Settings(BaseSettings):
     binance_timeout: float = 10.0
     binance_symbol: str = "BTCUSDT"
     binance_use_websocket: bool = False
-    market_data_venue: str = "mt5"
-    market_data_venues: list[str] = Field(default_factory=lambda: ["mt5"])
     paper_initial_balance: float = 100000.0
 
     database_url: str = "sqlite+aiosqlite:///freebuff.db"
@@ -137,11 +114,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Primary trading symbol (env override: PRIMARY_SYMBOL)
-    primary_symbol: str = "XAUUSD"
+    primary_symbol: str = "BTCUSDT"
 
     # Loaded from YAML
     app: AppConfig = Field(default_factory=AppConfig)
-    mt5: MT5Config = Field(default_factory=MT5Config)
     data: DataConfig = Field(default_factory=DataConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     sessions: SessionConfig = Field(default_factory=SessionConfig)
@@ -180,15 +156,6 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
     # Load symbol configs
     symbols_config = _load_symbols_yaml(config_path / "symbols.yaml")
 
-    # Build MT5 config from env if available
-    mt5_config = MT5Config(**settings_yaml.get("mt5", {}))
-    if os.getenv("MT5_LOGIN"):
-        mt5_config.login = int(os.getenv("MT5_LOGIN", "0"))
-    if os.getenv("MT5_PASSWORD"):
-        mt5_config.password = os.getenv("MT5_PASSWORD", "")
-    if os.getenv("MT5_SERVER"):
-        mt5_config.server = os.getenv("MT5_SERVER", "")
-
     # Build database URL from env
     db_url = os.getenv("DATABASE_URL", settings_yaml.get("database_url", ""))
 
@@ -203,13 +170,6 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
 
     # Construct settings
     return Settings(
-        mt5_login=mt5_config.login,
-        mt5_password=mt5_config.password,
-        mt5_server=mt5_config.server,
-        mt5_mode=os.getenv("MT5_MODE", "local"),
-        bridge_url=os.getenv("BRIDGE_URL", "http://127.0.0.1:8900"),
-        bridge_token=os.getenv("BRIDGE_TOKEN", ""),
-        bridge_timeout=float(os.getenv("BRIDGE_TIMEOUT", "10")),
         binance_mode=os.getenv("BINANCE_MODE", "paper").lower(),
         binance_base_url=os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com"),
         binance_api_key=os.getenv("BINANCE_API_KEY", ""),
@@ -217,20 +177,13 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         binance_timeout=float(os.getenv("BINANCE_TIMEOUT", "10")),
         binance_symbol=os.getenv("BINANCE_SYMBOL", "BTCUSDT").upper(),
         binance_use_websocket=os.getenv("BINANCE_USE_WEBSOCKET", "false").lower() in {"1", "true", "yes"},
-        market_data_venue=os.getenv("MARKET_DATA_VENUE", "mt5").lower(),
-        market_data_venues=_load_market_data_venues(),
         paper_initial_balance=float(os.getenv("PAPER_INITIAL_BALANCE", "100000")),
         database_url=db_url or "sqlite+aiosqlite:///freebuff.db",
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         trading_mode=os.getenv("TRADING_MODE", settings_yaml.get("app", {}).get("mode", "paper")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
-        primary_symbol=os.getenv(
-            "PRIMARY_SYMBOL",
-            settings_yaml.get("app", {}).get("primary_symbol")
-            or (next(iter(symbols_config), "XAUUSD")),
-        ),
+        primary_symbol=os.getenv("PRIMARY_SYMBOL", os.getenv("BINANCE_SYMBOL", "BTCUSDT")).upper(),
         app=AppConfig(**settings_yaml.get("app", {})),
-        mt5=mt5_config,
         data=DataConfig(**settings_yaml.get("data", {})),
         risk=RiskConfig(**settings_yaml.get("risk", {})),
         sessions=SessionConfig(**settings_yaml.get("sessions", {})),
@@ -238,21 +191,5 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         logging_config=LoggingConfig(**settings_yaml.get("logging", {})),
         symbols=symbols_config,
     )
-
-
-def _load_market_data_venues() -> list[str]:
-    """Read the multi-venue selection while preserving the old single setting."""
-    configured = os.getenv("MARKET_DATA_VENUES", "").strip()
-    if not configured:
-        configured = os.getenv("MARKET_DATA_VENUE", "mt5")
-
-    venues: list[str] = []
-    for value in configured.split(","):
-        venue = value.strip().lower()
-        if venue and venue not in venues:
-            venues.append(venue)
-    return venues or ["mt5"]
-
-
 # Global settings instance
 settings = load_settings()

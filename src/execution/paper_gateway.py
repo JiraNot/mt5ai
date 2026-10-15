@@ -1,4 +1,4 @@
-"""Deterministic paper execution wrapper for any venue market-data gateway."""
+"""Deterministic paper execution wrapper for the Binance gateway."""
 
 from __future__ import annotations
 
@@ -7,15 +7,15 @@ from collections.abc import AsyncIterator
 
 from src.core.config import settings
 from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, OrderResult, Position, TradingMode, Tick
-from src.market.venue_gateway import VenueGateway
+from src.market.binance_gateway import BinanceGateway
 
 
 class PaperGateway:
-    """Simulate fills while reusing the selected venue's market data."""
+    """Simulate fills while reusing Binance market data."""
 
     venue = "binance"
 
-    def __init__(self, market: VenueGateway, initial_balance: float | None = None) -> None:
+    def __init__(self, market: BinanceGateway, initial_balance: float | None = None) -> None:
         self._market = market
         self._balance = initial_balance if initial_balance is not None else settings.paper_initial_balance
         self._positions: dict[int, Position] = {}
@@ -46,7 +46,7 @@ class PaperGateway:
     async def stream_klines(self, symbol: str, timeframe: str) -> AsyncIterator[tuple[str, Candle, bool]]:
         stream = getattr(self._market, "stream_klines", None)
         if stream is None:
-            raise RuntimeError("Selected market gateway does not support streaming")
+            raise RuntimeError("Binance gateway does not support streaming")
         async for event in stream(symbol, timeframe):
             yield event
 
@@ -102,24 +102,34 @@ class PaperGateway:
         self._positions[ticket] = position.model_copy(update={"sl": sl or position.sl, "tp": tp or position.tp})
         return OrderResult(success=True, ticket=ticket, venue=self.venue, metadata={"paper": True})
 
-    async def close_position(self, ticket: int) -> OrderResult:
+    async def close_position(self, ticket: int, volume: float | None = None) -> OrderResult:
         position = self._positions.get(ticket)
         if position is None:
             return OrderResult(success=False, ticket=ticket, venue=self.venue, error_message="Position not found")
         tick = await self._market.get_current_price(position.symbol)
         exit_price = tick.bid if position.direction == Direction.BUY else tick.ask
-        pnl = (exit_price - position.open_price) * position.volume
+        close_volume = position.volume if (volume is None or volume >= position.volume) else volume
+        pnl = (exit_price - position.open_price) * close_volume
         if position.direction == Direction.SELL:
             pnl = -pnl
         now = datetime.now(timezone.utc)
-        self._deals[ticket].append(Deal(
-            ticket=ticket * 10 + 1, order=ticket, position_id=ticket, time=now,
+        deal_ticket = ticket * 10 + 1 + len(self._deals.get(ticket, []))
+        self._deals.setdefault(ticket, []).append(Deal(
+            ticket=deal_ticket, order=ticket, position_id=ticket, time=now,
             entry=1, type=1 if position.direction == Direction.BUY else 0,
-            volume=position.volume, price=exit_price, profit=pnl, symbol=position.symbol,
+            volume=close_volume, price=exit_price, profit=pnl, symbol=position.symbol,
         ))
         self._balance += pnl
-        self._positions.pop(ticket)
-        return OrderResult(success=True, ticket=ticket, price=exit_price, volume=position.volume, venue=self.venue, metadata={"paper": True, "pnl": pnl})
+        if close_volume >= position.volume:
+            self._positions.pop(ticket)
+            remaining_volume = 0.0
+        else:
+            remaining_volume = round(position.volume - close_volume, 6)
+            self._positions[ticket] = position.model_copy(update={"volume": remaining_volume})
+        return OrderResult(
+            success=True, ticket=ticket, price=exit_price, volume=close_volume,
+            venue=self.venue, metadata={"paper": True, "pnl": pnl, "remaining_volume": remaining_volume},
+        )
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
         positions = list(self._positions.values())

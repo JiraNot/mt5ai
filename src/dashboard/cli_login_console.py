@@ -38,13 +38,8 @@ class LoginCommand:
 
 DEFAULT_COMMANDS = {
     "codex": LoginCommand("codex", "Codex / ChatGPT", ("codex", "login")),
-    # The fixed prompt lets agy complete its remote OAuth flow and exit without
-    # presenting a general-purpose, tool-capable agent shell to the dashboard.
-    "agy": LoginCommand(
-        "agy",
-        "Antigravity / Gemini",
-        ("agy", "--print", "Reply only LOGIN_OK", "--mode", "plan", "--sandbox"),
-    ),
+    # agy requires its full interactive TUI to complete its first OAuth login.
+    "agy": LoginCommand("agy", "Antigravity / Gemini", ("agy",)),
     # `cline auth` presents the ClinePass option in its supported auth TUI.
     "clinepass": LoginCommand("clinepass", "ClinePass", ("cline", "auth")),
 }
@@ -212,10 +207,16 @@ class CLILoginManager:
 
     @staticmethod
     def _import_codex_login() -> None:
-        """Copy a successful CLI login into the encrypted provider store."""
-        path = Path.home() / ".codex" / "auth.json"
-        try:
-            auth_json = path.read_text(encoding="utf-8")
-            save_provider_settings("codex", auth_json=auth_json)
-        except (OSError, ValueError):
-            _write_audit("codex", "credential_import_failed")
+        import_codex_login()
+
+
+def import_codex_login() -> bool:
+    """Copy a completed Codex CLI login into the encrypted provider store."""
+    path = Path.home() / ".codex" / "auth.json"
+    try:
+        auth_json = path.read_text(encoding="utf-8")
+        save_provider_settings("codex", auth_json=auth_json)
+    except (OSError, ValueError):
+        _write_audit("codex", "credential_import_failed")
+        return False
+    return True

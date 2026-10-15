@@ -1,4 +1,4 @@
-"""Position tracking — syncs open positions from MT5."""
+"""Position tracking — syncs open positions from Binance execution."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from typing import Optional
 from src.core.events import EventType, event_bus
 from src.core.types import Position
 from src.execution.outcomes import reconcile_deals
-from src.market.mt5_connection import MT5Connection
+from src.execution.paper_gateway import PaperGateway
+from src.market.binance_gateway import BinanceGateway
 
 logger = logging.getLogger(__name__)
 
@@ -17,22 +18,22 @@ class PositionTracker:
     """
     Tracks all open positions in real-time.
 
-    - Syncs positions from MT5
+    - Syncs positions from Binance execution
     - Detects position changes
     - Publishes position events
     """
 
-    def __init__(self, mt5: MT5Connection) -> None:
-        self._mt5 = mt5
+    def __init__(self, gateway: BinanceGateway | PaperGateway) -> None:
+        self._gateway = gateway
         self._positions: dict[int, Position] = {}  # ticket -> Position
 
     async def sync_positions(self, symbol: Optional[str] = None) -> list[Position]:
         """
-        Sync positions from MT5.
+        Sync positions from Binance execution.
 
         Returns list of current open positions.
         """
-        positions = await self._mt5.get_positions(symbol)
+        positions = await self._gateway.get_positions(symbol)
 
         # Track new/updated/closed positions
         current_tickets = {p.ticket for p in positions}
@@ -44,7 +45,7 @@ class PositionTracker:
             if ticket not in current_tickets:
                 try:
                     position_id = previous.identifier or ticket
-                    deals = await self._mt5.get_position_deals(position_id)
+                    deals = await self._gateway.get_position_deals(position_id)
                     outcome = reconcile_deals(position_id, deals)
                     if outcome is None:
                         continue  # History may be delayed; retry next poll.

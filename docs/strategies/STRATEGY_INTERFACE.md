@@ -41,7 +41,7 @@ class TradingStrategy:
    - Send orders directly
    - Calculate account risk
    - Query database directly
-   - Call MT5 directly
+   - Call the Binance gateway directly
 
 2. **Strategy must:**
    - Use MarketContext for all data
