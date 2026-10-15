@@ -74,7 +74,8 @@ DISABLED
 - [x] Multimodal AI Vision Confirmation (TradingView-style dark candlestick renderer + Rejection/Displacement/Trap analysis)
 - [x] Walk-Forward Backtesting Suite (Rolling in-sample/out-of-sample windows, Walk-Forward Efficiency WFE calculation)
 - [x] Modern Pro Crypto WebApp (React 19 + TypeScript + Vite + Tailwind CSS + TradingView Lightweight Charts + FastAPI WebSocket backend)
-- [x] 311 Tests passing
+- [x] Binance Testnet 401 Unauthorized auto-fallback to safe Paper execution & robust SPA routing
+- [x] 322 Tests passing
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
