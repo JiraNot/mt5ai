@@ -34,18 +34,29 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=mvvtu160tgxmnayuys4jaaph"
-      - "traefik.http.routers.freebuff-bot.rule=Host(`trade.onetapweb.com`)"
-      - "traefik.http.routers.freebuff-bot.entrypoints=http,https"
-      - "traefik.http.routers.freebuff-bot.tls=true"
-      - "traefik.http.routers.freebuff-bot.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.freebuff-bot.service=freebuff-bot"
+      # Web App HTTPS (Port 443)
+      - "traefik.http.routers.freebuff-bot-secure.rule=Host(`trade.onetapweb.com`)"
+      - "traefik.http.routers.freebuff-bot-secure.entrypoints=https"
+      - "traefik.http.routers.freebuff-bot-secure.tls=true"
+      - "traefik.http.routers.freebuff-bot-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.freebuff-bot-secure.service=freebuff-bot"
+      # Web App HTTP (Port 80) - Direct route to avoid Cloudflare Flexible SSL redirect loop
+      - "traefik.http.routers.freebuff-bot-http.rule=Host(`trade.onetapweb.com`)"
+      - "traefik.http.routers.freebuff-bot-http.entrypoints=http"
+      - "traefik.http.routers.freebuff-bot-http.service=freebuff-bot"
       - "traefik.http.services.freebuff-bot.loadbalancer.server.port=8501"
-      - "traefik.http.routers.freebuff-terminal.rule=Host(`trade.onetapweb.com`) && PathPrefix(`/terminal`)"
-      - "traefik.http.routers.freebuff-terminal.priority=100"
-      - "traefik.http.routers.freebuff-terminal.entrypoints=http,https"
-      - "traefik.http.routers.freebuff-terminal.tls=true"
-      - "traefik.http.routers.freebuff-terminal.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.freebuff-terminal.service=freebuff-terminal"
+      # Terminal HTTPS (/terminal)
+      - "traefik.http.routers.freebuff-terminal-secure.rule=Host(`trade.onetapweb.com`) && PathPrefix(`/terminal`)"
+      - "traefik.http.routers.freebuff-terminal-secure.priority=100"
+      - "traefik.http.routers.freebuff-terminal-secure.entrypoints=https"
+      - "traefik.http.routers.freebuff-terminal-secure.tls=true"
+      - "traefik.http.routers.freebuff-terminal-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.freebuff-terminal-secure.service=freebuff-terminal"
+      # Terminal HTTP (/terminal)
+      - "traefik.http.routers.freebuff-terminal-http.rule=Host(`trade.onetapweb.com`) && PathPrefix(`/terminal`)"
+      - "traefik.http.routers.freebuff-terminal-http.priority=100"
+      - "traefik.http.routers.freebuff-terminal-http.entrypoints=http"
+      - "traefik.http.routers.freebuff-terminal-http.service=freebuff-terminal"
       - "traefik.http.services.freebuff-terminal.loadbalancer.server.port=7681"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8501/_stcore/health"]
