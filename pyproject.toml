@@ -35,7 +35,9 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.1",
 
-    # Dashboard
+    # Web & Dashboard
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
     "streamlit>=1.37",
     "plotly>=5.18",
 
@@ -58,6 +60,7 @@ ml = [
 
 [project.scripts]
 freebuff = "src.app:main"
+freebuff-web = "src.web.server:main"
 freebuff-trade = "src.live.cli:main"
 freebuff-mcp = "src.control.mcp_server:main"
 freebuff-homework = "src.market.crypto_screener:main"

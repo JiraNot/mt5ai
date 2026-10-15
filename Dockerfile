@@ -23,6 +23,7 @@ RUN mkdir src && touch src/__init__.py && \
 
 # Copy application source code
 COPY src/ src/
+COPY web/ web/
 COPY config/ config/
 COPY scripts/ scripts/
 RUN chmod 755 scripts/container-entrypoint.sh
