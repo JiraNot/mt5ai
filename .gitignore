@@ -30,6 +30,7 @@ logs/
 dist/
 build/
 *.egg-info/
+!web/dist/
 
 # Testing
 .pytest_cache/
@@ -49,3 +50,7 @@ candidate_triage.json
 cli_login_audit.jsonl
 .mobileide/
 query_db.mjs
+
+# Node / Frontend
+node_modules/
+web/node_modules/

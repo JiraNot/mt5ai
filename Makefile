@@ -54,8 +54,20 @@ install:
 run:
 	python -m src.app
 
+dev:
+	python -m src.web.server
+
+run-web:
+	python -m src.web.server
+
+web-install:
+	cd web && npm install
+
+web-build:
+	cd web && npm run build
+
 dashboard:
-	streamlit run src/dashboard/app.py
+	python -m src.web.server
 
 dashboard-html:
 	python scripts/dashboard.py

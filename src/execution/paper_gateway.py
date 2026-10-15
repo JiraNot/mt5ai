@@ -53,6 +53,18 @@ class PaperGateway:
     async def get_symbol_info(self, symbol: str) -> dict:
         return await self._market.get_symbol_info(symbol)
 
+    async def get_funding_rate(self, symbol: str) -> float:
+        return await self._market.get_funding_rate(symbol)
+
+    async def get_24hr_tickers(self) -> list[dict[str, Any]]:
+        return await self._market.get_24hr_tickers()
+
+    async def set_leverage(self, symbol: str, leverage: int = 5) -> dict[str, Any]:
+        return await self._market.set_leverage(symbol, leverage)
+
+    async def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> dict[str, Any]:
+        return await self._market.set_margin_type(symbol, margin_type)
+
     async def get_account_info(self) -> AccountInfo:
         unrealized = sum(position.profit for position in self._positions.values())
         return AccountInfo(

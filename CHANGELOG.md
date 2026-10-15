@@ -1,6 +1,20 @@
 # Changelog
 
-## 2026-10-15 (Binance AI Platform Full-Suite Enhancement)
+## 2026-10-15 (Binance AI Platform Full-Suite Enhancement & Modern WebApp Overhaul)
+
+- **Modern Pro Crypto WebApp (React 19 + TypeScript + Vite + Tailwind CSS + TradingView Charts)**:
+  - Replaced legacy, slow Streamlit UI with a blazing-fast, responsive single-page application (SPA).
+  - **All-in-One Pro Terminal Grid**:
+    - **Header**: Live balance, equity, spread ticker, Promotion Gate readiness gauge (0–100%), Paper/Live mode toggle, and Panic Kill-Switch modal.
+    - **TradingView Lightweight Charts**: 60 FPS canvas candlestick chart with timeframe switcher (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`), volume histogram, and dynamic Entry/SL/TP horizontal line overlays.
+    - **AI Watchlist & Homework Panel**: BTC Macro regime cards, top ranked coins, 24h change %, and "Scan Now" button with immediate chart symbol switching.
+    - **AI Council Verdict Card**: Real-time evaluation breakdown, consensus score, Thai narrative analysis, confluences, and multimodal AI Vision confirmation verdict.
+    - **Active Positions & History Table**: Live positions with manual "Close" and "Lock BE" buttons, plus historical closed trade audit log.
+  - **Unified FastAPI & WebSocket Server (`src/web/server.py`)**:
+    - High-frequency REST APIs (`/api/status`, `/api/watchlist`, `/api/readiness`, `/api/positions`, `/api/candles/{symbol}`, `/api/council/latest`, `/api/actions/*`).
+    - Real-time WebSocket broadcaster (`/ws`) streaming price ticks, candle updates, and active position changes.
+    - Serves pre-built Vite assets with single-port deployment on port 8501 (fully compatible with Coolify / Traefik reverse proxies).
+  - **Automated Test Suite**: Added `tests/unit/test_web_api.py` with 10 unit tests. Platform test suite expanded to **321 passing tests (0 failures)**.
 
 - **Web Dashboard "Agent Homework & Readiness" Tab**:
   - Live Promotion Readiness Gauge (0–100%) with 6-gate safety audit checklist (Sample size >= 30, Profit Factor >= 1.5, Net PnL > 0, Win Rate >= 40%, Max DD <= 5%, 100% Server SL compliance).

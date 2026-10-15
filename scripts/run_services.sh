@@ -6,10 +6,7 @@ mkdir -p /app/data /app/models
 python -m src.app &
 worker_pid=$!
 
-streamlit run src/dashboard/app.py \
-  --server.port 8501 \
-  --server.address 0.0.0.0 \
-  --server.headless true &
+PORT=8501 python -m src.web.server &
 dashboard_pid=$!
 
 python -m src.dashboard.terminal_server &
