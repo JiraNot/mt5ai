@@ -351,3 +351,27 @@ async def test_symbol_deals_filter_to_recorded_order_and_map_partial_exit(monkey
     assert sum(deal.volume for deal in deals if deal.entry == 1) == pytest.approx(1)
     assert all(deal.position_id == 777 for deal in deals)
     await gateway.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_account_info_fallback_on_401_or_unconfigured(monkeypatch):
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "test_key")
+    monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "test_secret")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        if request.url.path == "/fapi/v2/account":
+            return httpx.Response(401, json={"code": -2014, "msg": "API-key format invalid."})
+        return httpx.Response(404, json={})
+
+    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    await gateway.connect()
+    account = await gateway.get_account_info()
+    assert account.balance == 100000.0
+    assert account.server == "paper"
+    assert "Paper Fallback" in account.name
+    await gateway.disconnect()

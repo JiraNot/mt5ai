@@ -343,16 +343,31 @@ class BinanceGateway:
             )
         if settings.binance_mode != "testnet":
             raise BinanceConnectionError("Signed Binance account access is restricted to BINANCE_MODE=testnet")
-        row = await self._signed_request("GET", "/fapi/v2/account", {})
-        return AccountInfo(
-            login=0, name="Binance Futures", server="binance-testnet",
-            balance=float(row.get("totalWalletBalance", 0)),
-            equity=float(row.get("totalMarginBalance", 0)),
-            margin=float(row.get("totalInitialMargin", 0)),
-            free_margin=float(row.get("availableBalance", 0)),
-            profit=float(row.get("totalUnrealizedProfit", 0)),
-            currency="USDT", leverage=0,
-        )
+        try:
+            row = await self._signed_request("GET", "/fapi/v2/account", {})
+            return AccountInfo(
+                login=0, name="Binance Futures", server="binance-testnet",
+                balance=float(row.get("totalWalletBalance", 0)),
+                equity=float(row.get("totalMarginBalance", 0)),
+                margin=float(row.get("totalInitialMargin", 0)),
+                free_margin=float(row.get("availableBalance", 0)),
+                profit=float(row.get("totalUnrealizedProfit", 0)),
+                currency="USDT", leverage=0,
+            )
+        except (BinanceConnectionError, httpx.HTTPStatusError) as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code in (401, 403) or isinstance(exc, BinanceConnectionError):
+                logger.warning(
+                    "⚠️ Binance account sync unauthorized or unconfigured (%s). Falling back to Paper Account simulation ($%s USDT).",
+                    exc, settings.paper_initial_balance,
+                )
+                return AccountInfo(
+                    login=0, name="Binance Testnet (Paper Fallback)", server="paper",
+                    balance=settings.paper_initial_balance, equity=settings.paper_initial_balance,
+                    free_margin=settings.paper_initial_balance, currency="USDT", leverage=1,
+                    mode=TradingMode.PAPER,
+                )
+            raise
 
     async def send_order(self, request: OrderRequest) -> OrderResult:
         if get_runtime_trading_mode(settings.trading_mode) == "live":

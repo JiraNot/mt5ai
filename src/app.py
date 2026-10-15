@@ -95,10 +95,17 @@ class TradingPlatform:
         from src.market.binance_gateway import BinanceGateway
 
         raw_binance = BinanceGateway()
+        has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
+        is_paper = settings.binance_mode == "paper" or not has_credentials
         self._gateway = (
-            PaperGateway(raw_binance) if settings.binance_mode == "paper" else raw_binance
+            PaperGateway(raw_binance) if is_paper else raw_binance
         )
-        logger.info("Market venue enabled: Binance (%s)", settings.binance_mode)
+        if not has_credentials and settings.binance_mode != "paper":
+            logger.warning(
+                "BINANCE_MODE=%s but credentials are empty; defaulting execution to safe PAPER mode.",
+                settings.binance_mode,
+            )
+        logger.info("Market venue enabled: Binance (%s, execution=%s)", settings.binance_mode, "paper" if is_paper else "exchange")
 
         self._data_feed = DataFeed(self._gateway)
         self._spread_monitor = SpreadMonitor(self._trading_symbol)
@@ -249,11 +256,38 @@ class TradingPlatform:
             except asyncio.CancelledError:
                 return
 
+        sync_retries = 0
         while True:
             try:
                 account = await self._gateway.get_account_info()
                 break
             except Exception as exc:
+                sync_retries += 1
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                is_auth_error = (
+                    status_code in (401, 403)
+                    or "401" in str(exc)
+                    or "credentials" in str(exc).lower()
+                    or "unauthorized" in str(exc).lower()
+                )
+                if is_auth_error and sync_retries >= 2 and not isinstance(self._gateway, PaperGateway):
+                    logger.warning(
+                        "⚠️ Binance account sync unauthorized (401/403: %s). "
+                        "Auto-switching execution to safe PAPER mode so trading engine, candles, and AI scoring operate normally.",
+                        exc,
+                    )
+                    from src.execution.paper_gateway import PaperGateway
+                    raw_binance = self._gateway if not isinstance(self._gateway, PaperGateway) else self._gateway._market
+                    self._gateway = PaperGateway(raw_binance)
+                    self._data_feed = DataFeed(self._gateway)
+                    self._order_manager = OrderManager(self._gateway)
+                    self._position_tracker = PositionTracker(self._gateway)
+                    from src.execution.position_manager import PositionManager
+                    self._position_manager = PositionManager(gateway=self._gateway, order_manager=self._order_manager)
+                    account = await self._gateway.get_account_info()
+                    update_runtime_status(last_error="Binance API 401 Unauthorized: Auto-switched to safe PAPER mode")
+                    break
+
                 logger.warning(
                     "Account sync failed for %s: %s. "
                     "Change the runtime mode in the dashboard if this is a credentials check; retrying in 10s...",

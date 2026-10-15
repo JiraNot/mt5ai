@@ -85,8 +85,9 @@ class OrderManager:
         result = await self._gateway.send_order(request)
 
         if result.success:
+            fill_price_str = f"{result.price:.2f}" if isinstance(result.price, (int, float)) else str(result.price)
             logger.info(
-                f"Order filled: ticket={result.ticket}, price={result.price:.2f}, "
+                f"Order filled: ticket={result.ticket}, price={fill_price_str}, "
                 f"volume={result.volume}"
             )
             await event_bus.publish(EventType.ORDER_FILLED, {

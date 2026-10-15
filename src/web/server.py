@@ -53,7 +53,9 @@ def get_gateway() -> BinanceGateway | PaperGateway:
     global _gateway
     if _gateway is None:
         raw = BinanceGateway()
-        _gateway = PaperGateway(raw) if settings.binance_mode == "paper" else raw
+        has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
+        is_paper = settings.binance_mode == "paper" or not has_credentials
+        _gateway = PaperGateway(raw) if is_paper else raw
     return _gateway
 
 
@@ -647,19 +649,30 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 # ─── Static Files & SPA Fallback ──────────────────────────────────────────────
 
-web_dist = Path("web/dist")
-if web_dist.is_dir():
+candidate_paths = [
+    Path("web/dist"),
+    Path(__file__).resolve().parent.parent.parent / "web" / "dist",
+    Path("/app/web/dist"),
+]
+web_dist = next((p for p in candidate_paths if p.is_dir()), candidate_paths[1])
+
+if (web_dist / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=str(web_dist / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        file_path = web_dist / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
-        index_file = web_dist / "index.html"
-        if index_file.is_file():
-            return FileResponse(index_file)
-        return JSONResponse({"ok": True, "message": "Freebuff API is running. Build frontend to view UI."})
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    file_path = web_dist / full_path
+    if full_path and file_path.is_file():
+        return FileResponse(file_path)
+    index_file = web_dist / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    return JSONResponse({
+        "ok": True,
+        "message": "Freebuff Trading Platform API is running. Web UI dist loading...",
+        "status": "ready",
+    })
 
 
 def main() -> None:
