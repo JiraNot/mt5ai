@@ -12,6 +12,9 @@ services:
     expose:
       - 8501
       - 7681
+    ports:
+      - "8501:8501"
+      - "7681:7681"
     environment:
       - BINANCE_MODE=${BINANCE_MODE:-paper}
       - BINANCE_BASE_URL=${BINANCE_BASE_URL:-https://testnet.binancefuture.com}
