@@ -8,6 +8,7 @@ import {
   Lock,
   Unlock,
   AlertTriangle,
+  Terminal as TerminalIcon,
 } from 'lucide-react';
 import { StatusResponse, ReadinessData, triggerPanic, setTradingMode } from '../services/api';
 
@@ -157,6 +158,18 @@ export const Header: React.FC<HeaderProps> = ({
           {isPaper ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3 text-emerald-400" />}
           <span>{status?.mode || 'PAPER'} MODE</span>
         </button>
+
+        {/* AI Login & Terminal Button */}
+        <a
+          href="/terminal"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2.5 py-1 rounded text-xs font-semibold font-mono flex items-center space-x-1.5 border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-colors"
+          title="เปิดหน้าต่าง Terminal เพื่อ Login ChatGPT / Codex"
+        >
+          <TerminalIcon className="w-3.5 h-3.5" />
+          <span>AI LOGIN</span>
+        </a>
 
         {/* Panic Button */}
         <button

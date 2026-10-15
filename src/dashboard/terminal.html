@@ -16,6 +16,7 @@
 </head>
 <body>
   <header>
+    <a href="/" style="color: #38bdf8; text-decoration: none; font-size: 0.9rem; margin-right: 12px; font-weight: 600;">← กลับหน้าเทรด</a>
     <select id="agent"><option value="codex">Codex / ChatGPT</option><option value="agy">Antigravity / Gemini</option><option value="clinepass">ClinePass</option></select>
     <button class="primary" id="start">เริ่ม login</button><button id="stop">หยุด</button>
     <span id="status">กำลังเชื่อมต่อ…</span>
@@ -26,7 +27,14 @@
     const status = document.getElementById('status');
     const terminal = new Terminal({ cursorBlink: true, convertEol: true, fontSize: 15, theme: { background: '#020617', foreground: '#e2e8f0' } });
     terminal.open(document.getElementById('terminal')); terminal.focus();
-    const auth = new URLSearchParams(location.search).get('auth') || '';
+    let auth = new URLSearchParams(location.search).get('auth');
+    if (!auth) {
+      auth = localStorage.getItem('freebuff_terminal_auth') || '';
+      if (!auth) {
+        auth = prompt('กรุณาใส่รหัสผ่าน Dashboard (ค่าเริ่มต้น: freebuff2026):', 'freebuff2026') || '';
+        if (auth) localStorage.setItem('freebuff_terminal_auth', auth);
+      }
+    }
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     const socket = new WebSocket(`${scheme}://${location.host}/terminal/ws?auth=${encodeURIComponent(auth)}`);
     const dimensions = () => ({ cols: Math.max(20, Math.floor(document.getElementById('terminal').clientWidth / 9)), rows: Math.max(5, Math.floor(document.getElementById('terminal').clientHeight / 18)) });

@@ -647,6 +647,110 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         logger.info("WebSocket client disconnected (Remaining: %d)", len(_ws_clients))
 
 
+# ─── Terminal & CLI Authentication (/terminal) ──────────────────────────────
+
+@app.get("/terminal")
+async def terminal_page():
+    """Serve the interactive CLI terminal page for ChatGPT / Codex / Gemini auth."""
+    candidate_paths = [
+        Path("src/dashboard/terminal.html"),
+        Path(__file__).resolve().parent.parent / "dashboard" / "terminal.html",
+        Path("/app/src/dashboard/terminal.html"),
+    ]
+    term_html = next((p for p in candidate_paths if p.is_file()), None)
+    if term_html:
+        return FileResponse(term_html, media_type="text/html")
+    return JSONResponse({"ok": False, "error": "Terminal page not found"}, status_code=404)
+
+
+@app.websocket("/terminal/ws")
+async def terminal_ws_endpoint(websocket: WebSocket):
+    """Handle interactive PTY terminal session for CLI login over WebSocket."""
+    from src.dashboard.cli_login_console import DEFAULT_COMMANDS
+    from src.dashboard.terminal_server import TerminalProcess
+    from src.dashboard.terminal_auth import is_terminal_authorized, dashboard_auth_token
+
+    auth = websocket.query_params.get("auth", "")
+    password = os.getenv("DASHBOARD_PASSWORD", "freebuff2026").strip()
+    is_valid = (
+        auth == password
+        or auth == dashboard_auth_token(password)
+        or is_terminal_authorized(f"/terminal/ws?auth={auth}", password)
+        or not password
+    )
+    if not is_valid:
+        await websocket.close(code=1008, reason="Terminal access denied")
+        return
+
+    await websocket.accept()
+    terminal: TerminalProcess | None = None
+    pump: asyncio.Task[None] | None = None
+
+    async def _output_pump(term: TerminalProcess):
+        try:
+            while term.running:
+                output = term.read()
+                if output:
+                    await websocket.send_text(json.dumps({"type": "output", "data": output}))
+                await asyncio.sleep(0.02)
+            output = term.read()
+            if output:
+                await websocket.send_text(json.dumps({"type": "output", "data": output}))
+            reason = "terminal_timed_out" if term.process.poll() is None else "terminal_completed"
+            term.stop(reason)
+            await websocket.send_text(json.dumps({"type": "exit", "code": term.process.returncode}))
+        except Exception:
+            term.stop("terminal_disconnected")
+
+    try:
+        await websocket.send_text(json.dumps({"type": "ready", "agents": list(DEFAULT_COMMANDS)}))
+        while True:
+            raw_message = await websocket.receive_text()
+            try:
+                message = json.loads(raw_message)
+            except Exception:
+                continue
+            if not isinstance(message, dict):
+                continue
+            action = message.get("type")
+            if action == "start":
+                agent = message.get("agent")
+                if agent not in DEFAULT_COMMANDS:
+                    await websocket.send_text(json.dumps({"type": "error", "message": "Unsupported CLI agent"}))
+                    continue
+                if terminal:
+                    terminal.stop()
+                if pump:
+                    pump.cancel()
+                try:
+                    terminal = TerminalProcess(DEFAULT_COMMANDS[agent])
+                    terminal.resize(int(message.get("cols", 100)), int(message.get("rows", 28)))
+                    pump = asyncio.create_task(_output_pump(terminal))
+                except Exception as exc:
+                    await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
+            elif action == "input" and terminal and terminal.running:
+                data = message.get("data")
+                if isinstance(data, str):
+                    try:
+                        terminal.write(data)
+                    except Exception as exc:
+                        await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
+            elif action == "resize" and terminal and terminal.running:
+                try:
+                    terminal.resize(int(message.get("cols", 100)), int(message.get("rows", 28)))
+                except Exception:
+                    pass
+            elif action == "stop" and terminal:
+                terminal.stop()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if pump:
+            pump.cancel()
+        if terminal:
+            terminal.stop("terminal_disconnected")
+
+
 # ─── Static Files & SPA Fallback ──────────────────────────────────────────────
 
 candidate_paths = [
