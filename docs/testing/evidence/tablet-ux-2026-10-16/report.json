@@ -1,0 +1,2428 @@
+{
+  "transport": "local Playwright Chromium, emulated touch, mocked HTTP/WebSocket",
+  "checks": [
+    {
+      "view": "768x1024",
+      "name": "header groups do not overlap",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": -6,
+          "width": 371.96875,
+          "height": 67,
+          "right": 387.96875,
+          "bottom": 61
+        },
+        {
+          "x": 387.96875,
+          "y": 19.5,
+          "width": 228.859375,
+          "height": 16,
+          "right": 616.828125,
+          "bottom": 35.5
+        },
+        {
+          "x": 616.828125,
+          "y": 4.5,
+          "width": 271.3125,
+          "height": 46,
+          "right": 888.140625,
+          "bottom": 50.5
+        }
+      ]
+    },
+    {
+      "view": "768x1024",
+      "name": "header controls fit viewport",
+      "passed": false,
+      "evidence": [
+        {
+          "x": 16,
+          "y": -6,
+          "width": 371.96875,
+          "height": 67,
+          "right": 387.96875,
+          "bottom": 61
+        },
+        {
+          "x": 387.96875,
+          "y": 19.5,
+          "width": 228.859375,
+          "height": 16,
+          "right": 616.828125,
+          "bottom": 35.5
+        },
+        {
+          "x": 616.828125,
+          "y": 4.5,
+          "width": 271.3125,
+          "height": 46,
+          "right": 888.140625,
+          "bottom": 50.5
+        }
+      ]
+    },
+    {
+      "view": "768x1024",
+      "name": "touch controls are at least 44px",
+      "passed": false,
+      "evidence": [
+        {
+          "label": "PAPER",
+          "x": 616.828125,
+          "y": 9.5,
+          "width": 82.015625,
+          "height": 36,
+          "right": 698.84375,
+          "bottom": 45.5
+        },
+        {
+          "label": "1m",
+          "x": 392.140625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 430.546875,
+          "bottom": 93.5
+        },
+        {
+          "label": "5m",
+          "x": 434.546875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 472.953125,
+          "bottom": 93.5
+        },
+        {
+          "label": "15m",
+          "x": 476.953125,
+          "y": 61.5,
+          "width": 45.609375,
+          "height": 32,
+          "right": 522.5625,
+          "bottom": 93.5
+        },
+        {
+          "label": "1h",
+          "x": 526.5625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 564.96875,
+          "bottom": 93.5
+        },
+        {
+          "label": "4h",
+          "x": 568.96875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 607.375,
+          "bottom": 93.5
+        },
+        {
+          "label": "1d",
+          "x": 611.375,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 649.78125,
+          "bottom": 93.5
+        },
+        {
+          "label": "AI Panel",
+          "x": 660.78125,
+          "y": 60.5,
+          "width": 92.21875,
+          "height": 34,
+          "right": 753,
+          "bottom": 94.5
+        },
+        {
+          "label": "Active Positions (1)",
+          "x": 14,
+          "y": 806.5,
+          "width": 158.1875,
+          "height": 32,
+          "right": 172.1875,
+          "bottom": 838.5
+        },
+        {
+          "label": "Closed History",
+          "x": 180.1875,
+          "y": 806.5,
+          "width": 132.390625,
+          "height": 32,
+          "right": 312.578125,
+          "bottom": 838.5
+        },
+        {
+          "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+          "x": 722,
+          "y": 806.5,
+          "width": 32,
+          "height": 32,
+          "right": 754,
+          "bottom": 838.5
+        }
+      ]
+    },
+    {
+      "view": "768x1024",
+      "name": "chart has usable height",
+      "passed": true,
+      "evidence": {
+        "x": 0,
+        "y": 100,
+        "width": 694,
+        "height": 672,
+        "right": 694,
+        "bottom": 772
+      }
+    },
+    {
+      "view": "768x1024",
+      "name": "timeframe requests selected data",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=5m&count=250",
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "768x1024",
+      "name": "sidebar opens inside viewport",
+      "passed": true,
+      "evidence": {
+        "x": 448,
+        "y": 56,
+        "width": 320,
+        "height": 968
+      }
+    },
+    {
+      "view": "768x1024",
+      "name": "council tab opens",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "768x1024",
+      "name": "watchlist changes chart symbol",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/ETHUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "768x1024",
+      "name": "collapse increases chart height",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "x": 0,
+          "y": 100,
+          "width": 694,
+          "height": 672
+        },
+        "after": {
+          "x": 0,
+          "y": 100,
+          "width": 694,
+          "height": 852
+        }
+      }
+    },
+    {
+      "view": "768x1024",
+      "name": "history tab expands table",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "768x1024",
+      "name": "position table overflow is locally scrollable",
+      "passed": true,
+      "evidence": {
+        "left": 0,
+        "width": 766,
+        "scrollWidth": 766
+      }
+    },
+    {
+      "view": "768x1024",
+      "name": "no console or runtime errors",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "768x1024",
+      "name": "no trading mutations sent",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "820x1180",
+      "name": "header groups do not overlap",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": -6,
+          "width": 371.96875,
+          "height": 67,
+          "right": 387.96875,
+          "bottom": 61
+        },
+        {
+          "x": 387.96875,
+          "y": 19.5,
+          "width": 228.859375,
+          "height": 16,
+          "right": 616.828125,
+          "bottom": 35.5
+        },
+        {
+          "x": 616.828125,
+          "y": 4.5,
+          "width": 271.3125,
+          "height": 46,
+          "right": 888.140625,
+          "bottom": 50.5
+        }
+      ]
+    },
+    {
+      "view": "820x1180",
+      "name": "header controls fit viewport",
+      "passed": false,
+      "evidence": [
+        {
+          "x": 16,
+          "y": -6,
+          "width": 371.96875,
+          "height": 67,
+          "right": 387.96875,
+          "bottom": 61
+        },
+        {
+          "x": 387.96875,
+          "y": 19.5,
+          "width": 228.859375,
+          "height": 16,
+          "right": 616.828125,
+          "bottom": 35.5
+        },
+        {
+          "x": 616.828125,
+          "y": 4.5,
+          "width": 271.3125,
+          "height": 46,
+          "right": 888.140625,
+          "bottom": 50.5
+        }
+      ]
+    },
+    {
+      "view": "820x1180",
+      "name": "touch controls are at least 44px",
+      "passed": false,
+      "evidence": [
+        {
+          "label": "PAPER",
+          "x": 616.828125,
+          "y": 9.5,
+          "width": 82.015625,
+          "height": 36,
+          "right": 698.84375,
+          "bottom": 45.5
+        },
+        {
+          "label": "1m",
+          "x": 444.140625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 482.546875,
+          "bottom": 93.5
+        },
+        {
+          "label": "5m",
+          "x": 486.546875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 524.953125,
+          "bottom": 93.5
+        },
+        {
+          "label": "15m",
+          "x": 528.953125,
+          "y": 61.5,
+          "width": 45.609375,
+          "height": 32,
+          "right": 574.5625,
+          "bottom": 93.5
+        },
+        {
+          "label": "1h",
+          "x": 578.5625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 616.96875,
+          "bottom": 93.5
+        },
+        {
+          "label": "4h",
+          "x": 620.96875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 659.375,
+          "bottom": 93.5
+        },
+        {
+          "label": "1d",
+          "x": 663.375,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 701.78125,
+          "bottom": 93.5
+        },
+        {
+          "label": "AI Panel",
+          "x": 712.78125,
+          "y": 60.5,
+          "width": 92.21875,
+          "height": 34,
+          "right": 805,
+          "bottom": 94.5
+        },
+        {
+          "label": "Active Positions (1)",
+          "x": 14,
+          "y": 962.5,
+          "width": 158.1875,
+          "height": 32,
+          "right": 172.1875,
+          "bottom": 994.5
+        },
+        {
+          "label": "Closed History",
+          "x": 180.1875,
+          "y": 962.5,
+          "width": 132.390625,
+          "height": 32,
+          "right": 312.578125,
+          "bottom": 994.5
+        },
+        {
+          "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+          "x": 774,
+          "y": 962.5,
+          "width": 32,
+          "height": 32,
+          "right": 806,
+          "bottom": 994.5
+        }
+      ]
+    },
+    {
+      "view": "820x1180",
+      "name": "chart has usable height",
+      "passed": true,
+      "evidence": {
+        "x": 0,
+        "y": 100,
+        "width": 746,
+        "height": 828,
+        "right": 746,
+        "bottom": 928
+      }
+    },
+    {
+      "view": "820x1180",
+      "name": "timeframe requests selected data",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=5m&count=250",
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "820x1180",
+      "name": "sidebar opens inside viewport",
+      "passed": true,
+      "evidence": {
+        "x": 500,
+        "y": 56,
+        "width": 320,
+        "height": 1124
+      }
+    },
+    {
+      "view": "820x1180",
+      "name": "council tab opens",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "820x1180",
+      "name": "watchlist changes chart symbol",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/ETHUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "820x1180",
+      "name": "collapse increases chart height",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "x": 0,
+          "y": 100,
+          "width": 746,
+          "height": 828
+        },
+        "after": {
+          "x": 0,
+          "y": 100,
+          "width": 746,
+          "height": 1008
+        }
+      }
+    },
+    {
+      "view": "820x1180",
+      "name": "history tab expands table",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "820x1180",
+      "name": "position table overflow is locally scrollable",
+      "passed": true,
+      "evidence": {
+        "left": 0,
+        "width": 818,
+        "scrollWidth": 818
+      }
+    },
+    {
+      "view": "820x1180",
+      "name": "no console or runtime errors",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "820x1180",
+      "name": "no trading mutations sent",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1024x768",
+      "name": "header groups do not overlap",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 463,
+          "y": 19.5,
+          "width": 232.859375,
+          "height": 16,
+          "right": 695.859375,
+          "bottom": 35.5
+        },
+        {
+          "x": 715.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1008,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1024x768",
+      "name": "header controls fit viewport",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 463,
+          "y": 19.5,
+          "width": 232.859375,
+          "height": 16,
+          "right": 695.859375,
+          "bottom": 35.5
+        },
+        {
+          "x": 715.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1008,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1024x768",
+      "name": "touch controls are at least 44px",
+      "passed": false,
+      "evidence": [
+        {
+          "label": "PAPER",
+          "x": 715.078125,
+          "y": 9.5,
+          "width": 82.015625,
+          "height": 36,
+          "right": 797.09375,
+          "bottom": 45.5
+        },
+        {
+          "label": "AI LOGIN",
+          "x": 807.09375,
+          "y": 9.5,
+          "width": 103.609375,
+          "height": 36,
+          "right": 910.703125,
+          "bottom": 45.5
+        },
+        {
+          "label": "PANIC",
+          "x": 920.703125,
+          "y": 9.5,
+          "width": 87.296875,
+          "height": 36,
+          "right": 1008,
+          "bottom": 45.5
+        },
+        {
+          "label": "1m",
+          "x": 648.140625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 686.546875,
+          "bottom": 93.5
+        },
+        {
+          "label": "5m",
+          "x": 690.546875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 728.953125,
+          "bottom": 93.5
+        },
+        {
+          "label": "15m",
+          "x": 732.953125,
+          "y": 61.5,
+          "width": 45.609375,
+          "height": 32,
+          "right": 778.5625,
+          "bottom": 93.5
+        },
+        {
+          "label": "1h",
+          "x": 782.5625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 820.96875,
+          "bottom": 93.5
+        },
+        {
+          "label": "4h",
+          "x": 824.96875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 863.375,
+          "bottom": 93.5
+        },
+        {
+          "label": "1d",
+          "x": 867.375,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 905.78125,
+          "bottom": 93.5
+        },
+        {
+          "label": "AI Panel",
+          "x": 916.78125,
+          "y": 60.5,
+          "width": 92.21875,
+          "height": 34,
+          "right": 1009,
+          "bottom": 94.5
+        },
+        {
+          "label": "Active Positions (1)",
+          "x": 14,
+          "y": 550.5,
+          "width": 158.1875,
+          "height": 32,
+          "right": 172.1875,
+          "bottom": 582.5
+        },
+        {
+          "label": "Closed History",
+          "x": 180.1875,
+          "y": 550.5,
+          "width": 132.390625,
+          "height": 32,
+          "right": 312.578125,
+          "bottom": 582.5
+        },
+        {
+          "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+          "x": 978,
+          "y": 550.5,
+          "width": 32,
+          "height": 32,
+          "right": 1010,
+          "bottom": 582.5
+        },
+        {
+          "label": "Lock BE",
+          "x": 827.578125,
+          "y": 632,
+          "width": 94.40625,
+          "height": 32,
+          "right": 921.984375,
+          "bottom": 664
+        },
+        {
+          "label": "Close",
+          "x": 929.984375,
+          "y": 632,
+          "width": 80.015625,
+          "height": 32,
+          "right": 1010,
+          "bottom": 664
+        }
+      ]
+    },
+    {
+      "view": "1024x768",
+      "name": "chart has usable height",
+      "passed": true,
+      "evidence": {
+        "x": 0,
+        "y": 100,
+        "width": 950,
+        "height": 416,
+        "right": 950,
+        "bottom": 516
+      }
+    },
+    {
+      "view": "1024x768",
+      "name": "timeframe requests selected data",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=5m&count=250",
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1024x768",
+      "name": "sidebar opens inside viewport",
+      "passed": true,
+      "evidence": {
+        "x": 704,
+        "y": 56,
+        "width": 320,
+        "height": 488
+      }
+    },
+    {
+      "view": "1024x768",
+      "name": "council tab opens",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1024x768",
+      "name": "watchlist changes chart symbol",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/ETHUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1024x768",
+      "name": "collapse increases chart height",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "x": 0,
+          "y": 100,
+          "width": 950,
+          "height": 416
+        },
+        "after": {
+          "x": 0,
+          "y": 100,
+          "width": 950,
+          "height": 596
+        }
+      }
+    },
+    {
+      "view": "1024x768",
+      "name": "history tab expands table",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1024x768",
+      "name": "position table overflow is locally scrollable",
+      "passed": true,
+      "evidence": {
+        "left": 0,
+        "width": 1022,
+        "scrollWidth": 1022
+      }
+    },
+    {
+      "view": "1024x768",
+      "name": "no console or runtime errors",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1024x768",
+      "name": "no trading mutations sent",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1366x1024",
+      "name": "header groups do not overlap",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 520.53125,
+          "y": 19.5,
+          "width": 459.8125,
+          "height": 16,
+          "right": 980.34375,
+          "bottom": 35.5
+        },
+        {
+          "x": 1057.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1350,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1366x1024",
+      "name": "header controls fit viewport",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 520.53125,
+          "y": 19.5,
+          "width": 459.8125,
+          "height": 16,
+          "right": 980.34375,
+          "bottom": 35.5
+        },
+        {
+          "x": 1057.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1350,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1366x1024",
+      "name": "touch controls are at least 44px",
+      "passed": false,
+      "evidence": [
+        {
+          "label": "PAPER",
+          "x": 1057.078125,
+          "y": 9.5,
+          "width": 82.015625,
+          "height": 36,
+          "right": 1139.09375,
+          "bottom": 45.5
+        },
+        {
+          "label": "AI LOGIN",
+          "x": 1149.09375,
+          "y": 9.5,
+          "width": 103.609375,
+          "height": 36,
+          "right": 1252.703125,
+          "bottom": 45.5
+        },
+        {
+          "label": "PANIC",
+          "x": 1262.703125,
+          "y": 9.5,
+          "width": 87.296875,
+          "height": 36,
+          "right": 1350,
+          "bottom": 45.5
+        },
+        {
+          "label": "1m",
+          "x": 675.734375,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 714.140625,
+          "bottom": 93.5
+        },
+        {
+          "label": "5m",
+          "x": 718.140625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 756.546875,
+          "bottom": 93.5
+        },
+        {
+          "label": "15m",
+          "x": 760.546875,
+          "y": 61.5,
+          "width": 45.609375,
+          "height": 32,
+          "right": 806.15625,
+          "bottom": 93.5
+        },
+        {
+          "label": "1h",
+          "x": 810.15625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 848.5625,
+          "bottom": 93.5
+        },
+        {
+          "label": "4h",
+          "x": 852.5625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 890.96875,
+          "bottom": 93.5
+        },
+        {
+          "label": "1d",
+          "x": 894.96875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 933.375,
+          "bottom": 93.5
+        },
+        {
+          "label": "Hide AI",
+          "x": 944.375,
+          "y": 60.5,
+          "width": 86.625,
+          "height": 34,
+          "right": 1031,
+          "bottom": 94.5
+        },
+        {
+          "label": "Watchlist1",
+          "x": 1059,
+          "y": 61.5,
+          "width": 122.484375,
+          "height": 32,
+          "right": 1181.484375,
+          "bottom": 93.5
+        },
+        {
+          "label": "AI Council",
+          "x": 1187.484375,
+          "y": 61.5,
+          "width": 102.921875,
+          "height": 32,
+          "right": 1290.40625,
+          "bottom": 93.5
+        },
+        {
+          "label": "Scan Now",
+          "x": 1248.890625,
+          "y": 105.5,
+          "width": 103.109375,
+          "height": 32,
+          "right": 1352,
+          "bottom": 137.5
+        },
+        {
+          "label": "Active Positions (1)",
+          "x": 14,
+          "y": 806.5,
+          "width": 158.1875,
+          "height": 32,
+          "right": 172.1875,
+          "bottom": 838.5
+        },
+        {
+          "label": "Closed History",
+          "x": 180.1875,
+          "y": 806.5,
+          "width": 132.390625,
+          "height": 32,
+          "right": 312.578125,
+          "bottom": 838.5
+        },
+        {
+          "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+          "x": 1320,
+          "y": 806.5,
+          "width": 32,
+          "height": 32,
+          "right": 1352,
+          "bottom": 838.5
+        },
+        {
+          "label": "Lock BE",
+          "x": 1169.578125,
+          "y": 888,
+          "width": 94.40625,
+          "height": 32,
+          "right": 1263.984375,
+          "bottom": 920
+        },
+        {
+          "label": "Close",
+          "x": 1271.984375,
+          "y": 888,
+          "width": 80.015625,
+          "height": 32,
+          "right": 1352,
+          "bottom": 920
+        }
+      ]
+    },
+    {
+      "view": "1366x1024",
+      "name": "chart has usable height",
+      "passed": true,
+      "evidence": {
+        "x": 0,
+        "y": 100,
+        "width": 972,
+        "height": 672,
+        "right": 972,
+        "bottom": 772
+      }
+    },
+    {
+      "view": "1366x1024",
+      "name": "timeframe requests selected data",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=5m&count=250",
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1366x1024",
+      "name": "sidebar opens inside viewport",
+      "passed": true,
+      "evidence": {
+        "x": 1046,
+        "y": 56,
+        "width": 320,
+        "height": 744
+      }
+    },
+    {
+      "view": "1366x1024",
+      "name": "council tab opens",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1366x1024",
+      "name": "watchlist changes chart symbol",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/ETHUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1366x1024",
+      "name": "collapse increases chart height",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "x": 0,
+          "y": 100,
+          "width": 1292,
+          "height": 672
+        },
+        "after": {
+          "x": 0,
+          "y": 100,
+          "width": 1292,
+          "height": 852
+        }
+      }
+    },
+    {
+      "view": "1366x1024",
+      "name": "history tab expands table",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1366x1024",
+      "name": "position table overflow is locally scrollable",
+      "passed": true,
+      "evidence": {
+        "left": 0,
+        "width": 1364,
+        "scrollWidth": 1364
+      }
+    },
+    {
+      "view": "1366x1024",
+      "name": "no console or runtime errors",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1366x1024",
+      "name": "no trading mutations sent",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1440x900",
+      "name": "header groups do not overlap",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 557.53125,
+          "y": 19.5,
+          "width": 459.8125,
+          "height": 16,
+          "right": 1017.34375,
+          "bottom": 35.5
+        },
+        {
+          "x": 1131.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1424,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1440x900",
+      "name": "header controls fit viewport",
+      "passed": true,
+      "evidence": [
+        {
+          "x": 16,
+          "y": 9.25,
+          "width": 427.78125,
+          "height": 36.5,
+          "right": 443.78125,
+          "bottom": 45.75
+        },
+        {
+          "x": 557.53125,
+          "y": 19.5,
+          "width": 459.8125,
+          "height": 16,
+          "right": 1017.34375,
+          "bottom": 35.5
+        },
+        {
+          "x": 1131.078125,
+          "y": 9.5,
+          "width": 292.921875,
+          "height": 36,
+          "right": 1424,
+          "bottom": 45.5
+        }
+      ]
+    },
+    {
+      "view": "1440x900",
+      "name": "touch controls are at least 44px",
+      "passed": false,
+      "evidence": [
+        {
+          "label": "PAPER",
+          "x": 1131.078125,
+          "y": 9.5,
+          "width": 82.015625,
+          "height": 36,
+          "right": 1213.09375,
+          "bottom": 45.5
+        },
+        {
+          "label": "AI LOGIN",
+          "x": 1223.09375,
+          "y": 9.5,
+          "width": 103.609375,
+          "height": 36,
+          "right": 1326.703125,
+          "bottom": 45.5
+        },
+        {
+          "label": "PANIC",
+          "x": 1336.703125,
+          "y": 9.5,
+          "width": 87.296875,
+          "height": 36,
+          "right": 1424,
+          "bottom": 45.5
+        },
+        {
+          "label": "1m",
+          "x": 749.734375,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 788.140625,
+          "bottom": 93.5
+        },
+        {
+          "label": "5m",
+          "x": 792.140625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 830.546875,
+          "bottom": 93.5
+        },
+        {
+          "label": "15m",
+          "x": 834.546875,
+          "y": 61.5,
+          "width": 45.609375,
+          "height": 32,
+          "right": 880.15625,
+          "bottom": 93.5
+        },
+        {
+          "label": "1h",
+          "x": 884.15625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 922.5625,
+          "bottom": 93.5
+        },
+        {
+          "label": "4h",
+          "x": 926.5625,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 964.96875,
+          "bottom": 93.5
+        },
+        {
+          "label": "1d",
+          "x": 968.96875,
+          "y": 61.5,
+          "width": 38.40625,
+          "height": 32,
+          "right": 1007.375,
+          "bottom": 93.5
+        },
+        {
+          "label": "Hide AI",
+          "x": 1018.375,
+          "y": 60.5,
+          "width": 86.625,
+          "height": 34,
+          "right": 1105,
+          "bottom": 94.5
+        },
+        {
+          "label": "Watchlist1",
+          "x": 1133,
+          "y": 61.5,
+          "width": 122.484375,
+          "height": 32,
+          "right": 1255.484375,
+          "bottom": 93.5
+        },
+        {
+          "label": "AI Council",
+          "x": 1261.484375,
+          "y": 61.5,
+          "width": 102.921875,
+          "height": 32,
+          "right": 1364.40625,
+          "bottom": 93.5
+        },
+        {
+          "label": "Scan Now",
+          "x": 1322.890625,
+          "y": 105.5,
+          "width": 103.109375,
+          "height": 32,
+          "right": 1426,
+          "bottom": 137.5
+        },
+        {
+          "label": "Active Positions (1)",
+          "x": 14,
+          "y": 682.5,
+          "width": 158.1875,
+          "height": 32,
+          "right": 172.1875,
+          "bottom": 714.5
+        },
+        {
+          "label": "Closed History",
+          "x": 180.1875,
+          "y": 682.5,
+          "width": 132.390625,
+          "height": 32,
+          "right": 312.578125,
+          "bottom": 714.5
+        },
+        {
+          "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+          "x": 1394,
+          "y": 682.5,
+          "width": 32,
+          "height": 32,
+          "right": 1426,
+          "bottom": 714.5
+        },
+        {
+          "label": "Lock BE",
+          "x": 1243.578125,
+          "y": 764,
+          "width": 94.40625,
+          "height": 32,
+          "right": 1337.984375,
+          "bottom": 796
+        },
+        {
+          "label": "Close",
+          "x": 1345.984375,
+          "y": 764,
+          "width": 80.015625,
+          "height": 32,
+          "right": 1426,
+          "bottom": 796
+        }
+      ]
+    },
+    {
+      "view": "1440x900",
+      "name": "chart has usable height",
+      "passed": true,
+      "evidence": {
+        "x": 0,
+        "y": 100,
+        "width": 1046,
+        "height": 548,
+        "right": 1046,
+        "bottom": 648
+      }
+    },
+    {
+      "view": "1440x900",
+      "name": "timeframe requests selected data",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=5m&count=250",
+        "http://127.0.0.1:3017/api/candles/BTCUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1440x900",
+      "name": "sidebar opens inside viewport",
+      "passed": true,
+      "evidence": {
+        "x": 1120,
+        "y": 56,
+        "width": 320,
+        "height": 620
+      }
+    },
+    {
+      "view": "1440x900",
+      "name": "council tab opens",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1440x900",
+      "name": "watchlist changes chart symbol",
+      "passed": true,
+      "evidence": [
+        "http://127.0.0.1:3017/api/candles/ETHUSDT?timeframe=15m&count=250"
+      ]
+    },
+    {
+      "view": "1440x900",
+      "name": "collapse increases chart height",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "x": 0,
+          "y": 100,
+          "width": 1366,
+          "height": 548
+        },
+        "after": {
+          "x": 0,
+          "y": 100,
+          "width": 1366,
+          "height": 728
+        }
+      }
+    },
+    {
+      "view": "1440x900",
+      "name": "history tab expands table",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "view": "1440x900",
+      "name": "position table overflow is locally scrollable",
+      "passed": true,
+      "evidence": {
+        "left": 0,
+        "width": 1438,
+        "scrollWidth": 1438
+      }
+    },
+    {
+      "view": "1440x900",
+      "name": "no console or runtime errors",
+      "passed": true,
+      "evidence": []
+    },
+    {
+      "view": "1440x900",
+      "name": "no trading mutations sent",
+      "passed": true,
+      "evidence": []
+    }
+  ],
+  "views": [
+    {
+      "view": "768x1024",
+      "layout": {
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 768,
+          "height": 56,
+          "right": 768,
+          "bottom": 56
+        },
+        "groups": [
+          {
+            "x": 16,
+            "y": -6,
+            "width": 371.96875,
+            "height": 67,
+            "right": 387.96875,
+            "bottom": 61
+          },
+          {
+            "x": 387.96875,
+            "y": 19.5,
+            "width": 228.859375,
+            "height": 16,
+            "right": 616.828125,
+            "bottom": 35.5
+          },
+          {
+            "x": 616.828125,
+            "y": 4.5,
+            "width": 271.3125,
+            "height": 46,
+            "right": 888.140625,
+            "bottom": 50.5
+          }
+        ],
+        "controls": [
+          {
+            "label": "PAPER",
+            "x": 616.828125,
+            "y": 9.5,
+            "width": 82.015625,
+            "height": 36,
+            "right": 698.84375,
+            "bottom": 45.5
+          },
+          {
+            "label": "1m",
+            "x": 392.140625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 430.546875,
+            "bottom": 93.5
+          },
+          {
+            "label": "5m",
+            "x": 434.546875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 472.953125,
+            "bottom": 93.5
+          },
+          {
+            "label": "15m",
+            "x": 476.953125,
+            "y": 61.5,
+            "width": 45.609375,
+            "height": 32,
+            "right": 522.5625,
+            "bottom": 93.5
+          },
+          {
+            "label": "1h",
+            "x": 526.5625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 564.96875,
+            "bottom": 93.5
+          },
+          {
+            "label": "4h",
+            "x": 568.96875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 607.375,
+            "bottom": 93.5
+          },
+          {
+            "label": "1d",
+            "x": 611.375,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 649.78125,
+            "bottom": 93.5
+          },
+          {
+            "label": "AI Panel",
+            "x": 660.78125,
+            "y": 60.5,
+            "width": 92.21875,
+            "height": 34,
+            "right": 753,
+            "bottom": 94.5
+          },
+          {
+            "label": "Active Positions (1)",
+            "x": 14,
+            "y": 806.5,
+            "width": 158.1875,
+            "height": 32,
+            "right": 172.1875,
+            "bottom": 838.5
+          },
+          {
+            "label": "Closed History",
+            "x": 180.1875,
+            "y": 806.5,
+            "width": 132.390625,
+            "height": 32,
+            "right": 312.578125,
+            "bottom": 838.5
+          },
+          {
+            "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+            "x": 722,
+            "y": 806.5,
+            "width": 32,
+            "height": 32,
+            "right": 754,
+            "bottom": 838.5
+          },
+          {
+            "label": "Lock BE",
+            "x": 675.671875,
+            "y": 904,
+            "width": 72.8125,
+            "height": 46,
+            "right": 748.484375,
+            "bottom": 950
+          }
+        ],
+        "canvas": {
+          "x": 0,
+          "y": 100,
+          "width": 694,
+          "height": 672,
+          "right": 694,
+          "bottom": 772
+        },
+        "documentWidth": 768
+      }
+    },
+    {
+      "view": "820x1180",
+      "layout": {
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 820,
+          "height": 56,
+          "right": 820,
+          "bottom": 56
+        },
+        "groups": [
+          {
+            "x": 16,
+            "y": -6,
+            "width": 371.96875,
+            "height": 67,
+            "right": 387.96875,
+            "bottom": 61
+          },
+          {
+            "x": 387.96875,
+            "y": 19.5,
+            "width": 228.859375,
+            "height": 16,
+            "right": 616.828125,
+            "bottom": 35.5
+          },
+          {
+            "x": 616.828125,
+            "y": 4.5,
+            "width": 271.3125,
+            "height": 46,
+            "right": 888.140625,
+            "bottom": 50.5
+          }
+        ],
+        "controls": [
+          {
+            "label": "PAPER",
+            "x": 616.828125,
+            "y": 9.5,
+            "width": 82.015625,
+            "height": 36,
+            "right": 698.84375,
+            "bottom": 45.5
+          },
+          {
+            "label": "AI LOGIN",
+            "x": 708.84375,
+            "y": 4.5,
+            "width": 82,
+            "height": 46,
+            "right": 790.84375,
+            "bottom": 50.5
+          },
+          {
+            "label": "1m",
+            "x": 444.140625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 482.546875,
+            "bottom": 93.5
+          },
+          {
+            "label": "5m",
+            "x": 486.546875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 524.953125,
+            "bottom": 93.5
+          },
+          {
+            "label": "15m",
+            "x": 528.953125,
+            "y": 61.5,
+            "width": 45.609375,
+            "height": 32,
+            "right": 574.5625,
+            "bottom": 93.5
+          },
+          {
+            "label": "1h",
+            "x": 578.5625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 616.96875,
+            "bottom": 93.5
+          },
+          {
+            "label": "4h",
+            "x": 620.96875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 659.375,
+            "bottom": 93.5
+          },
+          {
+            "label": "1d",
+            "x": 663.375,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 701.78125,
+            "bottom": 93.5
+          },
+          {
+            "label": "AI Panel",
+            "x": 712.78125,
+            "y": 60.5,
+            "width": 92.21875,
+            "height": 34,
+            "right": 805,
+            "bottom": 94.5
+          },
+          {
+            "label": "Active Positions (1)",
+            "x": 14,
+            "y": 962.5,
+            "width": 158.1875,
+            "height": 32,
+            "right": 172.1875,
+            "bottom": 994.5
+          },
+          {
+            "label": "Closed History",
+            "x": 180.1875,
+            "y": 962.5,
+            "width": 132.390625,
+            "height": 32,
+            "right": 312.578125,
+            "bottom": 994.5
+          },
+          {
+            "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+            "x": 774,
+            "y": 962.5,
+            "width": 32,
+            "height": 32,
+            "right": 806,
+            "bottom": 994.5
+          },
+          {
+            "label": "Lock BE",
+            "x": 675.671875,
+            "y": 1060,
+            "width": 72.8125,
+            "height": 46,
+            "right": 748.484375,
+            "bottom": 1106
+          }
+        ],
+        "canvas": {
+          "x": 0,
+          "y": 100,
+          "width": 746,
+          "height": 828,
+          "right": 746,
+          "bottom": 928
+        },
+        "documentWidth": 820
+      }
+    },
+    {
+      "view": "1024x768",
+      "layout": {
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 1024,
+          "height": 56,
+          "right": 1024,
+          "bottom": 56
+        },
+        "groups": [
+          {
+            "x": 16,
+            "y": 9.25,
+            "width": 427.78125,
+            "height": 36.5,
+            "right": 443.78125,
+            "bottom": 45.75
+          },
+          {
+            "x": 463,
+            "y": 19.5,
+            "width": 232.859375,
+            "height": 16,
+            "right": 695.859375,
+            "bottom": 35.5
+          },
+          {
+            "x": 715.078125,
+            "y": 9.5,
+            "width": 292.921875,
+            "height": 36,
+            "right": 1008,
+            "bottom": 45.5
+          }
+        ],
+        "controls": [
+          {
+            "label": "PAPER",
+            "x": 715.078125,
+            "y": 9.5,
+            "width": 82.015625,
+            "height": 36,
+            "right": 797.09375,
+            "bottom": 45.5
+          },
+          {
+            "label": "AI LOGIN",
+            "x": 807.09375,
+            "y": 9.5,
+            "width": 103.609375,
+            "height": 36,
+            "right": 910.703125,
+            "bottom": 45.5
+          },
+          {
+            "label": "PANIC",
+            "x": 920.703125,
+            "y": 9.5,
+            "width": 87.296875,
+            "height": 36,
+            "right": 1008,
+            "bottom": 45.5
+          },
+          {
+            "label": "1m",
+            "x": 648.140625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 686.546875,
+            "bottom": 93.5
+          },
+          {
+            "label": "5m",
+            "x": 690.546875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 728.953125,
+            "bottom": 93.5
+          },
+          {
+            "label": "15m",
+            "x": 732.953125,
+            "y": 61.5,
+            "width": 45.609375,
+            "height": 32,
+            "right": 778.5625,
+            "bottom": 93.5
+          },
+          {
+            "label": "1h",
+            "x": 782.5625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 820.96875,
+            "bottom": 93.5
+          },
+          {
+            "label": "4h",
+            "x": 824.96875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 863.375,
+            "bottom": 93.5
+          },
+          {
+            "label": "1d",
+            "x": 867.375,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 905.78125,
+            "bottom": 93.5
+          },
+          {
+            "label": "AI Panel",
+            "x": 916.78125,
+            "y": 60.5,
+            "width": 92.21875,
+            "height": 34,
+            "right": 1009,
+            "bottom": 94.5
+          },
+          {
+            "label": "Active Positions (1)",
+            "x": 14,
+            "y": 550.5,
+            "width": 158.1875,
+            "height": 32,
+            "right": 172.1875,
+            "bottom": 582.5
+          },
+          {
+            "label": "Closed History",
+            "x": 180.1875,
+            "y": 550.5,
+            "width": 132.390625,
+            "height": 32,
+            "right": 312.578125,
+            "bottom": 582.5
+          },
+          {
+            "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+            "x": 978,
+            "y": 550.5,
+            "width": 32,
+            "height": 32,
+            "right": 1010,
+            "bottom": 582.5
+          },
+          {
+            "label": "Lock BE",
+            "x": 827.578125,
+            "y": 632,
+            "width": 94.40625,
+            "height": 32,
+            "right": 921.984375,
+            "bottom": 664
+          },
+          {
+            "label": "Close",
+            "x": 929.984375,
+            "y": 632,
+            "width": 80.015625,
+            "height": 32,
+            "right": 1010,
+            "bottom": 664
+          }
+        ],
+        "canvas": {
+          "x": 0,
+          "y": 100,
+          "width": 950,
+          "height": 416,
+          "right": 950,
+          "bottom": 516
+        },
+        "documentWidth": 1024
+      }
+    },
+    {
+      "view": "1366x1024",
+      "layout": {
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 1366,
+          "height": 56,
+          "right": 1366,
+          "bottom": 56
+        },
+        "groups": [
+          {
+            "x": 16,
+            "y": 9.25,
+            "width": 427.78125,
+            "height": 36.5,
+            "right": 443.78125,
+            "bottom": 45.75
+          },
+          {
+            "x": 520.53125,
+            "y": 19.5,
+            "width": 459.8125,
+            "height": 16,
+            "right": 980.34375,
+            "bottom": 35.5
+          },
+          {
+            "x": 1057.078125,
+            "y": 9.5,
+            "width": 292.921875,
+            "height": 36,
+            "right": 1350,
+            "bottom": 45.5
+          }
+        ],
+        "controls": [
+          {
+            "label": "PAPER",
+            "x": 1057.078125,
+            "y": 9.5,
+            "width": 82.015625,
+            "height": 36,
+            "right": 1139.09375,
+            "bottom": 45.5
+          },
+          {
+            "label": "AI LOGIN",
+            "x": 1149.09375,
+            "y": 9.5,
+            "width": 103.609375,
+            "height": 36,
+            "right": 1252.703125,
+            "bottom": 45.5
+          },
+          {
+            "label": "PANIC",
+            "x": 1262.703125,
+            "y": 9.5,
+            "width": 87.296875,
+            "height": 36,
+            "right": 1350,
+            "bottom": 45.5
+          },
+          {
+            "label": "1m",
+            "x": 675.734375,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 714.140625,
+            "bottom": 93.5
+          },
+          {
+            "label": "5m",
+            "x": 718.140625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 756.546875,
+            "bottom": 93.5
+          },
+          {
+            "label": "15m",
+            "x": 760.546875,
+            "y": 61.5,
+            "width": 45.609375,
+            "height": 32,
+            "right": 806.15625,
+            "bottom": 93.5
+          },
+          {
+            "label": "1h",
+            "x": 810.15625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 848.5625,
+            "bottom": 93.5
+          },
+          {
+            "label": "4h",
+            "x": 852.5625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 890.96875,
+            "bottom": 93.5
+          },
+          {
+            "label": "1d",
+            "x": 894.96875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 933.375,
+            "bottom": 93.5
+          },
+          {
+            "label": "Hide AI",
+            "x": 944.375,
+            "y": 60.5,
+            "width": 86.625,
+            "height": 34,
+            "right": 1031,
+            "bottom": 94.5
+          },
+          {
+            "label": "Watchlist1",
+            "x": 1059,
+            "y": 61.5,
+            "width": 122.484375,
+            "height": 32,
+            "right": 1181.484375,
+            "bottom": 93.5
+          },
+          {
+            "label": "AI Council",
+            "x": 1187.484375,
+            "y": 61.5,
+            "width": 102.921875,
+            "height": 32,
+            "right": 1290.40625,
+            "bottom": 93.5
+          },
+          {
+            "label": "Scan Now",
+            "x": 1248.890625,
+            "y": 105.5,
+            "width": 103.109375,
+            "height": 32,
+            "right": 1352,
+            "bottom": 137.5
+          },
+          {
+            "label": "Active Positions (1)",
+            "x": 14,
+            "y": 806.5,
+            "width": 158.1875,
+            "height": 32,
+            "right": 172.1875,
+            "bottom": 838.5
+          },
+          {
+            "label": "Closed History",
+            "x": 180.1875,
+            "y": 806.5,
+            "width": 132.390625,
+            "height": 32,
+            "right": 312.578125,
+            "bottom": 838.5
+          },
+          {
+            "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+            "x": 1320,
+            "y": 806.5,
+            "width": 32,
+            "height": 32,
+            "right": 1352,
+            "bottom": 838.5
+          },
+          {
+            "label": "Lock BE",
+            "x": 1169.578125,
+            "y": 888,
+            "width": 94.40625,
+            "height": 32,
+            "right": 1263.984375,
+            "bottom": 920
+          },
+          {
+            "label": "Close",
+            "x": 1271.984375,
+            "y": 888,
+            "width": 80.015625,
+            "height": 32,
+            "right": 1352,
+            "bottom": 920
+          }
+        ],
+        "canvas": {
+          "x": 0,
+          "y": 100,
+          "width": 972,
+          "height": 672,
+          "right": 972,
+          "bottom": 772
+        },
+        "documentWidth": 1366
+      }
+    },
+    {
+      "view": "1440x900",
+      "layout": {
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 56,
+          "right": 1440,
+          "bottom": 56
+        },
+        "groups": [
+          {
+            "x": 16,
+            "y": 9.25,
+            "width": 427.78125,
+            "height": 36.5,
+            "right": 443.78125,
+            "bottom": 45.75
+          },
+          {
+            "x": 557.53125,
+            "y": 19.5,
+            "width": 459.8125,
+            "height": 16,
+            "right": 1017.34375,
+            "bottom": 35.5
+          },
+          {
+            "x": 1131.078125,
+            "y": 9.5,
+            "width": 292.921875,
+            "height": 36,
+            "right": 1424,
+            "bottom": 45.5
+          }
+        ],
+        "controls": [
+          {
+            "label": "PAPER",
+            "x": 1131.078125,
+            "y": 9.5,
+            "width": 82.015625,
+            "height": 36,
+            "right": 1213.09375,
+            "bottom": 45.5
+          },
+          {
+            "label": "AI LOGIN",
+            "x": 1223.09375,
+            "y": 9.5,
+            "width": 103.609375,
+            "height": 36,
+            "right": 1326.703125,
+            "bottom": 45.5
+          },
+          {
+            "label": "PANIC",
+            "x": 1336.703125,
+            "y": 9.5,
+            "width": 87.296875,
+            "height": 36,
+            "right": 1424,
+            "bottom": 45.5
+          },
+          {
+            "label": "1m",
+            "x": 749.734375,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 788.140625,
+            "bottom": 93.5
+          },
+          {
+            "label": "5m",
+            "x": 792.140625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 830.546875,
+            "bottom": 93.5
+          },
+          {
+            "label": "15m",
+            "x": 834.546875,
+            "y": 61.5,
+            "width": 45.609375,
+            "height": 32,
+            "right": 880.15625,
+            "bottom": 93.5
+          },
+          {
+            "label": "1h",
+            "x": 884.15625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 922.5625,
+            "bottom": 93.5
+          },
+          {
+            "label": "4h",
+            "x": 926.5625,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 964.96875,
+            "bottom": 93.5
+          },
+          {
+            "label": "1d",
+            "x": 968.96875,
+            "y": 61.5,
+            "width": 38.40625,
+            "height": 32,
+            "right": 1007.375,
+            "bottom": 93.5
+          },
+          {
+            "label": "Hide AI",
+            "x": 1018.375,
+            "y": 60.5,
+            "width": 86.625,
+            "height": 34,
+            "right": 1105,
+            "bottom": 94.5
+          },
+          {
+            "label": "Watchlist1",
+            "x": 1133,
+            "y": 61.5,
+            "width": 122.484375,
+            "height": 32,
+            "right": 1255.484375,
+            "bottom": 93.5
+          },
+          {
+            "label": "AI Council",
+            "x": 1261.484375,
+            "y": 61.5,
+            "width": 102.921875,
+            "height": 32,
+            "right": 1364.40625,
+            "bottom": 93.5
+          },
+          {
+            "label": "Scan Now",
+            "x": 1322.890625,
+            "y": 105.5,
+            "width": 103.109375,
+            "height": 32,
+            "right": 1426,
+            "bottom": 137.5
+          },
+          {
+            "label": "Active Positions (1)",
+            "x": 14,
+            "y": 682.5,
+            "width": 158.1875,
+            "height": 32,
+            "right": 172.1875,
+            "bottom": 714.5
+          },
+          {
+            "label": "Closed History",
+            "x": 180.1875,
+            "y": 682.5,
+            "width": 132.390625,
+            "height": 32,
+            "right": 312.578125,
+            "bottom": 714.5
+          },
+          {
+            "label": "ย่อตารางเพื่อดูกราฟเต็มจอ",
+            "x": 1394,
+            "y": 682.5,
+            "width": 32,
+            "height": 32,
+            "right": 1426,
+            "bottom": 714.5
+          },
+          {
+            "label": "Lock BE",
+            "x": 1243.578125,
+            "y": 764,
+            "width": 94.40625,
+            "height": 32,
+            "right": 1337.984375,
+            "bottom": 796
+          },
+          {
+            "label": "Close",
+            "x": 1345.984375,
+            "y": 764,
+            "width": 80.015625,
+            "height": 32,
+            "right": 1426,
+            "bottom": 796
+          }
+        ],
+        "canvas": {
+          "x": 0,
+          "y": 100,
+          "width": 1046,
+          "height": 548,
+          "right": 1046,
+          "bottom": 648
+        },
+        "documentWidth": 1440
+      }
+    }
+  ],
+  "passed": 58,
+  "failed": 7,
+  "source_sha256": {
+    "web/src/App.tsx": "1c6ddf9517c21085906e688556a77638b39126097dbc7df19e641a75ff3f10a2",
+    "web/src/components/AICouncilCard.tsx": "2c2ab9fef824445da0b0c2768782e6068ceb0591f1f186ef24b4d2c11fd0e969",
+    "web/src/components/Header.tsx": "3b64f4ae10e95e9fe8b08e081945d97fb2e8c113435db3861a9ef30a5638ee5d",
+    "web/src/components/PositionsTable.tsx": "4d92b451c8caa67e76dce09a589ad375fc3cbda31581da807fe5264642a04a15",
+    "web/src/components/TradingChart.tsx": "14241d3c5293d462844bda17fa63c3c13946f42ab77c43fe1fbdb134bdc7dcb9",
+    "web/src/components/WatchlistPanel.tsx": "fd1adbdaace3ad374d2a6b01b43755f16a6679c6d37ead4f3b85d0e0a8e2d676",
+    "web/src/index.css": "3ac6efde23d4cf7f76610054171d10f403581cdf32c685462fe927f7001e48b4",
+    "web/src/main.tsx": "79faf095f462c11b5dc445dac9043c06809247d25c47f6693fccd656d1a1d35a",
+    "web/src/services/api.ts": "5f10764279560a5c93d8c0dcfbbd77c5e7c88c33202b1a27e4f55b9fb899f7e6",
+    "web/src/services/websocket.ts": "defc028b24c378abfa59601984fed708084e9a631d7939da89a166b80308fffc"
+  },
+  "git_head": "147cf5ebc1fc35c75e5a052d7dc32c28f07b2139"
+}

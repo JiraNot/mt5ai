@@ -9,6 +9,8 @@ import {
   Unlock,
   AlertTriangle,
   Terminal as TerminalIcon,
+  PanelRight,
+  PanelRightClose,
 } from 'lucide-react';
 import { StatusResponse, ReadinessData, triggerPanic, setTradingMode } from '../services/api';
 
@@ -18,6 +20,9 @@ interface HeaderProps {
   lastTick: { bid: number; ask: number; last: number } | null;
   activeSymbol: string;
   onRefresh: () => void;
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
+  candidatesCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +31,9 @@ export const Header: React.FC<HeaderProps> = ({
   lastTick,
   activeSymbol,
   onRefresh,
+  onToggleSidebar,
+  isSidebarOpen = true,
+  candidatesCount,
 }) => {
   const [panicLoading, setPanicLoading] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
@@ -69,11 +77,11 @@ export const Header: React.FC<HeaderProps> = ({
   const isPaper = (status?.mode ?? 'PAPER').toUpperCase() === 'PAPER';
 
   return (
-    <header className="h-14 border-b border-dark-800 bg-dark-900 px-4 flex items-center justify-between z-20">
+    <header className="h-14 border-b border-dark-800 bg-dark-900 px-3 sm:px-4 flex items-center justify-between z-20 shrink-0">
       {/* Brand & Market Context */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2.5 sm:space-x-4 shrink-0 whitespace-nowrap">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-gold to-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/10">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-gold to-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/10 shrink-0">
             <Zap className="w-5 h-5 text-dark-950 font-bold" />
           </div>
           <div>
@@ -83,19 +91,19 @@ export const Header: React.FC<HeaderProps> = ({
                 AI TERMINAL
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 font-mono">Binance USDT-M Futures</div>
+            <div className="text-[11px] text-slate-400 font-mono hidden xl:block">Binance USDT-M Futures</div>
           </div>
         </div>
 
-        <div className="h-6 w-px bg-dark-800" />
+        <div className="h-6 w-px bg-dark-800 hidden sm:block" />
 
         {/* Symbol Price Flash */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <span className="font-bold text-sm tracking-wide text-white">{activeSymbol}</span>
           {lastTick ? (
-            <div className="font-mono text-sm font-semibold text-brand-green flex items-center space-x-1">
+            <div className="font-mono text-xs sm:text-sm font-semibold text-brand-green flex items-center space-x-1">
               <span>${lastTick.last.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-400 hidden xl:inline">
                 (Spread: {((lastTick.ask - lastTick.bid)).toFixed(2)})
               </span>
             </div>
@@ -109,29 +117,28 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Middle Stats & Readiness */}
-      <div className="hidden lg:flex items-center space-x-6">
+      <div className="hidden lg:flex items-center space-x-3 lg:space-x-5 shrink-0 whitespace-nowrap">
         {/* Account Info */}
-        <div className="flex items-center space-x-4 font-mono text-xs">
+        <div className="flex items-center space-x-3 lg:space-x-4 font-mono text-xs">
           <div>
-            <span className="text-slate-400 mr-1.5">Balance:</span>
+            <span className="text-slate-400 mr-1">Bal:</span>
             <span className="font-semibold text-slate-200">
               ${(status?.account?.balance ?? 100000).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div>
-            <span className="text-slate-400 mr-1.5">Equity:</span>
+            <span className="text-slate-400 mr-1">Eq:</span>
             <span className="font-semibold text-slate-100">
               ${(status?.account?.equity ?? 100000).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
         </div>
 
-        <div className="h-4 w-px bg-dark-800" />
-
-        {/* Live Promotion Readiness Mini-Gauge */}
-        <div className="flex items-center space-x-2 text-xs">
-          <span className="text-slate-400">Live Readiness:</span>
-          <div className="w-28 bg-dark-800 rounded-full h-2 overflow-hidden relative">
+        {/* Live Promotion Readiness Mini-Gauge (Desktop & Wide Tablet) */}
+        <div className="hidden xl:flex items-center space-x-2 text-xs">
+          <div className="h-4 w-px bg-dark-800" />
+          <span className="text-slate-400">Readiness:</span>
+          <div className="w-24 bg-dark-800 rounded-full h-2 overflow-hidden relative">
             <div
               className={`h-full transition-all duration-500 ${
                 readinessScore >= 80 ? 'bg-brand-green' : readinessScore >= 50 ? 'bg-brand-gold' : 'bg-brand-blue'
@@ -143,20 +150,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Mode Toggle + Panic */}
-      <div className="flex items-center space-x-3">
+      {/* Right Controls: Mode Toggle + AI Login + Panic + Sidebar Toggle */}
+      <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0 whitespace-nowrap">
         {/* Mode Badge */}
         <button
           onClick={handleToggleMode}
-          className={`px-2.5 py-1 rounded text-xs font-semibold font-mono flex items-center space-x-1.5 border transition-colors ${
+          className={`px-3.5 py-2 rounded-lg text-xs font-semibold font-mono flex items-center space-x-1.5 border min-h-[44px] min-w-[44px] active:scale-95 transition-all ${
             isPaper
               ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
               : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25'
           }`}
           title="คลิกเพื่อสลับโหมด"
         >
-          {isPaper ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3 text-emerald-400" />}
-          <span>{status?.mode || 'PAPER'} MODE</span>
+          {isPaper ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5 text-emerald-400" />}
+          <span>{status?.mode || 'PAPER'}</span>
         </button>
 
         {/* AI Login & Terminal Button */}
@@ -164,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
           href="/terminal"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-2.5 py-1 rounded text-xs font-semibold font-mono flex items-center space-x-1.5 border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-colors"
+          className="hidden sm:flex px-3.5 py-2 rounded-lg text-xs font-semibold font-mono items-center space-x-1.5 border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 min-h-[44px] min-w-[44px] active:scale-95 transition-all"
           title="เปิดหน้าต่าง Terminal เพื่อ Login ChatGPT / Codex"
         >
           <TerminalIcon className="w-3.5 h-3.5" />
@@ -173,12 +180,35 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Panic Button */}
         <button
-          onClick={() => setShowPanicModal(true)}
-          className="px-3 py-1.5 rounded bg-brand-red/90 hover:bg-brand-red text-white text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-brand-red/20 transition-all active:scale-95"
+          onClick={() => {
+            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(40);
+            setShowPanicModal(true);
+          }}
+          className="px-4 py-2 rounded-lg bg-brand-red/90 hover:bg-brand-red text-white text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-brand-red/20 min-h-[44px] min-w-[44px] active:scale-95 transition-all"
         >
           <ShieldAlert className="w-4 h-4" />
           <span>PANIC</span>
         </button>
+
+        {/* Sidebar Toggle for Tablet/Mobile */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className={`md:hidden px-3.5 py-2 rounded-lg border text-xs font-semibold flex items-center space-x-1 min-h-[44px] min-w-[44px] active:scale-95 transition-all ${
+              isSidebarOpen
+                ? 'bg-brand-gold/15 border-brand-gold/40 text-brand-gold'
+                : 'bg-dark-800 border-dark-700 text-slate-300'
+            }`}
+            title="เปิด/ปิด AI Watchlist & Council"
+          >
+            {isSidebarOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRight className="w-4 h-4" />}
+            {candidatesCount !== undefined && candidatesCount > 0 && (
+              <span className="bg-brand-gold text-dark-950 px-1 rounded-full text-[10px] font-bold">
+                {candidatesCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Panic Confirmation Modal */}
@@ -202,14 +232,14 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   onClick={() => setShowPanicModal(false)}
                   disabled={panicLoading}
-                  className="px-4 py-2 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium transition-colors"
+                  className="px-4 py-2.5 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium transition-colors min-h-[44px] min-w-[44px]"
                 >
                   ยกเลิก
                 </button>
                 <button
                   onClick={handlePanicConfirm}
                   disabled={panicLoading}
-                  className="px-5 py-2 rounded-lg bg-brand-red hover:bg-brand-redHover text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-brand-red/30 transition-all"
+                  className="px-5 py-2.5 rounded-lg bg-brand-red hover:bg-brand-redHover text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-brand-red/30 transition-all min-h-[44px] min-w-[44px]"
                 >
                   {panicLoading ? (
                     <span>กำลังปิดทุกออเดอร์...</span>

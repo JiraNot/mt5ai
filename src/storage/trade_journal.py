@@ -91,7 +91,7 @@ class TradeCandidate(BaseModel):
     outcome: OutcomeStatus = OutcomeStatus.PENDING
 
     # Hypothetical outcome (for rejected trades)
-    hypothetical_outcome: Optional[float] = None
+    hypothetical_outcome: Optional[str | float] = None
     hypothetical_r: Optional[float] = None
 
     # Timestamps

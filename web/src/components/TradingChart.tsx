@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from 'lightweight-charts';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { fetchCandles, CandleItem, PositionItem } from '../services/api';
 
 interface TradingChartProps {
   symbol: string;
   positions: PositionItem[];
   lastTick: { bid: number; ask: number; last: number; timestamp: number } | null;
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
 }
 
 const TIMEFRAMES = [
@@ -17,7 +20,13 @@ const TIMEFRAMES = [
   { label: '1d', value: '1d' },
 ];
 
-export const TradingChart: React.FC<TradingChartProps> = ({ symbol, positions, lastTick }) => {
+export const TradingChart: React.FC<TradingChartProps> = ({
+  symbol,
+  positions,
+  lastTick,
+  onToggleSidebar,
+  isSidebarOpen = true,
+}) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -55,8 +64,17 @@ export const TradingChart: React.FC<TradingChartProps> = ({ symbol, positions, l
         borderColor: '#1e2638',
         autoScale: true,
       },
-      handleScale: { axisPressedMouseMove: true },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: {
+        pinch: true,
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+      },
+      handleScroll: {
+        vertTouchDrag: false,
+        horzTouchDrag: true,
+        mouseWheel: true,
+        pressedMouseMove: true,
+      },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -218,27 +236,44 @@ export const TradingChart: React.FC<TradingChartProps> = ({ symbol, positions, l
   return (
     <div className="flex-1 flex flex-col bg-dark-950 relative overflow-hidden border-r border-dark-800">
       {/* Chart Top Bar: Symbol Info & Timeframe Selectors */}
-      <div className="h-10 border-b border-dark-800 px-3 flex items-center justify-between bg-dark-900/60 select-none">
+      <div className="min-h-[52px] py-1 border-b border-dark-800 px-3.5 flex items-center justify-between bg-dark-900/60 select-none">
         <div className="flex items-center space-x-2">
-          <span className="font-bold text-xs text-white tracking-wider">{symbol}</span>
-          <span className="text-[11px] text-slate-400 font-mono">PERPETUAL</span>
+          <span className="font-bold text-xs sm:text-sm text-white tracking-wider">{symbol}</span>
+          <span className="text-[10px] bg-dark-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">PERP</span>
         </div>
 
-        {/* Timeframe Buttons */}
-        <div className="flex items-center space-x-1">
-          {TIMEFRAMES.map((tf) => (
+        {/* Timeframe Buttons & Sidebar Toggle */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex items-center space-x-1 bg-dark-900/80 p-0.5 rounded-lg border border-dark-800">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf.value}
+                onClick={() => setTimeframe(tf.value)}
+                className={`min-h-[44px] min-w-[44px] px-2.5 sm:px-3 py-2 rounded-md text-xs font-mono font-semibold transition-all flex items-center justify-center active:scale-95 ${
+                  timeframe === tf.value
+                    ? 'bg-dark-700 text-brand-gold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-dark-800/60'
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
+
+          {onToggleSidebar && (
             <button
-              key={tf.value}
-              onClick={() => setTimeframe(tf.value)}
-              className={`px-2.5 py-0.5 rounded text-xs font-mono font-medium transition-colors ${
-                timeframe === tf.value
-                  ? 'bg-dark-700 text-brand-gold font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-dark-800'
+              onClick={onToggleSidebar}
+              className={`px-3 py-2 rounded-lg border text-xs font-semibold flex items-center space-x-1.5 min-h-[44px] min-w-[44px] transition-all active:scale-95 ${
+                isSidebarOpen
+                  ? 'bg-brand-gold/15 border-brand-gold/40 text-brand-gold'
+                  : 'bg-dark-800 border-dark-700 text-slate-300 hover:text-white'
               }`}
+              title={isSidebarOpen ? 'ซ่อนแถบข้าง (Full Chart)' : 'แสดง AI Watchlist & Council'}
             >
-              {tf.label}
+              {isSidebarOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+              <span className="hidden sm:inline">{isSidebarOpen ? 'Hide AI' : 'AI Panel'}</span>
             </button>
-          ))}
+          )}
         </div>
       </div>
 

@@ -35,6 +35,11 @@
 - [x] Dashboard-managed AI provider login/API settings
 - [x] Real PTY browser login terminal for Codex, agy, and ClinePass
 - [ ] Next.js production (planned)
+- [x] ตรวจ Tablet ผ่าน Chromium จำลอง 5 ขนาด พร้อม HTTP/WebSocket จำลอง (2026-10-16)
+- [x] เพิ่ม regression checks: web/tests/tablet-ux.cjs
+- [ ] แก้ Header/PANIC ถูกตัดบนจอกว้าง 768/820px
+- [ ] ขยายปุ่มสัมผัสที่ยังสูง 32–36px ให้ได้อย่างน้อย 44px
+- [ ] ยืนยัน Tablet UX หลังแก้ไข — ผลตรวจและหลักฐาน: docs/testing/TABLET_UX_VERIFICATION.md
 
 **Acceptance:**
 - Dashboard accessible

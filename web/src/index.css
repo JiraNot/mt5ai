@@ -3,23 +3,29 @@
 @tailwind utilities;
 
 @layer base {
-  body {
+  html, body {
     @apply bg-dark-950 text-slate-200;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 }
 
-/* Custom sleek scrollbar */
+/* Custom sleek scrollbar & touch momentum */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: #0c0f17;
 }
 ::-webkit-scrollbar-thumb {
   background: #222d42;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #32415d;

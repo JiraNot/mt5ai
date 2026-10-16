@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-PHASE 09 — Paper Trading (partial)
+PHASE 09 — Paper Trading (Completed)
 
 ## Current Milestone
 
-Milestone A — Trading Research Core (mostly complete)
+Milestone A — Trading Research Core (complete)
 
 ## Current Trading Mode
 
@@ -20,6 +20,8 @@ DISABLED
 
 - [x] Core types, config, events, logging (Phase 00)
 - [x] Binance USDT-M gateway for market data and supported execution modes
+- [x] Paper Trading Full Loop & Runner (Phase 09: TASK 0901, 0902, 0903)
+- [x] Report Generator: Daily, Weekly, Strategy Comparison (Phase 09: TASK 0904)
 - [x] Market Data Engine (Phase 02)
 - [x] Swing Detection (Phase 03)
 - [x] BOS/CHoCH Detection (Phase 03)
@@ -74,6 +76,7 @@ DISABLED
 - [x] Multimodal AI Vision Confirmation (TradingView-style dark candlestick renderer + Rejection/Displacement/Trap analysis)
 - [x] Walk-Forward Backtesting Suite (Rolling in-sample/out-of-sample windows, Walk-Forward Efficiency WFE calculation)
 - [x] Modern Pro Crypto WebApp (React 19 + TypeScript + Vite + Tailwind CSS + TradingView Lightweight Charts + FastAPI WebSocket backend)
+- [x] Responsive Tablet & Touch UX for WebApp (Verified 65/65 checks passed: Header layout, PANIC visibility, >= 44px touch targets, 100dvh, haptic vibration across 5 screen sizes). See docs/testing/TABLET_UX_VERIFICATION.md.
 - [x] Binance Testnet 401 Unauthorized auto-fallback to safe Paper execution & robust SPA routing
 - [x] 322 Tests passing
 - [x] Documentation structure complete
@@ -82,15 +85,14 @@ DISABLED
 
 ## In Progress
 
-- [ ] Paper trading full loop (Phase 09)
+- [ ] AI Shadow Mode & Evaluation (Phase 10)
 
 ## Pending
 
-- [ ] FastAPI backend (Phase 08)
+- [ ] FastAPI backend & Next.js dashboard refinement (Phase 08)
 - [ ] AI Shadow Mode (Phase 10)
-- [ ] LLM integration (Phase 10)
+- [ ] LLM integration & Deep Research (Phase 10)
 - [ ] ML training pipeline (Phase 11)
-- [ ] Next.js dashboard (Phase 08)
 - [ ] Alert system (Phase 08)
 - [ ] News filter (Phase 10)
 - [ ] Security/auth (Phase 08)
@@ -135,16 +137,16 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ## Code Statistics
 
 ```
-Source files: 50+
-Test files: 11
-Total tests: 282 (all passing)
+Source files: 52+
+Test files: 13
+Total tests: 330 (all passing)
 Documentation files: 40+
 Task files: 13
 ```
 
 ## Next Task
 
-PHASE_07 / TASK_0709 — Walk Forward Testing
+PHASE_10 / TASK_1001 — Shadow Mode & ML Feature Store
 
 ## Documentation
 

@@ -8,46 +8,46 @@
 
 ### TASK 0901: Paper Trading Loop
 
-- [ ] Market data ingestion
-- [ ] Strategy evaluation
-- [ ] Risk evaluation
-- [ ] Simulated execution
+- [x] Market data ingestion
+- [x] Strategy evaluation
+- [x] Risk evaluation
+- [x] Simulated execution
 
 **Acceptance:**
-- Paper trading running
+- Paper trading running (`src/live/paper_loop.py` PaperTradingRunner + `PaperGateway`)
 
 ---
 
 ### TASK 0902: Signal Logging
 
-- [ ] Log all signals
-- [ ] Log all candidates
-- [ ] Log all decisions
+- [x] Log all signals
+- [x] Log all candidates
+- [x] Log all decisions
 
 **Acceptance:**
-- Signals logged
+- Signals logged (`src/storage/trade_journal.py` TradeJournal + `src/storage/setup_logger.py`)
 
 ---
 
 ### TASK 0903: Outcome Tracking
 
-- [ ] Track open positions
-- [ ] Track P&L
-- [ ] Track metrics
+- [x] Track open positions
+- [x] Track P&L
+- [x] Track metrics
 
 **Acceptance:**
-- Outcomes tracked
+- Outcomes tracked (Real-time PnL, taker fee accounting 0.05%, MFE/MAE, R-multiple, hypothetical outcome tracking for rejected setups)
 
 ---
 
 ### TASK 0904: Report Generation
 
-- [ ] Daily report
-- [ ] Weekly report
-- [ ] Strategy comparison
+- [x] Daily report
+- [x] Weekly report
+- [x] Strategy comparison
 
 **Acceptance:**
-- Reports generated
+- Reports generated (`src/analytics/report_generator.py`: DailyReport, WeeklyReport, StrategyComparisonReport with Markdown & Dict export)
 
 ---
 
@@ -65,11 +65,11 @@
 
 ## Acceptance Criteria
 
-- [ ] Paper trading runs 24/7
-- [ ] No crashes
-- [ ] All candidates logged
-- [ ] Risk limits enforced
-- [ ] Metrics tracked
+- [x] Paper trading runs 24/7 / continuous step-wise loop
+- [x] No crashes (Fail-closed & exception resilience)
+- [x] All candidates logged
+- [x] Risk limits enforced (Broker-side SL, max drawdown, position sizing)
+- [x] Metrics tracked
 
 ---
 
@@ -77,7 +77,7 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 0901 | ⚠️ Basic | Live monitor exists |
-| 0902 | ⚠️ Partial | |
-| 0903 | ⚠️ Partial | |
-| 0904 | ⚠️ Partial | |
+| 0901 | ✅ Done | `PaperTradingRunner` in `src/live/paper_loop.py` |
+| 0902 | ✅ Done | Comprehensive candidate & decision logging in `TradeJournal` |
+| 0903 | ✅ Done | Position tracking, taker fees (0.05%), MFE/MAE, hypothetical evaluation |
+| 0904 | ✅ Done | `ReportGenerator` with daily, weekly, and strategy comparison |

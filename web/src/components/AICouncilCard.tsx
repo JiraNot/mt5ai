@@ -11,8 +11,9 @@ export const AICouncilCard: React.FC<AICouncilCardProps> = ({ data }) => {
 
   if (!latest) {
     return (
-      <div className="w-80 h-1/2 p-4 border-b border-dark-800 bg-dark-900/40 flex items-center justify-center text-xs text-slate-500">
-        กำลังรอสัญญาณ AI Council...
+      <div className="w-full flex-1 p-6 border-b border-dark-800 bg-dark-900/40 flex flex-col items-center justify-center text-xs text-slate-500 space-y-2">
+        <Bot className="w-6 h-6 text-slate-600 animate-pulse" />
+        <span>กำลังรอสัญญาณ AI Council...</span>
       </div>
     );
   }
@@ -28,10 +29,10 @@ export const AICouncilCard: React.FC<AICouncilCardProps> = ({ data }) => {
     : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
 
   return (
-    <div className="w-80 flex-1 border-t border-dark-800 bg-dark-900/50 flex flex-col overflow-hidden">
+    <div className="w-full flex-1 border-t border-dark-800 bg-dark-900/50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="h-10 px-3 border-b border-dark-800 flex items-center justify-between bg-dark-900/70 select-none">
-        <div className="flex items-center space-x-1.5">
+      <div className="min-h-[52px] py-1 px-3.5 border-b border-dark-800 flex items-center justify-between bg-dark-900/70 select-none">
+        <div className="flex items-center space-x-2">
           <Bot className="w-4 h-4 text-brand-blue" />
           <span className="text-xs font-bold tracking-wider text-slate-200">AI COUNCIL VERDICT</span>
         </div>
