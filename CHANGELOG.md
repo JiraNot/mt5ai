@@ -17,6 +17,10 @@
   - Added instant `⚡ ทดสอบ (Test)` button next to each provider displaying measured round-trip latency in milliseconds.
   - Added direct `🔗 Terminal` button opening `/terminal` in a new tab for 1-click browser OAuth authentication.
   - Added `🔄 ตรวจสถานะใหม่ (Check login)` button to refresh sessions without closing the modal.
+- **Codex Quota Diagnosis & OpenRouter Fallback (`src/ai/gpt_evaluator.py`, `src/core/ai_auth_service.py`, `src/core/runtime_provider_settings.py`)**:
+  - Fixed the confusing `Codex CLI Auth Login และ API Key ไม่พร้อมใช้งาน` message: now accurately identifies OpenAI/ChatGPT hourly usage limits (`status: exhausted`), extracts reset times (e.g. `try again at 3:20 AM`), and alerts the user transparently.
+  - Added multi-tier fallback to **OpenRouter (DeepSeek)** and **OpenAI Direct API** in `GPTEvaluator`: if Codex CLI hits its rate limit, trading evaluations automatically fall back to OpenRouter/DeepSeek instead of skipping or failing.
+  - Bridged modern `runtime_settings.json` into `runtime_provider_settings.py` so API keys saved in the Web UI Settings Modal take effect across all AI evaluators instantly.
 - **Test Suite**:
   - Added `tests/unit/test_ai_auth_service.py` (4 tests).
   - Test suite expanded to **347 passing tests (0 failures)**.

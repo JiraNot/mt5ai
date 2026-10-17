@@ -292,22 +292,53 @@ class AIAuthService:
         text = (stdout_b.decode("utf-8", errors="replace") + " " + stderr_b.decode("utf-8", errors="replace")).strip()
         latency_ms = int((time.time() - t0) * 1000)
 
-        if re.search(r"logged in", text, re.IGNORECASE):
-            mode = "ChatGPT" if re.search(r"chatgpt", text, re.IGNORECASE) else "Codex"
+        if not re.search(r"logged in", text, re.IGNORECASE):
             return {
-                "ok": True,
+                "ok": False,
                 "provider": "codex",
-                "status": "ready",
+                "status": "login_required",
                 "latency_ms": latency_ms,
-                "message": f"{mode} login is active and ready ({latency_ms}ms).",
+                "message": "Codex CLI login required. Run `codex login` in terminal.",
                 "details": {"raw": text[:160]},
             }
+
+        mode = "ChatGPT" if re.search(r"chatgpt", text, re.IGNORECASE) else "Codex"
+
+        # Check if usage limit is reached via a fast probe
+        try:
+            probe = await asyncio.create_subprocess_exec(
+                codex_bin, "exec",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "--sandbox", "read-only",
+                "ping",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            probe_out, probe_err = await asyncio.wait_for(probe.communicate(), timeout=8.0)
+            combined_probe = (probe_err.decode("utf-8", errors="replace") + " " + probe_out.decode("utf-8", errors="replace")).strip()
+            latency_ms = int((time.time() - t0) * 1000)
+
+            if re.search(r"usage limit|rate limit|quota|upgrade to pro|purchase more credits", combined_probe, re.IGNORECASE):
+                reset_match = re.search(r"try again at ([^.\n]+)", combined_probe, re.IGNORECASE)
+                reset_msg = f" (รีเซ็ตเวลา {reset_match.group(1).strip()})" if reset_match else ""
+                return {
+                    "ok": False,
+                    "provider": "codex",
+                    "status": "exhausted",
+                    "latency_ms": latency_ms,
+                    "message": f"ล็อกอิน ChatGPT แล้ว แต่โควตาเต็มชั่วคราว{reset_msg}: แนะนำให้สลับใช้ OpenRouter / DeepSeek ใน Settings",
+                    "details": {"raw": combined_probe[:160]},
+                }
+        except Exception:
+            pass
+
         return {
-            "ok": False,
+            "ok": True,
             "provider": "codex",
-            "status": "login_required",
+            "status": "ready",
             "latency_ms": latency_ms,
-            "message": "Codex CLI login required. Run `codex login` in terminal.",
+            "message": f"{mode} login is active and ready ({latency_ms}ms).",
             "details": {"raw": text[:160]},
         }
 

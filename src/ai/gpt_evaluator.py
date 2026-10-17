@@ -106,24 +106,38 @@ class GPTEvaluator:
                 try:
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
                     out_text = stdout.decode("utf-8", errors="replace")
+                    err_text = stderr.decode("utf-8", errors="replace")
                     if proc.returncode == 0 and out_text.strip():
                         return self._parse_response(out_text)
-                    logger.warning("Codex exec returned code %d: %s", proc.returncode, stderr.decode()[:200])
+
+                    combined_err = f"{err_text} {out_text}".strip()
+                    logger.warning("Codex exec returned code %d: %s", proc.returncode, combined_err[:200])
+
+                    if re.search(r"usage limit|rate limit|quota|upgrade to pro|purchase more credits", combined_err, re.IGNORECASE):
+                        reset_match = re.search(r"try again at ([^.\n]+)", combined_err, re.IGNORECASE)
+                        reset_str = f" (รีเซ็ตเวลา {reset_match.group(1).strip()})" if reset_match else ""
+                        codex_err_summary = f"ล็อกอิน ChatGPT แล้วแต่โควตาเต็มชั่วคราว{reset_str}"
+                    else:
+                        codex_err_summary = combined_err[:120] if combined_err else "Codex CLI exec error"
                 except asyncio.TimeoutError:
                     proc.kill()
                     await proc.communicate()
                     logger.error("Codex exec timeout after 60s")
+                    codex_err_summary = "Codex CLI หมดเวลา 60s"
             except Exception as exc:
                 logger.error("Codex CLI evaluation error: %s", exc)
+                codex_err_summary = str(exc)
+        else:
+            codex_err_summary = "ไม่พบบิลด์ Codex CLI ในเครื่อง"
 
-        # 2. Fallback เมื่อผู้ดูแลตั้ง OpenAI API ใน Controls & Safety
+        # 2. Fallback: OpenAI Direct API
         openai_settings = get_provider_settings()["openai"]
-        api_key = openai_settings["api_key"]
+        api_key = openai_settings.get("api_key", "").strip()
         if api_key:
             try:
                 from openai import AsyncOpenAI
                 client = AsyncOpenAI(api_key=api_key)
-                model = openai_settings["model"]
+                model = openai_settings.get("model") or "gpt-4o"
                 response = await client.chat.completions.create(
                     model=model,
                     messages=[
@@ -134,11 +148,54 @@ class GPTEvaluator:
                     temperature=0.3,
                 )
                 raw = response.choices[0].message.content or ""
+                logger.info("Bear Analyst evaluated via OpenAI API (%s)", model)
                 return self._parse_response(raw)
             except Exception as exc:
                 logger.error("OpenAI API fallback error: %s", exc)
 
-        return self._fallback_verdict("Codex CLI Auth Login และ API Key ไม่พร้อมใช้งาน")
+        # 3. Fallback: OpenRouter (DeepSeek หรือโมเดลที่ตั้งไว้ใน Settings)
+        openrouter_settings = get_provider_settings()["openrouter"]
+        openrouter_key = openrouter_settings.get("api_key", "").strip()
+        if openrouter_key:
+            try:
+                import httpx
+                headers = {
+                    "Authorization": f"Bearer {openrouter_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": openrouter_settings.get("site_url", "https://trade.onetapweb.com"),
+                    "X-Title": openrouter_settings.get("app_name", "Freebuff AI Council"),
+                }
+                or_model = openrouter_settings.get("model") or "deepseek/deepseek-chat"
+                payload = {
+                    "model": or_model,
+                    "messages": [
+                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 800,
+                }
+                async with httpx.AsyncClient(timeout=45.0) as client:
+                    resp = await client.post(
+                        f"{openrouter_settings.get('base_url', 'https://openrouter.ai/api/v1').rstrip('/')}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    raw = data["choices"][0]["message"]["content"] or ""
+                    logger.info("Bear Analyst evaluated via OpenRouter (%s)", or_model)
+                    return self._parse_response(raw)
+            except Exception as exc:
+                logger.error("OpenRouter fallback error for Bear Analyst: %s", exc)
+
+        # If all failed, provide a transparent and helpful explanation
+        if codex_err_summary and "โควตาเต็ม" in codex_err_summary:
+            return self._fallback_verdict(
+                f"{codex_err_summary} — แนะนำให้สลับใช้ OpenRouter / DeepSeek ในหน้า Settings เพื่อเทรดต่อได้ทันที"
+            )
+
+        return self._fallback_verdict(f"Codex CLI และ API Key ไม่พร้อมใช้งาน ({codex_err_summary})")
 
     def _build_prompt(self, ctx: dict) -> str:
         symbol = ctx.get("symbol", "XAUUSD")

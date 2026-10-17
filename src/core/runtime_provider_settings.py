@@ -125,6 +125,23 @@ def _defaults() -> dict[str, dict[str, str]]:
 def get_provider_settings() -> dict[str, dict[str, str]]:
     """Return runtime settings, prioritizing dashboard values over legacy ENV."""
     result = _defaults()
+    # Bridge modern runtime_settings.json configured via Web Terminal
+    try:
+        from src.core.runtime_settings import get_runtime_settings
+        rs = get_runtime_settings(mask_secrets=False)
+        if rs.get("openrouter_api_key"):
+            result["openrouter"]["api_key"] = rs["openrouter_api_key"].strip()
+        if rs.get("openrouter_model"):
+            result["openrouter"]["model"] = rs["openrouter_model"].strip()
+        if rs.get("openai_api_key"):
+            result["openai"]["api_key"] = rs["openai_api_key"].strip()
+        if rs.get("openai_model"):
+            result["openai"]["model"] = rs["openai_model"].strip()
+        if rs.get("gemini_api_key"):
+            result["gemini"]["api_key"] = rs["gemini_api_key"].strip()
+    except Exception:
+        pass
+
     for provider, fields in _read_persisted().items():
         result[provider].update(fields)
     return result

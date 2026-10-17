@@ -636,15 +636,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                             {/* Live Test Feedback */}
                             {test && (
                               <div
-                                className={`mt-2 p-1.5 px-2.5 rounded-lg text-[11px] font-mono flex items-center justify-between border ${
+                                className={`mt-2 p-2 px-2.5 rounded-lg text-[11px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 border ${
                                   test.ok
                                     ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                    : test.status === 'exhausted'
+                                    ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
                                     : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
                                 }`}
                               >
-                                <span>{test.message}</span>
+                                <div className="flex items-center space-x-1.5">
+                                  {test.status === 'exhausted' && <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                                  <span>{test.message}</span>
+                                </div>
                                 {test.latency_ms > 0 && (
-                                  <span className="text-[10px] opacity-75">{test.latency_ms}ms</span>
+                                  <span className="text-[10px] font-mono opacity-75 shrink-0">{test.latency_ms}ms</span>
                                 )}
                               </div>
                             )}
