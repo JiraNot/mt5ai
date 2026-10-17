@@ -52,6 +52,16 @@ class TelegramBotListener:
     ) -> None:
         self.bot_token = bot_token or BOT_TOKEN
         self.chat_id = chat_id or CHAT_ID
+        if not self.bot_token or not self.chat_id:
+            try:
+                from src.core.runtime_settings import get_runtime_settings
+                cfg = get_runtime_settings(mask_secrets=False)
+                if not self.bot_token and cfg.get("telegram_bot_token"):
+                    self.bot_token = cfg["telegram_bot_token"]
+                if not self.chat_id and cfg.get("telegram_chat_id"):
+                    self.chat_id = cfg["telegram_chat_id"]
+            except Exception:
+                pass
         self.gateway = gateway
         self.order_manager = order_manager
         self.screener = screener

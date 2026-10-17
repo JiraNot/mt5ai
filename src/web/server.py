@@ -267,7 +267,11 @@ async def get_status() -> dict[str, Any]:
 @app.get("/api/watchlist")
 async def get_watchlist() -> dict[str, Any]:
     """Return latest AI crypto watchlist and market regime analysis."""
-    watchlist_path = Path("data/crypto_watchlist.json")
+    watchlist_path = (
+        Path("/app/data/crypto_watchlist.json")
+        if Path("/app/data/crypto_watchlist.json").is_file()
+        else (Path("data/crypto_watchlist.json") if Path("data/crypto_watchlist.json").is_file() else Path("crypto_watchlist.json"))
+    )
     if watchlist_path.is_file():
         try:
             data = json.loads(watchlist_path.read_text(encoding="utf-8"))
@@ -436,7 +440,11 @@ async def get_candles(symbol: str, timeframe: str = "5m", count: int = 250) -> d
 @app.get("/api/council/latest")
 async def get_latest_council() -> dict[str, Any]:
     """Return the most recent AI Council decision and analysis."""
-    triage_path = Path("candidate_triage.json")
+    triage_path = (
+        Path("/app/data/candidate_triage.json")
+        if Path("/app/data/candidate_triage.json").is_file()
+        else (Path("data/candidate_triage.json") if Path("data/candidate_triage.json").is_file() else Path("candidate_triage.json"))
+    )
     recent = []
     if triage_path.is_file():
         try:

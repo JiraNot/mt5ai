@@ -174,7 +174,11 @@ class TradingPlatform:
         import json
 
         symbols = [self._trading_symbol]
-        watchlist_file = Path("data/crypto_watchlist.json")
+        watchlist_file = (
+            Path("/app/data/crypto_watchlist.json")
+            if Path("/app/data/crypto_watchlist.json").is_file()
+            else Path("data/crypto_watchlist.json")
+        )
         if watchlist_file.exists():
             try:
                 with open(watchlist_file, "r", encoding="utf-8") as f:
@@ -188,6 +192,17 @@ class TradingPlatform:
                 logger.warning("Failed to load watchlist for active symbols: %s", exc)
 
         # Fallback to configured Binance symbols if watchlist has only 1
+        if len(symbols) == 1:
+            try:
+                from src.core.runtime_settings import get_runtime_settings
+                active_cfg = get_runtime_settings(mask_secrets=False).get("active_symbols", [])
+                for s in active_cfg:
+                    s_up = str(s).strip().upper()
+                    if s_up and s_up not in symbols and len(symbols) < 5:
+                        symbols.append(s_up)
+            except Exception:
+                pass
+
         if len(symbols) == 1:
             for s in ["ETHUSDT", "SOLUSDT"]:
                 if s not in symbols and s in settings.symbols and len(symbols) < 3:

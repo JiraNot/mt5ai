@@ -81,6 +81,8 @@ DISABLED
 - [x] Technical Indicators & Dynamic S/R Overlays (EMA 20, EMA 50, EMA 200, Resistance, Support, Pivot) with real-time value strip and toggle controls
 - [x] Candlestick Trade Markers & Trade Retrospective Drawer (Why entered, Why won/lost in Thai, with interactive chart focus)
 - [x] Dynamic Settings Management & Modal (`SettingsModal.tsx` + `src/core/runtime_settings.py`) allowing seamless configuration of Risk, Binance API, AI, and Telegram without .env redeployments
+- [x] Docker Persistent Volume (`/app/data`) Synchronization across Screener, Watchlist, and Council triage
+- [x] Dynamic Binance Gateway & Telegram Re-initialization upon runtime configuration updates
 - [x] 336 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-18 (System Recheck & Production Hardening)
+
+- **Docker Persistent Volume (`/app/data`) Synchronization**:
+  - Resolved path discrepancy where Docker production containers mounted persistent data to `/app/data/` while local runs used `data/`.
+  - Added dual-path saving in `CryptoScreener._save_watchlist()` to persist to both `/app/data/crypto_watchlist.json` and `data/crypto_watchlist.json`.
+  - Updated API endpoints in `src/web/server.py` (`/api/watchlist`, `/api/council/latest`) and `src/app.py` to check `/app/data` first.
+- **Dynamic Binance Gateway & Telegram Re-initialization**:
+  - Updated `BinanceGateway.connect()` and `websocket_base_url` to automatically tear down and re-establish `httpx.AsyncClient` if `binance_base_url` or venue mode is updated in runtime settings.
+  - Added fallback in `TelegramAlert.send_message()` and `TelegramBotListener` to load `telegram_bot_token` and `telegram_chat_id` dynamically from encrypted `runtime_settings.json` when environment variables are omitted.
+- **Automated Recheck & Test Suite Stability**:
+  - Full end-to-end regression audit: 336 tests passing (0 failures).
+
 ## 2026-10-17 (Technical Indicators, Trade Markers & Retrospective, Dynamic Settings UI)
 
 - **Technical Indicators & Institutional Overlays (`TradingChart.tsx`)**:

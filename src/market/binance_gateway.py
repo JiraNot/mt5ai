@@ -49,6 +49,7 @@ class BinanceGateway:
         transport: httpx.AsyncBaseTransport | None = None,
         timeout: float | None = None,
     ) -> None:
+        self._configured_base_url = base_url.rstrip("/") if base_url else None
         self._base_url = (base_url or settings.binance_base_url).rstrip("/")
         self._transport = transport
         self._timeout = timeout or settings.binance_timeout
@@ -65,20 +66,25 @@ class BinanceGateway:
     @property
     def websocket_base_url(self) -> str:
         """Return the official USDⓈ-M Futures WebSocket host for this venue."""
+        effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
         return (
             "wss://fstream.binancefuture.com"
-            if "testnet.binancefuture.com" in self._base_url
+            if "testnet.binancefuture.com" in effective_base
             else "wss://fstream.binance.com"
         )
 
     async def connect(self) -> bool:
-        if self._client is None:
+        effective = (self._configured_base_url or settings.binance_base_url).rstrip("/")
+        if self._client is None or str(self._client.base_url).rstrip("/") != effective:
+            if self._client:
+                await self._client.aclose()
             self._client = httpx.AsyncClient(
-                base_url=self._base_url,
+                base_url=effective,
                 timeout=self._timeout,
                 transport=self._transport,
                 headers={"User-Agent": "freebuff-binance-gateway/0.1"},
             )
+            self._base_url = effective
         try:
             response = await self._client.get("/fapi/v1/ping")
             response.raise_for_status()

@@ -189,15 +189,19 @@ class CryptoScreener:
     def _save_watchlist(self, watchlist: CryptoWatchlist) -> None:
         """Persist watchlist for other modules to consume."""
         try:
-            out_file = Path("data/crypto_watchlist.json")
-            out_file.parent.mkdir(parents=True, exist_ok=True)
+            target_paths = [Path("data/crypto_watchlist.json")]
+            if Path("/app/data").is_dir():
+                target_paths.append(Path("/app/data/crypto_watchlist.json"))
+
             payload = {
                 "timestamp": watchlist.timestamp,
                 "btc_report": asdict(watchlist.btc_report) if watchlist.btc_report else None,
                 "candidates": [asdict(c) for c in watchlist.candidates],
             }
-            with open(out_file, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
+            for out_file in target_paths:
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(out_file, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2, ensure_ascii=False)
         except Exception as exc:
             logger.warning("Failed to persist crypto watchlist: %s", exc)
 

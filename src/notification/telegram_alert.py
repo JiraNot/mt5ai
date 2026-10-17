@@ -37,17 +37,34 @@ class TradeAlert:
     narrative_th: str
 
 
+def _get_telegram_credentials() -> tuple[str, str]:
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "") or BOT_TOKEN
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "") or CHAT_ID
+    if not token or not chat_id:
+        try:
+            from src.core.runtime_settings import get_runtime_settings
+            cfg = get_runtime_settings(mask_secrets=False)
+            if not token and cfg.get("telegram_bot_token"):
+                token = cfg["telegram_bot_token"]
+            if not chat_id and cfg.get("telegram_chat_id"):
+                chat_id = cfg["telegram_chat_id"]
+        except Exception:
+            pass
+    return token, chat_id
+
+
 async def send_message(text: str, parse_mode: str = "HTML") -> bool:
     """ส่งข้อความไปยัง Telegram."""
-    if not BOT_TOKEN or not CHAT_ID:
-        logger.warning("TELEGRAM_BOT_TOKEN หรือ TELEGRAM_CHAT_ID ยังไม่ได้ตั้งค่า")
+    token, chat_id = _get_telegram_credentials()
+    if not token or not chat_id:
+        logger.debug("Telegram credentials not configured; skipping alert")
         return False
     try:
-        api_url = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage"
+        api_url = f"https://api.telegram.org/bot{token}/sendMessage"
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 api_url,
-                json={"chat_id": CHAT_ID, "text": text, "parse_mode": parse_mode},
+                json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode},
             )
             resp.raise_for_status()
             logger.info("Telegram: ส่งสำเร็จ")
