@@ -6,6 +6,7 @@ import { WatchlistPanel } from './components/WatchlistPanel';
 import { AICouncilCard } from './components/AICouncilCard';
 import { PositionsTable } from './components/PositionsTable';
 import { SettingsModal } from './components/SettingsModal';
+import { BacktestModal } from './components/BacktestModal';
 import {
   fetchStatus,
   fetchWatchlist,
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
   });
   const [sidebarTab, setSidebarTab] = useState<'watchlist' | 'council'>('watchlist');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBacktestOpen, setIsBacktestOpen] = useState(false);
 
   // Load all initial state
   const loadAllData = useCallback(async () => {
@@ -145,6 +147,7 @@ export const App: React.FC = () => {
         isSidebarOpen={isSidebarOpen}
         candidatesCount={watchlist?.candidates?.length}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenBacktest={() => setIsBacktestOpen(true)}
       />
 
       {/* Main Trading Area */}
@@ -248,6 +251,13 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={loadAllData}
+      />
+
+      {/* One-Click Backtesting Modal */}
+      <BacktestModal
+        isOpen={isBacktestOpen}
+        onClose={() => setIsBacktestOpen(false)}
+        activeSymbol={activeSymbol}
       />
     </div>
   );

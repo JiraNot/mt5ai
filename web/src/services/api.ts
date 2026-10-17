@@ -193,6 +193,10 @@ export interface RuntimeSettings {
   gemini_api_key?: string;
   openrouter_api_key?: string;
   openrouter_model?: string;
+  vision_provider?: 'deterministic' | 'gpt-4o' | 'claude-3-5' | 'deepseek-vision';
+  vision_min_score?: number;
+  volume_filter_enabled?: boolean;
+  rsi_filter_enabled?: boolean;
   telegram_enabled: boolean;
   telegram_bot_token?: string;
   telegram_chat_id?: string;
@@ -228,6 +232,52 @@ export interface TradeDetailItem {
   exit_time: string | null;
 }
 
+export interface BacktestRequest {
+  strategy_id: string;
+  symbol: string;
+  timeframe: string;
+  candle_count: number;
+  initial_balance: number;
+  risk_pct: number;
+  spread_pips: number;
+}
+
+export interface BacktestSummary {
+  strategy_id: string;
+  symbol: string;
+  timeframe: string;
+  total_trades: number;
+  winners: number;
+  losers: number;
+  win_rate: number;
+  profit_factor: number;
+  max_drawdown: number;
+  expectancy: number;
+  sharpe_ratio: number;
+  total_pnl: number;
+  initial_balance: number;
+  final_equity: number;
+}
+
+export interface BacktestTradeItem {
+  id: number;
+  direction: 'BUY' | 'SELL';
+  entry: number;
+  exit: number;
+  pnl: number;
+  status: 'WIN' | 'LOSS' | 'BREAKEVEN';
+  r_multiple?: number;
+  time?: string;
+}
+
+export interface BacktestResponse {
+  ok: boolean;
+  error?: string;
+  summary: BacktestSummary;
+  equity_curve: number[];
+  trades: BacktestTradeItem[];
+}
+
 export async function fetchSettings(): Promise<{ ok: boolean; settings: RuntimeSettings }> {
   const res = await fetch(`${API_BASE}/settings`);
   return res.json();
@@ -244,6 +294,15 @@ export async function saveSettings(settings: Partial<RuntimeSettings>): Promise<
 
 export async function fetchTradeMarkers(symbol: string): Promise<{ ok: boolean; symbol: string; markers: TradeMarkerItem[]; trades: TradeDetailItem[] }> {
   const res = await fetch(`${API_BASE}/trades/markers?symbol=${symbol}`);
+  return res.json();
+}
+
+export async function runBacktest(req: BacktestRequest): Promise<BacktestResponse> {
+  const res = await fetch(`${API_BASE}/backtest/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
   return res.json();
 }
 

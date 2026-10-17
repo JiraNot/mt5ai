@@ -9,6 +9,7 @@ from typing import Optional
 
 from src.core.types import Candle, Direction, OrderBlock, StrategyCandidate
 from src.strategies.base import StrategyPlugin
+from src.strategies.indicators import check_momentum_confirmation
 from src.strategies.registry import register
 from src.structure.context import MultiTimeframeContext
 
@@ -45,7 +46,7 @@ class CHOCHOrderBlockStrategy(StrategyPlugin):
 
     @property
     def version(self) -> str:
-        return "1.0.1"
+        return "1.1.0"
 
     def min_rr(self) -> float:
         return 2.0
@@ -189,6 +190,17 @@ class CHOCHOrderBlockStrategy(StrategyPlugin):
             score += 5
             confluences.append("strong_ob")
 
+        # Momentum & Volume Confirmation
+        candles = getattr(ctx, "primary_candles", None) or [candle]
+        confirmed, rsi, vol_ratio, mom_reason = check_momentum_confirmation(candles, Direction.BUY)
+        if confirmed:
+            if "สมบูรณ์" in mom_reason or "Volume" in mom_reason:
+                score += 10
+                confluences.append("volume_momentum_confirmed")
+        else:
+            score -= 15
+            risk_flags.append("momentum_exhaustion")
+
         score = max(0, min(100, score))
 
         return StrategyCandidate(
@@ -206,10 +218,13 @@ class CHOCHOrderBlockStrategy(StrategyPlugin):
             confluences=confluences,
             risk_flags=risk_flags,
             metadata={
+                "version": self.version,
                 "ob_upper": nearest_ob.upper_price,
                 "ob_lower": nearest_ob.lower_price,
                 "ob_strength": nearest_ob.strength,
                 "ob_fvg_overlap": nearest_ob.fvg_overlap,
+                "rsi": round(rsi, 1),
+                "volume_ratio": round(vol_ratio, 2),
             },
         )
 
@@ -290,4 +305,54 @@ class CHOCHOrderBlockStrategy(StrategyPlugin):
 
         rr = reward_risk(price - tp1, risk)
         if rr >= 3.0:
-            sc
+            score += 10
+            confluences.append("excellent_rr")
+        elif rr < 2.0:
+            score -= 10
+            risk_flags.append("low_rr")
+
+        # OB strength
+        if nearest_ob.strength >= 4:
+            score += 5
+            confluences.append("strong_ob")
+
+        # Momentum & Volume Confirmation
+        candles = getattr(ctx, "primary_candles", None) or [candle]
+        confirmed, rsi, vol_ratio, mom_reason = check_momentum_confirmation(candles, Direction.SELL)
+        if confirmed:
+            if "ชัดเจน" in mom_reason or "Volume" in mom_reason:
+                score += 10
+                confluences.append("volume_momentum_confirmed")
+        else:
+            score -= 15
+            risk_flags.append("momentum_exhaustion")
+
+        score = max(0, min(100, score))
+
+        return StrategyCandidate(
+            strategy_id=self.strategy_id,
+            strategy_name=self.name,
+            symbol=ctx.symbol,
+            timeframe="M15",
+            direction=Direction.SELL,
+            rule_score=score,
+            entry_price=price,
+            stop_loss=sl,
+            take_profit_1=tp1,
+            take_profit_2=tp2,
+            rr_ratio=round(rr, 2),
+            confluences=confluences,
+            risk_flags=risk_flags,
+            metadata={
+                "version": self.version,
+                "ob_upper": nearest_ob.upper_price,
+                "ob_lower": nearest_ob.lower_price,
+                "ob_strength": nearest_ob.strength,
+                "ob_fvg_overlap": nearest_ob.fvg_overlap,
+                "rsi": round(rsi, 1),
+                "volume_ratio": round(vol_ratio, 2),
+            },
+        )
+
+
+register(CHOCHOrderBlockStrategy())

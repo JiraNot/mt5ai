@@ -271,10 +271,17 @@ class AIVisionAnalyst:
 
         score = max(10, min(95, score))
 
-        if score >= 70:
+        min_approve = 70
+        try:
+            from src.core.runtime_settings import get_runtime_settings
+            min_approve = int(get_runtime_settings(mask_secrets=False).get("vision_min_score", 70))
+        except Exception:
+            pass
+
+        if score >= min_approve:
             verdict = "APPROVE"
             summary_th = "ทรงแท่งเทียนสวยงาม มีการปฏิเสธราคาหรือมีโมเมนตัมหนุนชัดเจน"
-        elif score >= 50:
+        elif score >= max(40, min_approve - 20):
             verdict = "CAUTION"
             summary_th = "ทรงแท่งเทียนอยู่ในระดับปานกลาง ควรใช้ความระมัดระวัง"
         else:

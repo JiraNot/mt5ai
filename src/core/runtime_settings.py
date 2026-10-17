@@ -49,13 +49,17 @@ DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "binance_base_url": "https://testnet.binancefuture.com",
     "binance_api_key": "",
     "binance_api_secret": "",
-    # AI Providers
+    # AI Providers & Vision
     "ai_provider": "codex",
     "openai_api_key": "",
     "openai_model": "gpt-4o",
     "gemini_api_key": "",
     "openrouter_api_key": "",
     "openrouter_model": "deepseek/deepseek-chat",
+    "vision_provider": "deterministic",
+    "vision_min_score": 65,
+    "volume_filter_enabled": True,
+    "rsi_filter_enabled": True,
     # Telegram
     "telegram_enabled": False,
     "telegram_bot_token": "",
@@ -188,6 +192,10 @@ def get_runtime_settings(mask_secrets: bool = True) -> dict[str, Any]:
     result["gemini_api_key"] = persisted.get("gemini_api_key", os.getenv("GEMINI_API_KEY", ""))
     result["openrouter_api_key"] = persisted.get("openrouter_api_key", os.getenv("OPENROUTER_API_KEY", ""))
     result["openrouter_model"] = persisted.get("openrouter_model", "deepseek/deepseek-chat")
+    result["vision_provider"] = persisted.get("vision_provider", "deterministic")
+    result["vision_min_score"] = int(persisted.get("vision_min_score", 65))
+    result["volume_filter_enabled"] = bool(persisted.get("volume_filter_enabled", True))
+    result["rsi_filter_enabled"] = bool(persisted.get("rsi_filter_enabled", True))
 
     result["telegram_enabled"] = bool(persisted.get("telegram_enabled", bool(os.getenv("TELEGRAM_BOT_TOKEN"))))
     result["telegram_bot_token"] = persisted.get("telegram_bot_token", os.getenv("TELEGRAM_BOT_TOKEN", ""))
@@ -287,6 +295,25 @@ def save_runtime_settings(changes: dict[str, Any]) -> dict[str, Any]:
 
     if "openrouter_model" in changes:
         updated["openrouter_model"] = str(changes["openrouter_model"]).strip()
+
+    if "vision_provider" in changes:
+        vp = str(changes["vision_provider"]).lower().strip()
+        if vp in ("deterministic", "gpt-4o", "claude-3-5", "deepseek-vision"):
+            updated["vision_provider"] = vp
+
+    if "vision_min_score" in changes:
+        try:
+            val = int(changes["vision_min_score"])
+            if 0 <= val <= 100:
+                updated["vision_min_score"] = val
+        except (ValueError, TypeError):
+            pass
+
+    if "volume_filter_enabled" in changes:
+        updated["volume_filter_enabled"] = bool(changes["volume_filter_enabled"])
+
+    if "rsi_filter_enabled" in changes:
+        updated["rsi_filter_enabled"] = bool(changes["rsi_filter_enabled"])
 
     if "telegram_enabled" in changes:
         updated["telegram_enabled"] = bool(changes["telegram_enabled"])

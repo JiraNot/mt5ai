@@ -9,6 +9,7 @@ from typing import Optional
 
 from src.core.types import Candle, Direction, StrategyCandidate
 from src.strategies.base import StrategyPlugin
+from src.strategies.indicators import check_momentum_confirmation, is_volume_spike
 from src.strategies.registry import register
 from src.structure.context import MultiTimeframeContext
 
@@ -41,7 +42,7 @@ class BreakoutRetestStrategy(StrategyPlugin):
 
     @property
     def version(self) -> str:
-        return "1.0.1"
+        return "1.1.0"
 
     def min_rr(self) -> float:
         return 2.0
@@ -161,6 +162,17 @@ class BreakoutRetestStrategy(StrategyPlugin):
             score += 10
             confluences.append("excellent_rr")
 
+        # Momentum & Volume Confirmation
+        candles = getattr(context, "primary_candles", None) or [candle]
+        confirmed, rsi, vol_ratio, mom_reason = check_momentum_confirmation(candles, Direction.BUY)
+        if confirmed:
+            if "สมบูรณ์" in mom_reason or "Volume" in mom_reason:
+                score += 10
+                confluences.append("volume_momentum_confirmed")
+        else:
+            score -= 15
+            risk_flags.append("momentum_exhaustion")
+
         score = max(0, min(100, score))
 
         return StrategyCandidate(
@@ -178,8 +190,11 @@ class BreakoutRetestStrategy(StrategyPlugin):
             confluences=confluences,
             risk_flags=risk_flags,
             metadata={
+                "version": self.version,
                 "breakout_level": breakout_level,
                 "wick_ratio": round(wick_ratio, 3),
+                "rsi": round(rsi, 1),
+                "volume_ratio": round(vol_ratio, 2),
             },
         )
 
@@ -257,6 +272,17 @@ class BreakoutRetestStrategy(StrategyPlugin):
             score += 10
             confluences.append("excellent_rr")
 
+        # Momentum & Volume Confirmation
+        candles = getattr(context, "primary_candles", None) or [candle]
+        confirmed, rsi, vol_ratio, mom_reason = check_momentum_confirmation(candles, Direction.SELL)
+        if confirmed:
+            if "ชัดเจน" in mom_reason or "Volume" in mom_reason:
+                score += 10
+                confluences.append("volume_momentum_confirmed")
+        else:
+            score -= 15
+            risk_flags.append("momentum_exhaustion")
+
         score = max(0, min(100, score))
 
         return StrategyCandidate(
@@ -274,8 +300,14 @@ class BreakoutRetestStrategy(StrategyPlugin):
             confluences=confluences,
             risk_flags=risk_flags,
             metadata={
+                "version": self.version,
                 "breakout_level": breakout_level,
                 "wick_ratio": round(wick_ratio, 3),
+                "rsi": round(rsi, 1),
+                "volume_ratio": round(vol_ratio, 2),
             },
         )
+
+
+register(BreakoutRetestStrategy())
 

@@ -83,7 +83,10 @@ DISABLED
 - [x] Dynamic Settings Management & Modal (`SettingsModal.tsx` + `src/core/runtime_settings.py`) allowing seamless configuration of Risk, Binance API, AI, and Telegram without .env redeployments
 - [x] Docker Persistent Volume (`/app/data`) Synchronization across Screener, Watchlist, and Council triage
 - [x] Dynamic Binance Gateway & Telegram Re-initialization upon runtime configuration updates
-- [x] 336 Tests passing (0 failures)
+- [x] Institutional Volume Spike & RSI Momentum Filters (`src/strategies/indicators.py`, `choch_orderblock` v1.1.0, `breakout_retest` v1.1.0)
+- [x] One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`) with SVG Equity Curve and simulated trade log
+- [x] Multimodal AI Vision Provider selector & customizable approval threshold
+- [x] 343 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)

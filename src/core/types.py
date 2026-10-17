@@ -377,6 +377,7 @@ class BacktestResult(BaseModel):
     avg_rr_achieved: float = 0.0
     total_pnl_r: float = 0.0
     equity_curve: list[float] = Field(default_factory=list)
+    trades: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DailyRisk(BaseModel):

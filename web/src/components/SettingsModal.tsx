@@ -47,6 +47,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     gemini_api_key: '',
     openrouter_api_key: '',
     openrouter_model: 'deepseek/deepseek-chat',
+    vision_provider: 'deterministic',
+    vision_min_score: 65,
+    volume_filter_enabled: true,
+    rsi_filter_enabled: true,
     telegram_enabled: false,
     telegram_bot_token: '',
     telegram_chat_id: '',
@@ -319,6 +323,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       />
                     </div>
                   </div>
+
+                  {/* Smart Filters */}
+                  <div className="p-3 bg-dark-950/60 border border-dark-800 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-slate-200">ตัวกรองโมเมนตัมและวอลุ่ม (Institutional Confirmation)</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="flex items-center justify-between p-2.5 bg-dark-900 border border-dark-700/60 rounded-xl cursor-pointer hover:border-dark-600 transition-colors">
+                        <div>
+                          <div className="text-xs font-semibold text-white">Volume Spike Filter</div>
+                          <div className="text-[10px] text-slate-400">กรองวอลุ่มสถาบัน ยืนยันการเบรกหลอก</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={formData.volume_filter_enabled ?? true}
+                          onChange={(e) => setFormData({ ...formData, volume_filter_enabled: e.target.checked })}
+                          className="w-4 h-4 rounded text-brand-gold bg-dark-950 border-dark-700 focus:ring-0 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2.5 bg-dark-900 border border-dark-700/60 rounded-xl cursor-pointer hover:border-dark-600 transition-colors">
+                        <div>
+                          <div className="text-xs font-semibold text-white">RSI Momentum Filter</div>
+                          <div className="text-[10px] text-slate-400">ป้องกันซื้อติดดอย Overbought / ขาย Oversold</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={formData.rsi_filter_enabled ?? true}
+                          onChange={(e) => setFormData({ ...formData, rsi_filter_enabled: e.target.checked })}
+                          className="w-4 h-4 rounded text-brand-gold bg-dark-950 border-dark-700 focus:ring-0 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -506,6 +542,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       </div>
                     </div>
                   )}
+
+                  {/* AI Vision & Chart Analysis */}
+                  <div className="p-3 bg-dark-950/60 border border-dark-800 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-slate-200">ระบบวิเคราะห์ภาพกราฟแท่งเทียน (Multimodal AI Vision)</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">เอนจิ้นวิเคราะห์รูปกราฟ</label>
+                        <select
+                          value={formData.vision_provider || 'deterministic'}
+                          onChange={(e) => setFormData({ ...formData, vision_provider: e.target.value as any })}
+                          className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-brand-gold"
+                        >
+                          <option value="deterministic">⚡ Deterministic Engine (เร็วสุด 0ms, แม่นยำ)</option>
+                          <option value="gpt-4o">🤖 OpenAI GPT-4o Vision</option>
+                          <option value="claude-3-5">🧠 Claude 3.5 Sonnet Vision</option>
+                          <option value="deepseek-vision">👁 DeepSeek Vision (OpenRouter)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">เกณฑ์คะแนนขั้นต่ำ (Min Approval Score)</label>
+                          <span className="text-xs font-mono font-bold text-brand-gold">{formData.vision_min_score || 65}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="50"
+                          max="90"
+                          step="5"
+                          value={formData.vision_min_score || 65}
+                          onChange={(e) => setFormData({ ...formData, vision_min_score: parseInt(e.target.value) })}
+                          className="w-full accent-brand-gold bg-dark-900 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                          <span>50% (ผ่อนปรน)</span>
+                          <span>70% (สมดุล)</span>
+                          <span>90% (เข้มงวด)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-18 (Institutional Enhancements: In-App Backtesting, Volume/RSI Filters & Multimodal Vision)
+
+- **One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`)**:
+  - Implemented on-demand historical simulation accessible via the new `BACKTEST` button in the header.
+  - Multi-parameter simulation supporting Strategy selection, Symbol (`BTCUSDT`, `ETHUSDT`, `SOLUSDT`, `BNBUSDT`), Timeframe (`1m`, `5m`, `15m`, `1h`), Capital, and Candle length.
+  - Real-time simulation metrics: Win Rate %, Profit Factor, Max Drawdown %, Net PnL, Expectancy, and Sharpe Ratio.
+  - Interactive SVG Equity Curve displaying portfolio trajectory over time with gradient fill.
+  - Simulated trade log detailing side, entry, exit, PnL ($), and R-multiples with realistic Binance taker fees (0.05%) and slippage modeling.
+- **Institutional Volume Spike & RSI Momentum Filters (`src/strategies/indicators.py`)**:
+  - Implemented Wilder's smoothed Relative Strength Index (RSI) and 20-period Volume Moving Average ratio.
+  - Added institutional volume expansion filter preventing low-liquidity false breaks (bull/bear traps).
+  - Integrated momentum filters directly into `CHOCHOrderBlockStrategy` (v1.1.0) and `BreakoutRetestStrategy` (v1.1.0).
+  - Completed `_check_short_choch_ob` candidate generation and enabled strategy auto-registration.
+- **Multimodal AI Vision Provider Selector & Configurable Threshold**:
+  - Added `vision_provider` selector in `SettingsModal.tsx` (Deterministic High-Res Engine, OpenAI GPT-4o Vision, Claude 3.5 Sonnet, DeepSeek Vision).
+  - Added customizable Minimum Vision Approval Score slider (50% to 90%).
+  - Added Volume Spike and RSI Momentum filter toggle switches directly into the Trading & Risk settings tab.
+- **Test Suite**:
+  - Added `tests/unit/test_indicators.py` (6 tests) and `tests/unit/test_api_backtest.py` (1 test).
+  - Test suite expanded to **343 passing tests (0 failures)**.
+
 ## 2026-10-18 (System Recheck & Production Hardening)
 
 - **Docker Persistent Volume (`/app/data`) Synchronization**:

@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Terminal as TerminalIcon,
   Settings as SettingsIcon,
+  BarChart3,
   PanelRight,
   PanelRightClose,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ interface HeaderProps {
   isSidebarOpen?: boolean;
   candidatesCount?: number;
   onOpenSettings?: () => void;
+  onOpenBacktest?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSidebarOpen = true,
   candidatesCount,
   onOpenSettings,
+  onOpenBacktest,
 }) => {
   const [panicLoading, setPanicLoading] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
@@ -190,6 +193,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <SettingsIcon className="w-3.5 h-3.5 text-brand-gold" />
             <span className="hidden md:inline">SETTINGS</span>
+          </button>
+        )}
+
+        {/* One-Click Backtest Button */}
+        {onOpenBacktest && (
+          <button
+            onClick={onOpenBacktest}
+            className="px-3.5 py-2 rounded-lg text-xs font-semibold font-mono flex items-center space-x-1.5 border border-dark-700 bg-dark-800 text-slate-300 hover:text-white hover:bg-dark-700 min-h-[44px] min-w-[44px] active:scale-95 transition-all"
+            title="เปิดหน้าต่างรัน Backtest จำลองย้อนหลัง"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden md:inline">BACKTEST</span>
           </button>
         )}
 

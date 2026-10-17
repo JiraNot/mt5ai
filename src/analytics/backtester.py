@@ -51,6 +51,7 @@ class Backtester:
         entry_tf: str = "M5",
         htf: str = "H4",
         start_idx: int = 50,
+        initial_balance: float = 10000.0,
     ) -> BacktestResult:
         """
         Run backtest for a specific strategy.
@@ -62,6 +63,7 @@ class Backtester:
             entry_tf: Entry timeframe
             htf: Higher timeframe
             start_idx: Starting candle index (skip early candles for structure warmup)
+            initial_balance: Starting portfolio equity in USDT
         """
         from src.strategies.registry import get_strategy
 
@@ -74,7 +76,7 @@ class Backtester:
             raise ValueError("Insufficient candle data for backtest")
 
         trades: list[dict] = []
-        equity = 10000.0
+        equity = float(initial_balance)
         equity_curve = [equity]
         max_equity = equity
         max_dd = 0.0
@@ -108,33 +110,73 @@ class Backtester:
             if in_trade:
                 # Check SL/TP
                 if trade_direction == Direction.BUY:
+                    time_str = current_candle.timestamp.strftime("%Y-%m-%d %H:%M")
+                    risk_amount = abs(trade_entry - trade_sl) * trade_volume * 100
                     if current_candle.low <= trade_sl:
                         # SL hit
                         pnl = (trade_sl - trade_entry - self._spread * 0.1) * trade_volume * 100
                         pnl -= self._commission * trade_volume
                         equity += pnl
                         in_trade = False
-                        trades.append({"direction": "BUY", "entry": trade_entry, "exit": trade_sl, "pnl": pnl})
+                        trades.append({
+                            "id": len(trades) + 1,
+                            "direction": "BUY",
+                            "entry": round(trade_entry, 2),
+                            "exit": round(trade_sl, 2),
+                            "pnl": round(pnl, 2),
+                            "status": "LOSS",
+                            "r_multiple": round(pnl / risk_amount, 2) if risk_amount > 0 else -1.0,
+                            "time": time_str,
+                        })
                     elif current_candle.high >= trade_tp:
                         # TP hit
                         pnl = (trade_tp - trade_entry - self._spread * 0.1) * trade_volume * 100
                         pnl -= self._commission * trade_volume
                         equity += pnl
                         in_trade = False
-                        trades.append({"direction": "BUY", "entry": trade_entry, "exit": trade_tp, "pnl": pnl})
+                        trades.append({
+                            "id": len(trades) + 1,
+                            "direction": "BUY",
+                            "entry": round(trade_entry, 2),
+                            "exit": round(trade_tp, 2),
+                            "pnl": round(pnl, 2),
+                            "status": "WIN",
+                            "r_multiple": round(pnl / risk_amount, 2) if risk_amount > 0 else 2.0,
+                            "time": time_str,
+                        })
                 else:  # SELL
+                    time_str = current_candle.timestamp.strftime("%Y-%m-%d %H:%M")
+                    risk_amount = abs(trade_sl - trade_entry) * trade_volume * 100
                     if current_candle.high >= trade_sl:
                         pnl = (trade_entry - trade_sl - self._spread * 0.1) * trade_volume * 100
                         pnl -= self._commission * trade_volume
                         equity += pnl
                         in_trade = False
-                        trades.append({"direction": "SELL", "entry": trade_entry, "exit": trade_sl, "pnl": pnl})
+                        trades.append({
+                            "id": len(trades) + 1,
+                            "direction": "SELL",
+                            "entry": round(trade_entry, 2),
+                            "exit": round(trade_sl, 2),
+                            "pnl": round(pnl, 2),
+                            "status": "LOSS",
+                            "r_multiple": round(pnl / risk_amount, 2) if risk_amount > 0 else -1.0,
+                            "time": time_str,
+                        })
                     elif current_candle.low <= trade_tp:
                         pnl = (trade_entry - trade_tp - self._spread * 0.1) * trade_volume * 100
                         pnl -= self._commission * trade_volume
                         equity += pnl
                         in_trade = False
-                        trades.append({"direction": "SELL", "entry": trade_entry, "exit": trade_tp, "pnl": pnl})
+                        trades.append({
+                            "id": len(trades) + 1,
+                            "direction": "SELL",
+                            "entry": round(trade_entry, 2),
+                            "exit": round(trade_tp, 2),
+                            "pnl": round(pnl, 2),
+                            "status": "WIN",
+                            "r_multiple": round(pnl / risk_amount, 2) if risk_amount > 0 else 2.0,
+                            "time": time_str,
+                        })
 
                 # Track drawdown
                 if equity > max_equity:
@@ -202,4 +244,5 @@ class Backtester:
             profit_factor=round(sum(t["pnl"] for t in winners) / abs(sum(t["pnl"] for t in losers)), 2) if losers else 0,
             total_pnl_r=round(sum(t["pnl"] for t in trades), 2),
             equity_curve=equity_curve,
+            trades=trades,
         )
