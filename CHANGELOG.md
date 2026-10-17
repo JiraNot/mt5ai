@@ -17,6 +17,11 @@
   - Added `vision_provider` selector in `SettingsModal.tsx` (Deterministic High-Res Engine, OpenAI GPT-4o Vision, Claude 3.5 Sonnet, DeepSeek Vision).
   - Added customizable Minimum Vision Approval Score slider (50% to 90%).
   - Added Volume Spike and RSI Momentum filter toggle switches directly into the Trading & Risk settings tab.
+- **Docker & Coolify Auto-Deploy Hardening**:
+  - Synchronized `docker-compose.yaml` with `docker-compose.yml` to prevent Coolify from using the outdated Compose manifest with stale Traefik labels and missing port binds.
+  - Made healthcheck in `docker-compose.yml` resilient with `CMD-SHELL` testing `/health`, `/_stcore/health`, and `/api/status` with `start_period: 40s`.
+  - Added fallback `|| true` on optional CLI tools in `Dockerfile` so network hiccups do not fail container builds.
+  - Added `.github/workflows/coolify-deploy.yml` GitHub Actions workflow to enable guaranteed webhook deployment on every push to `main`.
 - **Test Suite**:
   - Added `tests/unit/test_indicators.py` (6 tests) and `tests/unit/test_api_backtest.py` (1 test).
   - Test suite expanded to **343 passing tests (0 failures)**.

@@ -86,6 +86,7 @@ DISABLED
 - [x] Institutional Volume Spike & RSI Momentum Filters (`src/strategies/indicators.py`, `choch_orderblock` v1.1.0, `breakout_retest` v1.1.0)
 - [x] One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`) with SVG Equity Curve and simulated trade log
 - [x] Multimodal AI Vision Provider selector & customizable approval threshold
+- [x] Docker & Coolify Auto-Deploy Hardening (docker-compose sync, resilient healthchecks, GitHub Actions webhook trigger)
 - [x] 343 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)
