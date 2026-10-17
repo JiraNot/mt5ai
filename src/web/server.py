@@ -214,6 +214,10 @@ class SettingsUpdateRequest(BaseModel):
     telegram_chat_id: str | None = None
 
 
+class AITestRequest(BaseModel):
+    provider: str = "codex"
+
+
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -519,6 +523,27 @@ async def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
     changes = req.model_dump(exclude_none=True)
     updated = save_runtime_settings(changes)
     return {"ok": True, "message": "Settings updated successfully", "settings": updated}
+
+
+@app.get("/api/ai/auth-status")
+@app.get("/api/agents/auth")
+async def get_ai_auth_status(refresh: bool = False) -> dict[str, Any]:
+    """Inspect local AI auth state (Codex ChatGPT, Gemini OAuth, API keys) without burning tokens."""
+    from src.core.ai_auth_service import ai_auth_service
+    return await ai_auth_service.inspect(force=refresh)
+
+
+@app.post("/api/ai/test")
+@app.post("/api/settings/providers/{provider}/test")
+async def test_ai_provider_endpoint(
+    provider: str | None = None,
+    req: AITestRequest | None = None,
+) -> dict[str, Any]:
+    """Test connectivity to an AI provider with latency measurement."""
+    from src.core.ai_auth_service import ai_auth_service
+    target = provider or (req.provider if req else "codex")
+    result = await ai_auth_service.test_provider(target)
+    return {"ok": result.get("ok", False), "result": result}
 
 
 @app.get("/api/trades/markers")

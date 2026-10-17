@@ -12,8 +12,19 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Zap,
+  ExternalLink,
+  Terminal as TerminalIcon,
+  Sparkles,
 } from 'lucide-react';
-import { fetchSettings, saveSettings, RuntimeSettings } from '../services/api';
+import {
+  fetchSettings,
+  saveSettings,
+  RuntimeSettings,
+  fetchAIAuthStatus,
+  testAIProvider,
+  AIAuthItem,
+} from '../services/api';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -26,6 +37,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // AI Auth states (MobileIDE pattern)
+  const [authItems, setAuthItems] = useState<AIAuthItem[]>([]);
+  const [checkingAuth, setCheckingAuth] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string; latency_ms: number; status: string }>>({});
 
   // Form state
   const [formData, setFormData] = useState<Partial<RuntimeSettings>>({
@@ -60,6 +77,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   const [showAIKey, setShowAIKey] = useState(false);
   const [showTelegramToken, setShowTelegramToken] = useState(false);
 
+  const refreshAuth = async (force = false) => {
+    setCheckingAuth(true);
+    try {
+      const res = await fetchAIAuthStatus(force);
+      if (res && res.ok && Array.isArray(res.items)) {
+        setAuthItems(res.items);
+      }
+    } catch (err: any) {
+      console.warn('AI Auth inspection error:', err);
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  const handleTestProvider = async (providerId: string) => {
+    setTestingProvider(providerId);
+    try {
+      const res = await testAIProvider(providerId);
+      if (res && res.result) {
+        setTestResults(prev => ({
+          ...prev,
+          [providerId]: res.result,
+        }));
+      }
+    } catch (err: any) {
+      setTestResults(prev => ({
+        ...prev,
+        [providerId]: {
+          ok: false,
+          provider: providerId,
+          status: 'error',
+          latency_ms: 0,
+          message: err?.message || 'การเชื่อมต่อล้มเหลว',
+        },
+      }));
+    } finally {
+      setTestingProvider(null);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
@@ -73,7 +130,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
         setToast({ type: 'error', message: 'โหลดการตั้งค่าไม่สำเร็จ: ' + err.message });
       })
       .finally(() => setLoading(false));
+
+    refreshAuth(false);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'ai') {
+      refreshAuth(false);
+    }
+  }, [activeTab]);
 
   if (!isOpen) return null;
 
@@ -438,8 +503,160 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               {/* TAB 3: AI COUNCIL */}
               {activeTab === 'ai' && (
                 <div className="space-y-4">
+                  {/* Account Login & Auth Inspection Card (MobileIDE Pattern) */}
+                  <div className="p-3.5 bg-dark-950/80 border border-purple-500/20 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-dark-800 pb-2.5">
+                      <div className="flex items-center space-x-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        <div>
+                          <div className="text-xs font-bold text-white tracking-wide">
+                            สถานะการล็อกอิน AI (Account Login & CLI Sessions)
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            ตรวจสอบสถานะเซสชันและ CLI อัตโนมัติในเครื่อง ไม่กิน Quota หรือตัดเหรียญ
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshAuth(true)}
+                        disabled={checkingAuth}
+                        className="flex items-center space-x-1 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:text-white bg-dark-900 border border-dark-700 hover:border-dark-600 rounded-lg transition-colors"
+                        title="ตรวจสถานะการล็อกอินใหม่"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${checkingAuth ? 'animate-spin text-purple-400' : ''}`} />
+                        <span>{checkingAuth ? 'กำลังตรวจ…' : 'ตรวจสถานะใหม่'}</span>
+                      </button>
+                    </div>
+
+                    {/* Providers Status List */}
+                    <div className="space-y-2.5">
+                      {(authItems.length > 0
+                        ? authItems
+                        : [
+                            { id: 'codex', name: 'ChatGPT / Codex', auth_type: 'oauth-login', state: 'unknown', note: 'ตรวจสอบสถานะ Codex CLI…' },
+                            { id: 'gemini', name: 'Google Gemini / Antigravity', auth_type: 'oauth-login', state: 'unknown', note: 'ตรวจสอบสถานะ Google OAuth…' },
+                            { id: 'openai', name: 'OpenAI Direct API', auth_type: 'api-key', state: 'unknown', note: 'ตรวจสอบ API Key…' },
+                            { id: 'openrouter', name: 'OpenRouter', auth_type: 'api-key', state: 'unknown', note: 'ตรวจสอบ API Key…' },
+                          ]
+                      ).map((item) => {
+                        const test = testResults[item.id];
+                        const isTesting = testingProvider === item.id;
+                        const isPrimary = formData.ai_provider === item.id;
+
+                        let badgeColor = 'bg-slate-800/80 text-slate-400 border-slate-700';
+                        let badgeLabel = 'ไม่ทราบสถานะ';
+                        let dotColor = 'bg-slate-400';
+
+                        if (item.state === 'authenticated') {
+                          badgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
+                          badgeLabel = 'เข้าสู่ระบบแล้ว (Authenticated)';
+                          dotColor = 'bg-emerald-400 animate-pulse';
+                        } else if (item.state === 'configured') {
+                          badgeColor = 'bg-sky-500/15 text-sky-300 border-sky-500/40';
+                          badgeLabel = 'ตั้งค่าแล้ว (Configured)';
+                          dotColor = 'bg-sky-400';
+                        } else if (item.state === 'login_required') {
+                          badgeColor = 'bg-amber-500/15 text-amber-300 border-amber-500/40';
+                          badgeLabel = 'ต้องล็อกอิน (Login Required)';
+                          dotColor = 'bg-amber-400';
+                        }
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-2.5 rounded-xl border transition-all ${
+                              isPrimary
+                                ? 'bg-purple-950/20 border-purple-500/40 ring-1 ring-purple-500/20'
+                                : 'bg-dark-900/70 border-dark-800 hover:border-dark-700'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs font-bold text-white">{item.name}</span>
+                                {item.account_label && (
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-dark-800 text-slate-300 border border-dark-700">
+                                    {item.account_label}
+                                  </span>
+                                )}
+                                {isPrimary && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                    ★ AI หลัก
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center space-x-1.5">
+                                <span className={`inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-semibold rounded-full border ${badgeColor}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                  <span>{badgeLabel}</span>
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestProvider(item.id)}
+                                  disabled={isTesting}
+                                  className="flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors"
+                                  title="ทดสอบการเชื่อมต่อและความหน่วง (Latency)"
+                                >
+                                  <Zap className={`w-3 h-3 ${isTesting ? 'animate-bounce text-amber-400' : ''}`} />
+                                  <span>{isTesting ? 'กำลังเทส…' : '⚡ ทดสอบ'}</span>
+                                </button>
+
+                                {(item.id === 'codex' || item.id === 'gemini') && (
+                                  <a
+                                    href="/terminal"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center space-x-1 px-2 py-1 text-[10px] font-bold text-sky-300 hover:text-white bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-colors"
+                                    title="เปิด Web Terminal เพื่อล็อกอิน OAuth ผ่านเบราว์เซอร์"
+                                  >
+                                    <TerminalIcon className="w-3 h-3" />
+                                    <span>Terminal</span>
+                                    <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                  </a>
+                                )}
+
+                                {!isPrimary && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, ai_provider: item.id as any })}
+                                    className="px-2 py-1 text-[10px] font-medium text-slate-400 hover:text-white bg-dark-950 border border-dark-700 rounded-lg transition-colors"
+                                  >
+                                    เลือกใช้
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-slate-400 leading-tight">
+                              {item.note}
+                            </div>
+
+                            {/* Live Test Feedback */}
+                            {test && (
+                              <div
+                                className={`mt-2 p-1.5 px-2.5 rounded-lg text-[11px] font-mono flex items-center justify-between border ${
+                                  test.ok
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                    : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                                }`}
+                              >
+                                <span>{test.message}</span>
+                                {test.latency_ms > 0 && (
+                                  <span className="text-[10px] opacity-75">{test.latency_ms}ms</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Active AI Provider Switcher */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">ผู้ให้บริการ AI หลัก</label>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">ผู้ให้บริการ AI หลักสำหรับวิเคราะห์การเทรด</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
                         { id: 'codex', label: 'Codex / ChatGPT' },
@@ -463,6 +680,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                     </div>
                   </div>
 
+                  {/* Provider Specific Input Forms */}
                   {formData.ai_provider === 'openai' && (
                     <div className="space-y-3 p-3 bg-dark-950/60 border border-dark-800 rounded-xl">
                       <div>
@@ -499,13 +717,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                   {formData.ai_provider === 'gemini' && (
                     <div className="space-y-3 p-3 bg-dark-950/60 border border-dark-800 rounded-xl">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">Gemini API Key</label>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Gemini API Key (ตัวเลือกเสริม หากไม่ใช้ Antigravity OAuth)</label>
                         <input
                           type="password"
                           value={formData.gemini_api_key || ''}
                           onChange={(e) => setFormData({ ...formData, gemini_api_key: e.target.value })}
                           className="w-full bg-dark-900 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
-                          placeholder="AIzaSy..."
+                          placeholder="AIzaSy... (เว้นว่างไว้หากล็อกอินผ่าน Terminal แล้ว)"
                         />
                       </div>
                     </div>
@@ -537,8 +755,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
                   {formData.ai_provider === 'codex' && (
                     <div className="p-3 bg-dark-950/60 border border-dark-800 rounded-xl space-y-2">
-                      <div className="text-xs text-slate-300">
-                        ใช้งาน Codex CLI / ChatGPT OAuth Session อัตโนมัติ (สามารถกดปุ่ม <strong>AI LOGIN</strong> บนเมนูบาร์เพื่อ Login ผ่านเบราว์เซอร์ได้)
+                      <div className="text-xs text-slate-300 flex items-center justify-between">
+                        <span>ใช้งาน Codex CLI / ChatGPT OAuth Session อัตโนมัติ</span>
+                        <a
+                          href="/terminal"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 flex items-center space-x-1"
+                        >
+                          <span>เปิด Terminal เพื่อล็อกอิน</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       </div>
                     </div>
                   )}

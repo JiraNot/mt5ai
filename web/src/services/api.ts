@@ -306,3 +306,45 @@ export async function runBacktest(req: BacktestRequest): Promise<BacktestRespons
   return res.json();
 }
 
+export interface AIAuthItem {
+  id: string;
+  name: string;
+  auth_type: 'oauth-login' | 'api-key' | 'cli-login';
+  state: 'authenticated' | 'configured' | 'login_required' | 'unknown';
+  checked_at: string;
+  account_label?: string;
+  note: string;
+}
+
+export interface AIAuthResponse {
+  ok: boolean;
+  updated_at: string;
+  items: AIAuthItem[];
+}
+
+export interface AITestResponse {
+  ok: boolean;
+  result: {
+    ok: boolean;
+    provider: string;
+    status: 'ready' | 'login_required' | 'error' | 'exhausted';
+    latency_ms: number;
+    message: string;
+    details?: any;
+  };
+}
+
+export async function fetchAIAuthStatus(refresh = false): Promise<AIAuthResponse> {
+  const res = await fetch(`${API_BASE}/ai/auth-status?refresh=${refresh}`);
+  return res.json();
+}
+
+export async function testAIProvider(provider: string): Promise<AITestResponse> {
+  const res = await fetch(`${API_BASE}/ai/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  });
+  return res.json();
+}
+

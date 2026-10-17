@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-18 (MobileIDE AI Login & Local Session Probing Architecture)
+
+- **Quota-Safe Local Session Inspection (`src/core/ai_auth_service.py`)**:
+  - Adopted the lightweight, quota-safe inspection pattern from `/projects/mobileide`: checks local CLI session states and auth files without sending expensive tokens or model generation calls to AI providers.
+  - Detects **Codex / ChatGPT** login state via `codex login status` (e.g. `Logged in using ChatGPT`).
+  - Detects **Google Gemini / Antigravity** via `~/.gemini/` OAuth tokens and runtime keys.
+  - Detects **OpenAI Direct API** and **OpenRouter** via encrypted runtime configuration.
+  - Implemented 15-second cache to prevent redundant subprocess spawns during repeated status checks.
+- **FastAPI Endpoints (`GET /api/ai/auth-status` & `POST /api/ai/test`)**:
+  - Added `GET /api/ai/auth-status` (with MobileIDE alias `/api/agents/auth`) returning structured provider items (`auth_type`, `state`, `checked_at`, `account_label`, `note`).
+  - Added `POST /api/ai/test` (with MobileIDE alias `/api/settings/providers/{provider}/test`) providing on-demand latency measurement and status verification.
+- **Upgraded AI Settings Modal (`SettingsModal.tsx`)**:
+  - Added **Account Login & CLI Sessions** status card at the top of the AI tab.
+  - Rendered real-time status badges: `● เข้าสู่ระบบแล้ว (Authenticated)` (emerald), `● ตั้งค่าแล้ว (Configured)` (sky), and `● ต้องล็อกอิน (Login Required)` (amber).
+  - Added instant `⚡ ทดสอบ (Test)` button next to each provider displaying measured round-trip latency in milliseconds.
+  - Added direct `🔗 Terminal` button opening `/terminal` in a new tab for 1-click browser OAuth authentication.
+  - Added `🔄 ตรวจสถานะใหม่ (Check login)` button to refresh sessions without closing the modal.
+- **Test Suite**:
+  - Added `tests/unit/test_ai_auth_service.py` (4 tests).
+  - Test suite expanded to **347 passing tests (0 failures)**.
+
 ## 2026-10-18 (Institutional Enhancements: In-App Backtesting, Volume/RSI Filters & Multimodal Vision)
 
 - **One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`)**:

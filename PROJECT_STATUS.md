@@ -87,7 +87,8 @@ DISABLED
 - [x] One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`) with SVG Equity Curve and simulated trade log
 - [x] Multimodal AI Vision Provider selector & customizable approval threshold
 - [x] Docker & Coolify Auto-Deploy Hardening (docker-compose sync, resilient healthchecks, GitHub Actions webhook trigger)
-- [x] 343 Tests passing (0 failures)
+- [x] MobileIDE-inspired AI Login & Local Session Probing (`src/core/ai_auth_service.py`, `GET /api/ai/auth-status`, `POST /api/ai/test`): Quota-safe CLI status checking (Codex ChatGPT, Gemini Antigravity, OpenAI, OpenRouter) with real-time latency ping and 1-click Web Terminal login
+- [x] 347 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
