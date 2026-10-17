@@ -78,7 +78,10 @@ DISABLED
 - [x] Modern Pro Crypto WebApp (React 19 + TypeScript + Vite + Tailwind CSS + TradingView Lightweight Charts + FastAPI WebSocket backend)
 - [x] Responsive Tablet & Touch UX for WebApp (Verified 65/65 checks passed: Header layout, PANIC visibility, >= 44px touch targets, 100dvh, haptic vibration across 5 screen sizes). See docs/testing/TABLET_UX_VERIFICATION.md.
 - [x] Binance Testnet 401 Unauthorized auto-fallback to safe Paper execution & robust SPA routing
-- [x] 322 Tests passing
+- [x] Technical Indicators & Dynamic S/R Overlays (EMA 20, EMA 50, EMA 200, Resistance, Support, Pivot) with real-time value strip and toggle controls
+- [x] Candlestick Trade Markers & Trade Retrospective Drawer (Why entered, Why won/lost in Thai, with interactive chart focus)
+- [x] Dynamic Settings Management & Modal (`SettingsModal.tsx` + `src/core/runtime_settings.py`) allowing seamless configuration of Risk, Binance API, AI, and Telegram without .env redeployments
+- [x] 336 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)

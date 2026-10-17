@@ -5,6 +5,7 @@ import { TradingChart } from './components/TradingChart';
 import { WatchlistPanel } from './components/WatchlistPanel';
 import { AICouncilCard } from './components/AICouncilCard';
 import { PositionsTable } from './components/PositionsTable';
+import { SettingsModal } from './components/SettingsModal';
 import {
   fetchStatus,
   fetchWatchlist,
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
     return true;
   });
   const [sidebarTab, setSidebarTab] = useState<'watchlist' | 'council'>('watchlist');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Load all initial state
   const loadAllData = useCallback(async () => {
@@ -142,6 +144,7 @@ export const App: React.FC = () => {
         onToggleSidebar={handleToggleSidebar}
         isSidebarOpen={isSidebarOpen}
         candidatesCount={watchlist?.candidates?.length}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Main Trading Area */}
@@ -238,6 +241,13 @@ export const App: React.FC = () => {
         positions={positions}
         history={history}
         onRefresh={loadAllData}
+      />
+
+      {/* Dynamic Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSaved={loadAllData}
       />
     </div>
   );

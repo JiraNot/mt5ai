@@ -190,6 +190,30 @@ class PositionActionRequest(BaseModel):
     symbol: str = "BTCUSDT"
 
 
+class SettingsUpdateRequest(BaseModel):
+    trading_mode: str | None = None
+    primary_symbol: str | None = None
+    active_symbols: list[str] | str | None = None
+    paper_initial_balance: float | None = None
+    risk_per_trade_pct: float | None = None
+    max_daily_loss_pct: float | None = None
+    max_open_positions: int | None = None
+    min_rr: float | None = None
+    binance_mode: str | None = None
+    binance_base_url: str | None = None
+    binance_api_key: str | None = None
+    binance_api_secret: str | None = None
+    ai_provider: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    gemini_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    openrouter_model: str | None = None
+    telegram_enabled: bool | None = None
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
+
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -471,6 +495,146 @@ async def get_history(limit: int = 30) -> dict[str, Any]:
             for t in trades
         ]
         return {"ok": True, "trades": data}
+
+
+@app.get("/api/settings")
+async def get_settings() -> dict[str, Any]:
+    """Return effective runtime settings with sensitive fields masked."""
+    from src.core.runtime_settings import get_runtime_settings
+    return {"ok": True, "settings": get_runtime_settings(mask_secrets=True)}
+
+
+@app.post("/api/settings")
+async def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
+    """Update runtime settings persistently without modifying .env files."""
+    from src.core.runtime_settings import save_runtime_settings
+    changes = req.model_dump(exclude_none=True)
+    updated = save_runtime_settings(changes)
+    return {"ok": True, "message": "Settings updated successfully", "settings": updated}
+
+
+@app.get("/api/trades/markers")
+async def get_trade_markers(symbol: str = "BTCUSDT") -> dict[str, Any]:
+    """Return chart markers and detailed trade explanations for the specified symbol."""
+    sym = symbol.upper()
+    async with get_db_session() as session:
+        query = select(Trade).where(Trade.symbol == sym).order_by(Trade.open_time.desc()).limit(50)
+        result = await session.execute(query)
+        trades = result.scalars().all()
+
+        markers: list[dict[str, Any]] = []
+        trade_details: list[dict[str, Any]] = []
+
+        for t in trades:
+            direction_str = t.direction.value if hasattr(t.direction, "value") else str(t.direction)
+            profit_val = round(float(t.profit), 2) if t.profit is not None else 0.0
+            r_val = round(float(t.outcome_r), 2) if t.outcome_r is not None else 0.0
+            is_win = profit_val > 0
+
+            strategy_raw = (t.comment or "").lower()
+            if "fvg_reversal" in strategy_raw or "fvg" in strategy_raw:
+                strategy_title = "FVG Reversal"
+                why_entered = "ราคาย่อตัวทดสอบ Fair Value Gap (FVG) ในโซน Discount/Premium สอดคล้องกับโครงสร้างแท่งเทียน"
+            elif "breakout" in strategy_raw:
+                strategy_title = "Breakout Retest"
+                why_entered = "ราคาทะลุแนวรับแนวต้านสำคัญ (BOS) และย้อนกลับมา Retest ตามตำรา Price Action"
+            elif "choch" in strategy_raw or "orderblock" in strategy_raw:
+                strategy_title = "CHoCH + Order Block"
+                why_entered = "เกิด Change of Character (CHoCH) และกลับมาทดสอบโซน Order Block ของสถาบัน"
+            else:
+                strategy_title = "Smart Money Setup"
+                why_entered = "AI วิเคราะห์โครงสร้างราคาสอดคล้องกับแนวโน้ม Multi-Timeframe และผ่านเกณฑ์ความเสี่ยง"
+
+            if is_win:
+                why_won_lost = f"✅ ชนะ (+{r_val:+.1f}R, +${profit_val:,.2f}): ราคาวิ่งไปแตะเป้า Take Profit ตามแผน โครงสร้างราคาไม่เสีย"
+            elif profit_val < 0:
+                why_won_lost = f"❌ เสีย ({r_val:+.1f}R, -${abs(profit_val):,.2f}): ราคาถูกตัดขาดทุน (Stop Loss) เนื่องจากความผันผวนของสเปรดและแรงขายต้าน"
+            else:
+                why_won_lost = "⚪ เสมอตัว (0.0R): ออเดอร์ปิดที่จุด Break-Even คุ้มทุนพอดี"
+
+            entry_ts = int(t.open_time.timestamp()) if t.open_time else 0
+            exit_ts = int(t.exit_time.timestamp()) if t.exit_time else (entry_ts + 300)
+
+            if entry_ts > 0:
+                markers.append({
+                    "time": entry_ts,
+                    "position": "belowBar" if direction_str == "BUY" else "aboveBar",
+                    "color": "#10b981" if direction_str == "BUY" else "#ef4444",
+                    "shape": "arrowUp" if direction_str == "BUY" else "arrowDown",
+                    "text": f"{direction_str} @ {float(t.entry_price):,.2f}",
+                    "id": f"entry_{t.id}",
+                })
+
+            if t.exit_time and exit_ts > entry_ts:
+                markers.append({
+                    "time": exit_ts,
+                    "position": "aboveBar" if direction_str == "BUY" else "belowBar",
+                    "color": "#10b981" if is_win else "#ef4444",
+                    "shape": "circle",
+                    "text": f"{'WIN' if is_win else 'LOSS'} {r_val:+.1f}R",
+                    "id": f"exit_{t.id}",
+                })
+
+            trade_details.append({
+                "id": t.id,
+                "ticket": t.external_order_id or str(t.id),
+                "symbol": t.symbol,
+                "direction": direction_str,
+                "volume": float(t.volume) if t.volume else 0.0,
+                "entry_price": float(t.entry_price) if t.entry_price else 0.0,
+                "exit_price": float(t.exit_price) if t.exit_price else 0.0,
+                "sl": float(t.sl) if t.sl else 0.0,
+                "tp": float(t.tp1) if t.tp1 else 0.0,
+                "profit": profit_val,
+                "outcome_r": r_val,
+                "status": "WIN" if is_win else ("LOSS" if profit_val < 0 else "BREAKEVEN"),
+                "strategy": strategy_title,
+                "why_entered": why_entered,
+                "why_won_lost": why_won_lost,
+                "open_time": t.open_time.isoformat() if t.open_time else None,
+                "exit_time": t.exit_time.isoformat() if t.exit_time else None,
+            })
+
+        # Add currently open positions for this symbol
+        gateway = get_gateway()
+        try:
+            positions = await gateway.get_positions()
+            for p in positions:
+                if p.symbol == sym:
+                    direction_str = p.direction.value if hasattr(p.direction, "value") else str(p.direction)
+                    open_ts = int(datetime.now(timezone.utc).timestamp()) - 300
+                    markers.append({
+                        "time": open_ts,
+                        "position": "belowBar" if direction_str == "BUY" else "aboveBar",
+                        "color": "#3b82f6",
+                        "shape": "arrowUp" if direction_str == "BUY" else "arrowDown",
+                        "text": f"⏳ ACTIVE {direction_str} @ {p.open_price:,.2f}",
+                        "id": f"pos_{p.ticket}",
+                    })
+                    trade_details.insert(0, {
+                        "id": p.ticket,
+                        "ticket": str(p.ticket),
+                        "symbol": p.symbol,
+                        "direction": direction_str,
+                        "volume": p.volume,
+                        "entry_price": p.open_price,
+                        "exit_price": 0.0,
+                        "sl": p.sl,
+                        "tp": p.tp,
+                        "profit": round(p.profit, 2),
+                        "outcome_r": 0.0,
+                        "status": "OPEN",
+                        "strategy": "Active SMC Order",
+                        "why_entered": "ออเดอร์เปิดตามเงื่อนไข SMC Confluence และผ่านการอนุมัติจาก Risk Engine",
+                        "why_won_lost": "⏳ กำลังถือออเดอร์: มี Server-side SL ควบคุมความเสี่ยง และมีระบบ Auto Break-Even เฝ้าระวังที่ +1.0R",
+                        "open_time": datetime.now(timezone.utc).isoformat(),
+                        "exit_time": None,
+                    })
+        except Exception:
+            pass
+
+        markers.sort(key=lambda m: m["time"])
+        return {"ok": True, "symbol": sym, "markers": markers, "trades": trade_details}
 
 
 # ─── Action Endpoints ─────────────────────────────────────────────────────────

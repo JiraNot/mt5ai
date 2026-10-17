@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-17 (Technical Indicators, Trade Markers & Retrospective, Dynamic Settings UI)
+
+- **Technical Indicators & Institutional Overlays (`TradingChart.tsx`)**:
+  - Implemented mathematical Exponential Moving Averages (EMA 20 in Cyan `#00d4ff`, EMA 50 in Amber `#f59e0b`, EMA 200 in Purple `#a855f7`) with O(N) calculation from closed candles.
+  - Added Dynamic Support & Resistance levels (24h High resistance, 24h Low support, Midpoint pivot) based on SMC swing context.
+  - Added chart toolbar toggle buttons for `EMA 20/50/200`, `S/R Levels`, and `Trade Markers` with real-time numeric value legend readout.
+- **Trade Candlestick Markers & Retrospective Drawer (`TradingChart.tsx` + `/api/trades/markers`)**:
+  - Rendered entry markers (`arrowUp` for BUY, `arrowDown` for SELL) and exit markers (`circle` with WIN/LOSS PnL).
+  - Added collapsible "Trade Inspector" drawer below the chart showing trade tickets, entry/exit prices, profit, and R-multiple.
+  - Added clear Thai contextual explanations for each trade:
+    - **🎯 เข้าเพราะ (Why entered)**: Identifies whether setup was FVG Reversal, Breakout Retest, or CHoCH Order Block.
+    - **📊 ผลลัพธ์ (Why won/lost)**: Detailed retrospective explaining if TP was reached according to SMC plan or if SL was hit due to spread volatility.
+- **Dynamic Settings UI & Manager (`SettingsModal.tsx` + `src/core/runtime_settings.py`)**:
+  - Created persistent runtime settings manager storing configuration in `/app/data/runtime_settings.json` (survives container redeployments).
+  - Encrypts sensitive secrets (Binance API Key/Secret, AI Provider keys, Telegram Bot Token) using Fernet cryptography derived from dashboard password.
+  - Allows full configuration of Trading Mode (Paper/Demo/Live), Primary & Watchlist Symbols, Risk % per trade, Daily loss limit, Binance API credentials, AI Models, and Telegram alerts directly from the Web UI without touching `.env`.
+  - Added `SETTINGS` button in `Header.tsx` to open the modal from any screen.
+- **Test Suite**:
+  - Added `tests/unit/test_runtime_settings.py` (4 tests) and `tests/unit/test_api_settings_and_markers.py` (2 tests).
+  - Platform test suite expanded to **336 passing tests (0 failures)**.
+
 ## 2026-10-16 (Phase 09: Paper Trading Full Loop & Comprehensive Analytics Reporting)
 
 - **Paper Trading Full Loop Runner (`src/live/paper_loop.py`)**:

@@ -169,7 +169,7 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         db_url = db_url.replace("sqlite+aiosqlite:///app/", "sqlite+aiosqlite:////app/", 1)
 
     # Construct settings
-    return Settings(
+    s = Settings(
         binance_mode=os.getenv("BINANCE_MODE", "paper").lower(),
         binance_base_url=os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com"),
         binance_api_key=os.getenv("BINANCE_API_KEY", ""),
@@ -191,5 +191,35 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         logging_config=LoggingConfig(**settings_yaml.get("logging", {})),
         symbols=symbols_config,
     )
+    try:
+        from src.core.runtime_settings import _read_raw_file
+        persisted = _read_raw_file()
+        if persisted:
+            if "binance_mode" in persisted:
+                s.binance_mode = str(persisted["binance_mode"]).lower()
+            if "binance_base_url" in persisted:
+                s.binance_base_url = str(persisted["binance_base_url"])
+            if "binance_api_key" in persisted:
+                s.binance_api_key = str(persisted["binance_api_key"])
+            if "binance_api_secret" in persisted:
+                s.binance_api_secret = str(persisted["binance_api_secret"])
+            if "trading_mode" in persisted:
+                s.trading_mode = str(persisted["trading_mode"]).lower()
+            if "primary_symbol" in persisted:
+                s.primary_symbol = str(persisted["primary_symbol"]).upper()
+                s.binance_symbol = str(persisted["primary_symbol"]).upper()
+            if "risk_per_trade_pct" in persisted:
+                s.risk.risk_per_trade_pct = float(persisted["risk_per_trade_pct"])
+            if "max_daily_loss_pct" in persisted:
+                s.risk.max_daily_loss_pct = float(persisted["max_daily_loss_pct"])
+            if "max_open_positions" in persisted:
+                s.risk.max_trades_per_day = int(persisted["max_open_positions"])
+            if "min_rr" in persisted:
+                s.risk.min_rr = float(persisted["min_rr"])
+            if "paper_initial_balance" in persisted:
+                s.paper_initial_balance = float(persisted["paper_initial_balance"])
+    except Exception:
+        pass
+    return s
 # Global settings instance
 settings = load_settings()

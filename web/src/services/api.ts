@@ -170,3 +170,80 @@ export async function setTradingMode(mode: 'PAPER' | 'LIVE', armed = false): Pro
   });
   return res.json();
 }
+
+export interface RuntimeSettings {
+  trading_mode: 'paper' | 'demo' | 'live';
+  primary_symbol: string;
+  active_symbols: string[];
+  paper_initial_balance: number;
+  risk_per_trade_pct: number;
+  max_daily_loss_pct: number;
+  max_open_positions: number;
+  min_rr: number;
+  max_consecutive_losses?: number;
+  emergency_stop_loss_pct?: number;
+  news_filter_enabled?: boolean;
+  binance_mode: 'paper' | 'testnet' | 'live';
+  binance_base_url: string;
+  binance_api_key?: string;
+  binance_api_secret?: string;
+  ai_provider: 'codex' | 'openai' | 'gemini' | 'openrouter';
+  openai_api_key?: string;
+  openai_model?: string;
+  gemini_api_key?: string;
+  openrouter_api_key?: string;
+  openrouter_model?: string;
+  telegram_enabled: boolean;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+  updated_at?: string;
+}
+
+export interface TradeMarkerItem {
+  time: number;
+  position: 'aboveBar' | 'belowBar';
+  color: string;
+  shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
+  text: string;
+  id: string;
+}
+
+export interface TradeDetailItem {
+  id: number;
+  ticket: string;
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  volume: number;
+  entry_price: number;
+  exit_price: number;
+  sl: number;
+  tp: number;
+  profit: number;
+  outcome_r: number;
+  status: 'WIN' | 'LOSS' | 'BREAKEVEN' | 'OPEN';
+  strategy: string;
+  why_entered: string;
+  why_won_lost: string;
+  open_time: string | null;
+  exit_time: string | null;
+}
+
+export async function fetchSettings(): Promise<{ ok: boolean; settings: RuntimeSettings }> {
+  const res = await fetch(`${API_BASE}/settings`);
+  return res.json();
+}
+
+export async function saveSettings(settings: Partial<RuntimeSettings>): Promise<{ ok: boolean; message: string; settings: RuntimeSettings }> {
+  const res = await fetch(`${API_BASE}/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  return res.json();
+}
+
+export async function fetchTradeMarkers(symbol: string): Promise<{ ok: boolean; symbol: string; markers: TradeMarkerItem[]; trades: TradeDetailItem[] }> {
+  const res = await fetch(`${API_BASE}/trades/markers?symbol=${symbol}`);
+  return res.json();
+}
+
