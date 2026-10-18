@@ -36,8 +36,14 @@ class TradeFilter:
             )
         return True, None
 
-    def check_session(self, session: str | None = None) -> tuple[bool, str | None]:
+    def check_session(
+        self, session: str | None = None, is_crypto: bool = False
+    ) -> tuple[bool, str | None]:
         """Check if trading session is preferred."""
+        # 24/7 Crypto markets have no session lockout
+        if is_crypto:
+            return True, None
+
         if session is None:
             session = get_current_session()
 
@@ -50,7 +56,7 @@ class TradeFilter:
         return True, None
 
     def check_spread(
-        self, current_spread: float | None = None
+        self, current_spread: float | None = None, is_crypto: bool = False, is_paper: bool = False
     ) -> tuple[bool, str | None]:
         """Check current spread against limits."""
         if current_spread is None and self._spread_monitor:
@@ -58,9 +64,15 @@ class TradeFilter:
         if current_spread is None:
             return False, "Spread unavailable"
 
-        if current_spread > settings.risk.max_spread_pips:
+        max_allowed = settings.risk.max_spread_pips
+        if self._spread_monitor and hasattr(self._spread_monitor, "max_spread"):
+            max_allowed = max(max_allowed, self._spread_monitor.max_spread)
+        if is_crypto and is_paper:
+            max_allowed = max(max_allowed, 150.0)
+
+        if current_spread > max_allowed:
             return False, (
-                f"Spread {current_spread:.1f} > max {settings.risk.max_spread_pips} pips"
+                f"Spread {current_spread:.1f} > max {max_allowed:.1f} pips"
             )
         return True, None
 
@@ -77,12 +89,16 @@ class TradeFilter:
             )
         return True, None
 
-    def check_ai_confidence(self, decision: AIDecision) -> tuple[bool, str | None]:
+    def check_ai_confidence(
+        self, decision: AIDecision, is_paper: bool = False
+    ) -> tuple[bool, str | None]:
         """Check if AI confidence meets threshold."""
         min_score = settings.ai.min_combined_score
-        if decision.combined_score < min_score:
+        # In Paper Mode, use 58 to encourage exploration and continuous learning
+        threshold = 58 if is_paper else min_score
+        if decision.combined_score < threshold:
             return False, (
-                f"AI score {decision.combined_score} < threshold {min_score}"
+                f"AI score {decision.combined_score} < threshold {threshold}"
             )
         return True, None
 
@@ -101,15 +117,19 @@ class TradeFilter:
         session: str | None = None,
     ) -> tuple[bool, str | None]:
         """Run all filters. Returns first failure or (True, None)."""
+        is_crypto = candidate.symbol.upper().endswith(("USDT", "BUSD", "USDC", "BTC", "ETH"))
+        from src.core.runtime_control import get_runtime_trading_mode
+        is_paper = get_runtime_trading_mode() == "paper"
+
         filters = [
             self.check_rr(candidate),
-            self.check_session(session),
-            self.check_spread(current_spread),
+            self.check_session(session, is_crypto=is_crypto),
+            self.check_spread(current_spread, is_crypto=is_crypto, is_paper=is_paper),
             self.check_news(candidate.timestamp),
         ]
 
         if decision:
-            filters.append(self.check_ai_confidence(decision))
+            filters.append(self.check_ai_confidence(decision, is_paper=is_paper))
 
         for passed, reason in filters:
             if not passed:

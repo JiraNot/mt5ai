@@ -88,3 +88,41 @@ def test_real_rejection_still_blocks_single_provider_fallback() -> None:
     decision = council._make_decision(rejected_gemini, available_gpt, 95)
 
     assert decision.final_verdict == "SKIP"
+
+
+def test_dynamic_weight_normalization_when_gemini_unavailable() -> None:
+    council = AICouncil(require_consensus=False)
+    unavailable_gemini = _gemini("REJECT", 0)
+    available_gpt = _gpt("APPROVE", 80)
+    # Rule score = 80, GPT = 80 -> Normalized: 80 * 0.45 + 80 * 0.55 = 80
+    decision = council._make_decision(unavailable_gemini, available_gpt, 80)
+    assert decision.combined_score == 80
+    assert decision.final_verdict == "EXECUTE"
+
+
+def test_paper_learning_exploration_mode() -> None:
+    council = AICouncil(require_consensus=False, min_combined_score=70)
+    # Gemini APPROVE 65, GPT REJECT 50 -> Combined: 75 * 0.4 + 65 * 0.35 + 50 * 0.25 = 30 + 22.75 + 12.5 = 65
+    # In live mode (is_paper=False), this would SKIP due to low confidence disagreement
+    live_decision = council._make_decision(
+        _gemini("APPROVE", 65), _gpt("REJECT", 50), rule_score=75, is_paper=False
+    )
+    assert live_decision.final_verdict == "SKIP"
+
+    # In paper mode (is_paper=True), exploration is enabled for AI to learn
+    paper_decision = council._make_decision(
+        _gemini("APPROVE", 65), _gpt("REJECT", 50), rule_score=75, is_paper=True
+    )
+    assert paper_decision.final_verdict == "EXECUTE"
+    assert "Paper Learning" in paper_decision.recommendation
+
+
+def test_paper_exploration_both_providers_unavailable() -> None:
+    council = AICouncil(require_consensus=False)
+    unavail_gemini = _gemini("REJECT", 0)
+    unavail_gpt = _gpt("REJECT", 0)
+
+    # In paper mode, a solid rule-based setup executes so user can test and TradeLearner learns
+    paper_decision = council._make_decision(unavail_gemini, unavail_gpt, rule_score=75, is_paper=True)
+    assert paper_decision.final_verdict == "EXECUTE"
+    assert paper_decision.combined_score == 75

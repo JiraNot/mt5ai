@@ -58,6 +58,12 @@ DISABLED
 - [x] Binance paper execution with journal venue/order identity fields
 - [x] Binance WebSocket kline streaming with reconnect and server-time sync
 - [x] Binance Futures Testnet signed market orders with server-side SL/TP
+- [x] Autonomous background trading worker embedded in FastAPI server lifespan (`ENABLE_TRADING_WORKER=true`)
+- [x] Adaptive Paper Learning & Exploration Engine in AI Council (feeds live outcomes to `TradeLearner`)
+- [x] Dynamic weight normalization for AI Council (prevents score penalty from unavailable providers)
+- [x] Built-in SMC Bull & Bear Heuristics for offline/paper trading resilience
+- [x] 24/7 Crypto spread and session filter allowance in Risk Engine for Binance USDT-M pairs
+- [x] On-demand Paper Simulator API (`POST /api/actions/simulate_trade`) and UI buttons in Header & Pro Desk
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
 - [x] Bitcoin Macro Regime Analyzer (H4/D1 SMC trend + funding rate crowd detection)

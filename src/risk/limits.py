@@ -29,16 +29,20 @@ class LimitChecker:
         open_positions_count: int,
         total_exposure: float,
         current_spread: float,
+        is_crypto: bool = False,
     ) -> tuple[bool, str | None]:
         """
         Run all limit checks. Returns (approved, rejection_reason).
         """
+        from src.core.runtime_control import get_runtime_trading_mode
+        is_paper = get_runtime_trading_mode() == "paper"
+
         checks = [
             await self.check_daily_loss(balance),
             await self.check_max_trades_today(),
             self.check_consecutive_losses(),
             self.check_exposure(balance, total_exposure),
-            self.check_spread(current_spread),
+            self.check_spread(current_spread, is_crypto=is_crypto, is_paper=is_paper),
             self.check_max_open_positions(open_positions_count),
         ]
 
@@ -98,12 +102,15 @@ class LimitChecker:
             )
         return True, None
 
-    def check_spread(self, current_spread: float) -> tuple[bool, str | None]:
+    def check_spread(
+        self, current_spread: float, is_crypto: bool = False, is_paper: bool = False
+    ) -> tuple[bool, str | None]:
         """Check if spread is within limits."""
-        if current_spread > settings.risk.max_spread_pips:
+        max_allowed = 150.0 if (is_crypto and is_paper) else settings.risk.max_spread_pips
+        if current_spread > max_allowed:
             return False, (
                 f"Spread too wide: {current_spread:.1f} "
-                f"> {settings.risk.max_spread_pips} pips"
+                f"> {max_allowed} pips"
             )
         return True, None
 

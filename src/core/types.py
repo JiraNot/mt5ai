@@ -217,6 +217,14 @@ class StrategyCandidate(BaseModel):
             reward = abs(self.take_profit_1 - self.entry_price)
             self.rr_ratio = round(reward / risk, 2) if risk > 0 else 0.0
 
+    @property
+    def id(self) -> str:
+        return self.metadata.get("id") or f"{self.strategy_id}_{self.symbol}_{int(self.timestamp.timestamp())}"
+
+    @property
+    def strategy_version(self) -> str:
+        return self.metadata.get("version", "1.0.0")
+
 
 # ─── AI Decision ──────────────────────────────────────────────────────────────
 

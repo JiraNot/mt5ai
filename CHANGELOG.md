@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-18 (Autonomous Paper Learning & Council Exploration Engine)
+
+- **Adaptive Paper Learning & Exploration Engine (`src/ai/ai_council.py`)**:
+  - Implemented reinforcement learning exploration mode specifically active when `trading_mode == 'paper'`:
+  - When AI Council analysts disagree or single providers are active with sound SMC candidates (`rule_score >= 65`, `combined >= 58`), the council approves the trade as a Paper Exploration setup.
+  - This directly feeds real executed positions into `TradeLearner`, allowing the system to observe price action, evaluate R-multiples, record WIN/LOSS outcomes, and build empirical continuous lessons for future AI evaluations.
+- **Dynamic Weight Normalization in AI Council (`src/ai/ai_council.py`)**:
+  - Re-normalized scoring weights when an AI provider is unreachable or unconfigured (reallocating weights to 45% Rule Score + 55% Active Analyst), completely eliminating the 35% score penalty deadlock where single providers could never reach the execution threshold.
+- **Built-in SMC Bull & Bear Heuristics (`src/ai/gemini_evaluator.py`, `src/ai/gpt_evaluator.py`)**:
+  - Added deterministic Smart Money Concepts Bull and Bear Heuristic analysts that operate seamlessly when external LLM credentials or CLI binaries are unavailable in paper mode.
+  - Bull analyst verifies HTF alignment, liquidity sweep, and displacement; Bear analyst verifies liquidity pool traps and risk/reward safety.
+  - Fail-closed behavior is strictly preserved for live trading.
+- **24/7 Crypto Spread & Session Tolerance (`src/risk/filters.py`, `src/risk/limits.py`, `src/risk/manager.py`)**:
+  - Allowed 24/7 continuous session execution for cryptocurrency pairs (`BTCUSDT`, `ETHUSDT`, etc.), preventing Forex session lockouts (`asian`, `off`) from freezing crypto futures trades.
+  - Added crypto paper spread tolerance (up to 150 pips) to accommodate Binance Futures Testnet liquidity book gaps while preserving strict Forex/Gold spread limits.
+- **StrategyCandidate Properties & Execution Key Fix (`src/core/types.py`)**:
+  - Added `@property def id(self)` and `@property def strategy_version(self)` to `StrategyCandidate`, resolving `'StrategyCandidate' object has no attribute 'id'` on order execution.
+- **Full Verification**:
+  - Autonomous trading loop executed first live paper position (`Ticket #1: SELL 8.24 BTCUSDT @ 82,002.70`, SL `82,125.30`, TP `81,761.10`) with live position tracking and WebSocket broadcasting.
+  - All 319 unit tests passing cleanly.
+
 ## 2026-10-18 (Institutional Pro Prop Desk & Telemetry Dashboard)
 
 - **SwingFrontRun High-Density Institutional Desk (`web/src/components/ProAnalyticsDashboard.tsx`)**:

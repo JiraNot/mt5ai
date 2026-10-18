@@ -99,11 +99,13 @@ class RiskEngine:
             )
 
         # Step 3: Risk limits
+        is_crypto = candidate.symbol.upper().endswith(("USDT", "BUSD", "USDC", "BTC", "ETH"))
         limit_pass, limit_reason = await self._limits.check_all(
             balance=account_balance,
             open_positions_count=open_positions_count,
             total_exposure=total_exposure,
             current_spread=current_spread,
+            is_crypto=is_crypto,
         )
         if not limit_pass:
             return self._reject(
