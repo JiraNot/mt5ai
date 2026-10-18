@@ -9,6 +9,12 @@
 - **Crypto Futures & Paper Exposure Scaling (`src/risk/limits.py`)**:
   - Updated `LimitChecker.check_exposure` with a 10.0x exposure multiplier for crypto USDT-M futures and paper trading.
   - Resolves contract sizing constraints on small accounts (e.g. $100 capital) where standard crypto minimum contract size (~$80-$100 notional) previously exceeded default 10% equity exposure limits.
+- **Altcoin & Micro-Balance Presets for Small Accounts (`web/src/components/SettingsModal.tsx`)**:
+  - Added one-click altcoin quick-badges (`SOLUSDT`, `DOGEUSDT`, `XRPUSDT`, `SUIUSDT`, `ADAUSDT`) for instant adding/toggling under the Watchlist input, specifically suited for micro accounts ($10–$50).
+  - Added quick presets (`$10`, `$100`, `$1k`) for Paper Initial Balance and lowered minimum to $1.
+  - Added visual helper indicator: `"🧪 โหมดจำลองพอร์ตเล็ก Micro ($10 - $50)"` vs standard testing.
+- **Isolated Pytest Environment (`tests/conftest.py`)**:
+  - Added automatic runtime settings isolation fixture so running unit tests never pollutes or gets overridden by persistent web runtime state.
 - **Verification & Testing**:
   - All 321 unit tests passing.
   - Frontend built successfully via Vite.

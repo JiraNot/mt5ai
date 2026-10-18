@@ -294,7 +294,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">เหรียญใน Watchlist (คั่นด้วยจุลภาค)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-300">เหรียญใน Watchlist (คั่นด้วยจุลภาค)</label>
+                        <span className="text-[10px] text-slate-400">คลิกเพื่อเพิ่มเหรียญเล็ก</span>
+                      </div>
                       <input
                         type="text"
                         value={Array.isArray(formData.active_symbols) ? formData.active_symbols.join(', ') : formData.active_symbols || ''}
@@ -307,6 +310,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                         className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
                         placeholder="BTCUSDT, ETHUSDT, SOLUSDT"
                       />
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {['SOLUSDT', 'DOGEUSDT', 'XRPUSDT', 'SUIUSDT', 'ADAUSDT'].map((sym) => {
+                          const currentList = Array.isArray(formData.active_symbols) ? formData.active_symbols : [];
+                          const isIncluded = currentList.includes(sym);
+                          return (
+                            <button
+                              key={sym}
+                              type="button"
+                              onClick={() => {
+                                if (isIncluded) {
+                                  setFormData({
+                                    ...formData,
+                                    active_symbols: currentList.filter((s) => s !== sym),
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    active_symbols: [...currentList, sym],
+                                  });
+                                }
+                              }}
+                              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border transition-colors ${
+                                isIncluded
+                                  ? 'bg-brand-gold/20 border-brand-gold text-brand-gold font-bold'
+                                  : 'bg-dark-950 border-dark-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {isIncluded ? `✓ ${sym}` : `+ ${sym}`}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
@@ -411,15 +446,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">เงินทุนจำลอง Paper (USDT)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-300">เงินทุนจำลอง Paper (USDT)</label>
+                        <div className="flex items-center space-x-1">
+                          {[
+                            { label: '$10', val: 10 },
+                            { label: '$100', val: 100 },
+                            { label: '$1k', val: 1000 },
+                          ].map((b) => (
+                            <button
+                              key={b.label}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, paper_initial_balance: b.val })}
+                              className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded transition-colors ${
+                                formData.paper_initial_balance === b.val
+                                  ? 'bg-brand-gold text-dark-950 font-extrabold'
+                                  : 'bg-dark-800 text-slate-400 hover:text-white border border-dark-700'
+                              }`}
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <input
                         type="number"
-                        step="1000"
-                        min="100"
-                        value={formData.paper_initial_balance || 100000}
-                        onChange={(e) => setFormData({ ...formData, paper_initial_balance: parseFloat(e.target.value) })}
+                        step="1"
+                        min="1"
+                        value={formData.paper_initial_balance ?? 100}
+                        onChange={(e) => setFormData({ ...formData, paper_initial_balance: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
                       />
+                      <span className="text-[10px] text-slate-500 mt-0.5 block">
+                        {(formData.paper_initial_balance || 100) <= 50 ? '🧪 โหมดจำลองพอร์ตเล็ก Micro ($10 - $50)' : 'ทุนจำลองสำหรับทดสอบระบบ'}
+                      </span>
                     </div>
                   </div>
 
