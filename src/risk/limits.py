@@ -41,7 +41,7 @@ class LimitChecker:
             await self.check_daily_loss(balance),
             await self.check_max_trades_today(),
             self.check_consecutive_losses(),
-            self.check_exposure(balance, total_exposure),
+            self.check_exposure(balance, total_exposure, is_crypto=is_crypto, is_paper=is_paper),
             self.check_spread(current_spread, is_crypto=is_crypto, is_paper=is_paper),
             self.check_max_open_positions(open_positions_count),
         ]
@@ -91,14 +91,15 @@ class LimitChecker:
         return True, None
 
     def check_exposure(
-        self, balance: float, total_exposure: float
+        self, balance: float, total_exposure: float, is_crypto: bool = False, is_paper: bool = False
     ) -> tuple[bool, str | None]:
         """Check total exposure limit."""
-        max_exposure = settings.risk.max_exposure_pct * balance
+        multiplier = 10.0 if (is_crypto or is_paper) else 1.0
+        max_exposure = settings.risk.max_exposure_pct * balance * multiplier
         if total_exposure >= max_exposure:
             return False, (
                 f"Max exposure reached: {total_exposure:.2f} "
-                f">= {max_exposure:.2f} ({settings.risk.max_exposure_pct*100}%)"
+                f">= {max_exposure:.2f} ({settings.risk.max_exposure_pct*100*multiplier}%)"
             )
         return True, None
 

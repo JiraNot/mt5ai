@@ -312,7 +312,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">ความเสี่ยงต่อไม้ (Risk %)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-300">ความเสี่ยงต่อไม้ (Risk %)</label>
+                        <div className="flex items-center space-x-1">
+                          {[
+                            { label: '1%', val: 0.01, daily: 0.03 },
+                            { label: '3%', val: 0.03, daily: 0.10 },
+                            { label: '5%', val: 0.05, daily: 0.15 },
+                          ].map((p) => {
+                            const isSelected = Math.abs((formData.risk_per_trade_pct || 0.01) - p.val) < 0.005;
+                            return (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() =>
+                                  setFormData({
+                                    ...formData,
+                                    risk_per_trade_pct: p.val,
+                                    max_daily_loss_pct: Math.max(formData.max_daily_loss_pct || 0.03, p.daily),
+                                  })
+                                }
+                                className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded transition-colors ${
+                                  isSelected
+                                    ? 'bg-brand-gold text-dark-950 font-extrabold'
+                                    : 'bg-dark-800 text-slate-400 hover:text-white border border-dark-700'
+                                }`}
+                                title={`ตั้งค่าความเสี่ยง ${p.label}`}
+                              >
+                                {p.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="relative">
                         <input
                           type="number"
@@ -327,7 +359,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                         />
                         <span className="absolute right-3 top-2.5 text-xs text-slate-500 font-mono">%</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 mt-0.5 block">แนะนำ 1.0% - 2.0%</span>
+                      <span className="text-[10px] text-slate-500 mt-0.5 block">
+                        {(formData.risk_per_trade_pct || 0.01) >= 0.03 ? '🔥 โหมดเติบโตเร็ว (เสี่ยง 3% - 5%)' : '🛡️ โหมดอนุรักษ์นิยม (1% - 2%)'}
+                      </span>
                     </div>
 
                     <div>

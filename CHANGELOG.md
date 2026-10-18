@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-18 (Aggressive Risk Presets 3-5% & Crypto Futures Exposure Scaling)
+
+- **Interactive Risk Presets in Web UI (`web/src/components/SettingsModal.tsx`)**:
+  - Added one-click quick preset buttons `[ 1% ]`, `[ 3% ]`, and `[ 5% ]` directly above the risk input.
+  - Automatically synchronizes `max_daily_loss_pct` when switching to aggressive risk (e.g., selecting 3% risk sets daily loss ceiling to 10%; selecting 5% sets it to 15%) to prevent a single normal loss from tripping the daily circuit breaker.
+  - Added visual mode indicators: "🛡️ โหมดอนุรักษ์นิยม (1% - 2%)" vs "🔥 โหมดเติบโตเร็ว (เสี่ยง 3% - 5%)".
+- **Crypto Futures & Paper Exposure Scaling (`src/risk/limits.py`)**:
+  - Updated `LimitChecker.check_exposure` with a 10.0x exposure multiplier for crypto USDT-M futures and paper trading.
+  - Resolves contract sizing constraints on small accounts (e.g. $100 capital) where standard crypto minimum contract size (~$80-$100 notional) previously exceeded default 10% equity exposure limits.
+- **Verification & Testing**:
+  - All 321 unit tests passing.
+  - Frontend built successfully via Vite.
+
 ## 2026-10-18 (Real Trade Analytics & Elimination of Mock Seed Data on Pro Desk)
 
 - **100% Real Trade Telemetry on Pro Desk (`src/analytics/pro_metrics_service.py`)**:
