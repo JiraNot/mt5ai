@@ -100,6 +100,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           ...prev,
           [providerId]: res.result,
         }));
+        if (res.result.ok) {
+          refreshAuth(true);
+        }
       }
     } catch (err: any) {
       setTestResults(prev => ({
@@ -131,12 +134,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
       })
       .finally(() => setLoading(false));
 
-    refreshAuth(false);
+    refreshAuth(true);
   }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeTab === 'ai') {
-      refreshAuth(false);
+      refreshAuth(true);
     }
   }, [activeTab]);
 
@@ -642,7 +645,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                         let badgeLabel = 'ไม่ทราบสถานะ';
                         let dotColor = 'bg-slate-400';
 
-                        if (item.state === 'authenticated') {
+                        const isAuth = item.state === 'authenticated' || Boolean(test && test.ok);
+                        if (isAuth) {
                           badgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
                           badgeLabel = 'เข้าสู่ระบบแล้ว (Authenticated)';
                           dotColor = 'bg-emerald-400 animate-pulse';

@@ -75,6 +75,9 @@ class AIAuthService:
             Path("/config"),
             Path("/app/data/cli-home"),
             Path("/app/data"),
+            Path("/projects/linux-remote-agents/data/workspace-profile"),
+            Path("/projects/linux-remote-agents/data/antigravity-profile"),
+            Path("/projects/linux-remote-agents/data/chatgpt-profile"),
         ]
         for p in raw:
             try:

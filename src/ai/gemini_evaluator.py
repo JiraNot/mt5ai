@@ -161,15 +161,31 @@ Format การตอบ (JSON):
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
             if process.returncode != 0:
                 logger.error("Antigravity CLI failed: %s", stderr.decode("utf-8", errors="replace")[:300])
+                from src.core.runtime_control import get_runtime_trading_mode
+                if get_runtime_trading_mode() == "paper":
+                    return self._smc_bull_heuristic(setup_context)
                 return self._fallback_verdict("Antigravity CLI command failed")
-            return self._parse_response(self._extract_structured_output(stdout))
+            try:
+                return self._parse_response(self._extract_structured_output(stdout))
+            except Exception as parse_err:
+                logger.warning("Antigravity CLI output parsing failed (%s), using SMC Bull Heuristic", parse_err)
+                from src.core.runtime_control import get_runtime_trading_mode
+                if get_runtime_trading_mode() == "paper":
+                    return self._smc_bull_heuristic(setup_context)
+                return self._fallback_verdict(f"Output parse error: {parse_err}")
         except asyncio.TimeoutError:
             if "process" in locals():
                 process.kill()
                 await process.communicate()
+            from src.core.runtime_control import get_runtime_trading_mode
+            if get_runtime_trading_mode() == "paper":
+                return self._smc_bull_heuristic(setup_context)
             return self._fallback_verdict("Antigravity CLI timeout")
         except Exception as exc:
             logger.error("Gemini evaluate error: %s", exc)
+            from src.core.runtime_control import get_runtime_trading_mode
+            if get_runtime_trading_mode() == "paper":
+                return self._smc_bull_heuristic(setup_context)
             return self._fallback_verdict(f"Error: {exc}")
 
     @staticmethod

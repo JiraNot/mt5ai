@@ -13,7 +13,7 @@ if [ -x /usr/bin/antigravity ] && [ ! -e /usr/local/bin/agy ]; then
 fi
 
 # Synchronize Gemini / Antigravity OAuth tokens across roots (root terminal vs worker)
-for src in /config/.gemini /root/.gemini /app/data/cli-home/.gemini /app/data/.gemini; do
+for src in /config/.gemini /root/.gemini /app/data/cli-home/.gemini /app/data/.gemini /projects/linux-remote-agents/data/workspace-profile/.gemini /projects/linux-remote-agents/data/antigravity-profile/.gemini; do
   if [ -d "$src" ] && { [ -f "$src/jetski-standalone-oauth-token" ] || [ -f "$src/oauth_creds.json" ]; }; then
     for dest in /root/.gemini /app/data/cli-home/.gemini /config/.gemini; do
       if [ "$src" != "$dest" ]; then
@@ -26,7 +26,7 @@ for src in /config/.gemini /root/.gemini /app/data/cli-home/.gemini /app/data/.g
 done
 
 # Synchronize Antigravity user storage (containing login email username)
-for src in /config/antigravity-data /root/.config/antigravity /app/data/cli-home/.config/antigravity /app/data/antigravity-data; do
+for src in /config/antigravity-data /root/.config/antigravity /app/data/cli-home/.config/antigravity /app/data/antigravity-data /projects/linux-remote-agents/data/workspace-profile/antigravity-data /projects/linux-remote-agents/data/antigravity-profile/antigravity-data; do
   if [ -f "$src/app_storage.json" ]; then
     for dest in /config/antigravity-data /root/.config/antigravity /app/data/cli-home/.config/antigravity /app/data/antigravity-data; do
       if [ "$src" != "$dest" ]; then
