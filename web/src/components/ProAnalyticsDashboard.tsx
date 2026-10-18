@@ -25,7 +25,8 @@ import {
   CalendarWeekItem,
   ExecutionQualityLeg,
   HourlySlipDistribution,
-  LiveGuardItem
+  LiveGuardItem,
+  simulatePaperTrade
 } from '../services/api';
 
 interface ProAnalyticsDashboardProps {
@@ -42,8 +43,21 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
   const [data, setData] = useState<ProMetricsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<{ date: string; actual: number; edge: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'slippage' | 'calendar'>('overview');
+
+  const handleSimulateTrade = async () => {
+    setSimulating(true);
+    try {
+      await simulatePaperTrade(symbol, 'BUY', 'CHoCH + Order Block');
+      loadData(true);
+    } catch (err: any) {
+      alert('Simulate error: ' + err.message);
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   // Global live clocks
   const [clocks, setClocks] = useState({
@@ -867,7 +881,15 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
               <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
                 ACTIVE POSITION TELEMETRY
               </span>
-              <span className="text-[10px] font-mono text-cyan-400">1 Position Open</span>
+              <button
+                onClick={handleSimulateTrade}
+                disabled={simulating}
+                className="px-2.5 py-0.5 rounded text-[10px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold hover:bg-emerald-500/25 transition-all flex items-center space-x-1"
+                title="จำลองให้ AI เปิดออเดอร์ซ้อมเทรดตามโครงสร้าง SMC ทันที"
+              >
+                <Zap className={`w-3 h-3 ${simulating ? 'animate-spin' : ''}`} />
+                <span>{simulating ? 'กำลังส่งคำสั่ง...' : '+ ซ้อมเปิดไม้จำลอง'}</span>
+              </button>
             </div>
             <div className="p-3 font-mono text-xs">
               <div className="flex items-center justify-between py-1.5 border-b border-[#141e33]">

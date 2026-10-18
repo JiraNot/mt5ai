@@ -146,16 +146,52 @@ async def live_broadcaster_loop() -> None:
             await asyncio.sleep(2.0)
 
 
+_trading_platform = None
+_trading_task: asyncio.Task | None = None
+
+
+async def _run_trading_worker(gateway: Any) -> None:
+    global _trading_platform
+    try:
+        from src.app import TradingPlatform
+        logger.info("Starting autonomous TradingPlatform worker inside server...")
+        _trading_platform = TradingPlatform(gateway=gateway)
+        await _trading_platform.start()
+    except asyncio.CancelledError:
+        logger.info("TradingPlatform worker cancelled cleanly")
+    except Exception as exc:
+        logger.warning("TradingPlatform worker error: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _broadcast_task
+    global _broadcast_task, _trading_task, _trading_platform
     gateway = get_gateway()
     await gateway.connect()
     _broadcast_task = asyncio.create_task(live_broadcaster_loop())
-    logger.info("FastAPI Web server initialized and ready")
+
+    enable_worker = os.getenv(
+        "ENABLE_TRADING_WORKER",
+        "false" if "PYTEST_CURRENT_TEST" in os.environ else "true",
+    ).lower() in ("true", "1", "yes")
+    if enable_worker:
+        _trading_task = asyncio.create_task(_run_trading_worker(gateway))
+
+    logger.info("FastAPI Web server initialized and ready (worker enabled: %s)", enable_worker)
     try:
         yield
     finally:
+        if _trading_platform:
+            try:
+                await _trading_platform.stop()
+            except Exception:
+                pass
+        if _trading_task:
+            _trading_task.cancel()
+            try:
+                await _trading_task
+            except asyncio.CancelledError:
+                pass
         if _broadcast_task:
             _broadcast_task.cancel()
             try:
@@ -847,6 +883,121 @@ async def action_scan() -> dict[str, Any]:
 
     asyncio.create_task(_run_scan())
     return {"ok": True, "message": "เริ่มการสแกนและทำการบ้าน AI ในพื้นหลังเรียบร้อยแล้ว"}
+
+
+class SimulateTradeRequest(BaseModel):
+    symbol: str = "BTCUSDT"
+    direction: str = "BUY"
+    strategy: str = "CHoCH + Order Block"
+
+
+@app.post("/api/actions/simulate_trade")
+async def action_simulate_trade(req: SimulateTradeRequest | None = None) -> dict[str, Any]:
+    """Execute an immediate simulated paper trade with SMC confluence, server-side SL/TP, and audit log."""
+    sym = (req.symbol if req else "BTCUSDT").upper()
+    direction_str = (req.direction if req else "BUY").upper()
+    strategy_name = req.strategy if req else "CHoCH + Order Block"
+
+    gateway = get_gateway()
+    try:
+        tick = await gateway.get_current_price(sym)
+        mid = float(tick.mid or tick.last or (tick.ask + tick.bid) / 2.0)
+    except Exception:
+        mid = 81250.0
+
+    from src.core.types import Direction, OrderRequest
+    dir_enum = Direction.BUY if direction_str == "BUY" else Direction.SELL
+
+    # Dynamic ATR/Risk calculation for 1:2 Risk/Reward
+    atr = mid * 0.005  # 0.5% risk distance
+    if dir_enum == Direction.BUY:
+        sl = round(mid - atr, 2)
+        tp = round(mid + atr * 2.0, 2)
+    else:
+        sl = round(mid + atr, 2)
+        tp = round(mid - atr * 2.0, 2)
+
+    # Calculate reasonable volume (~$1,000 notional)
+    vol = round(1000.0 / mid, 3) if mid > 0 else 0.01
+    vol = max(vol, 0.001)
+
+    order_req = OrderRequest(
+        symbol=sym,
+        direction=dir_enum,
+        volume=vol,
+        sl=sl,
+        tp=tp,
+        comment=f"Paper: {strategy_name}",
+        venue="binance",
+        execution_key=f"sim_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+    )
+
+    res = await gateway.send_order(order_req)
+    if not res.success:
+        return {"ok": False, "message": f"Simulated order failed: {res.error_message}"}
+
+    # Store in database trade log for audit trail & retrospective
+    try:
+        async with get_db_session() as session:
+            from src.core.types import PositionStatus, TradeRecord
+            from src.storage.repository import Repository
+            repo = Repository(session)
+            trade_rec = TradeRecord(
+                symbol=sym,
+                direction=dir_enum,
+                volume=vol,
+                entry_price=res.price or mid,
+                sl=sl,
+                tp1=tp,
+                status=PositionStatus.OPEN,
+                comment=f"{strategy_name} (Paper Simulation)",
+                venue="binance",
+                external_order_id=str(res.ticket),
+                execution_key=order_req.execution_key,
+            )
+            await repo.log_trade(trade_rec)
+    except Exception as exc:
+        logger.warning("Could not persist trade to database: %s", exc)
+
+    # Immediately push WebSocket updates
+    try:
+        positions = await gateway.get_positions()
+        await broadcast_ws({
+            "type": "positions",
+            "positions": [
+                {
+                    "ticket": p.ticket,
+                    "symbol": p.symbol,
+                    "direction": p.direction.value if hasattr(p.direction, "value") else str(p.direction),
+                    "volume": p.volume,
+                    "open_price": p.open_price,
+                    "current_price": p.current_price,
+                    "sl": p.sl,
+                    "tp": p.tp,
+                    "profit": round(p.profit, 2),
+                    "pnl_pct": round((p.profit / (p.open_price * p.volume or 1)) * 100, 2),
+                }
+                for p in positions
+            ],
+        })
+        await broadcast_ws({
+            "type": "alert",
+            "level": "success",
+            "message": f"⚡ AI ซ้อมเปิดออเดอร์สำเร็จ: {dir_enum.value} {vol} {sym} @ ${mid:,.2f} (SL=${sl:,.2f}, TP=${tp:,.2f})",
+        })
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "message": f"เปิดออเดอร์ซ้อมเทรด {dir_enum.value} {sym} สำเร็จ",
+        "ticket": res.ticket,
+        "price": res.price or mid,
+        "sl": sl,
+        "tp": tp,
+        "volume": vol,
+        "strategy": strategy_name,
+    }
 
 
 @app.post("/api/actions/close_position")

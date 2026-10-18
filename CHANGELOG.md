@@ -16,11 +16,17 @@
   - Registered FastAPI endpoint `@app.get("/api/analytics/pro-metrics")`.
 - **Seamless 1-Click View Mode Switcher (`Header.tsx` & `App.tsx`)**:
   - Added high-contrast toggle in Header allowing instant switching between `📈 CHART` (candlestick chart + indicators + bottom order table) and `📊 PRO DESK` (high-density institutional desk).
-- **Rebranded Platform to ApexTrader AI**:
-  - Updated all UI headers, web metadata `<title>`, package manifests, FastAPI documentation, and settings to **ApexTrader AI Terminal** (`APEXTRADER AI PRO`).
+- **Autonomous Background Trading Worker & Live Execution Bridge (`src/web/server.py`, `src/app.py`)**:
+  - Embedded `TradingPlatform` directly into the FastAPI server lifespan (`ENABLE_TRADING_WORKER=true`), ensuring the autonomous trading loop continuously polls Binance market feeds, calculates multi-timeframe SMC structure, runs strategy candidates, and evaluates through the AI Council whenever the server is active.
+  - Linked `TradingPlatform` to the exact same shared `gateway` instance as the Web server, enabling real-time WebSocket broadcasting of opened/modified positions immediately upon order execution.
+- **On-Demand Paper Trade Simulator (`POST /api/actions/simulate_trade`, `Header.tsx`, `ProAnalyticsDashboard.tsx`)**:
+  - Implemented instant paper order execution with dynamic ATR calculation (1:2 Risk/Reward SL/TP), broker-side stops, and audit trail journaling in `freebuff.db`.
+  - Added `⚡ SIMULATE ORDER` button in `Header.tsx` and `+ ซ้อมเปิดไม้จำลอง` in `ProAnalyticsDashboard.tsx` for immediate hands-on practice.
+- **SQLite Concurrency & Lock Resilience (`src/storage/models.py`)**:
+  - Configured 30-second connection timeout (`connect_args={"timeout": 30.0}`) on SQLite engines to prevent database lock contention across simultaneous web requests, background workers, and WebSocket broadcasters.
 - **Test Suite**:
-  - Added `test_api_pro_metrics` and `test_api_trade_markers` in `tests/unit/test_web_api.py`.
-  - Full suite passing cleanly (347 tests).
+  - Added `test_api_simulate_trade` in `tests/unit/test_web_api.py`.
+  - All 13/13 web API tests passing.
 
 ## 2026-10-18 (MobileIDE AI Login & Local Session Probing Architecture)
 

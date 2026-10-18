@@ -136,3 +136,18 @@ def test_api_trade_markers(client):
     assert "markers" in data
     assert "trades" in data
 
+
+def test_api_simulate_trade(client):
+    response = client.post(
+        "/api/actions/simulate_trade",
+        json={"symbol": "BTCUSDT", "direction": "BUY", "strategy": "CHoCH + Order Block"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert "ticket" in data
+    assert data["ticket"] is not None
+    assert "sl" in data
+    assert "tp" in data
+
+

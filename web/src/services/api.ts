@@ -479,3 +479,13 @@ export async function fetchProMetrics(symbol = 'BTCUSDT'): Promise<ProMetricsRes
   return res.json();
 }
 
+export async function simulatePaperTrade(symbol = 'BTCUSDT', direction = 'BUY', strategy = 'CHoCH + Order Block'): Promise<any> {
+  const res = await fetch(`${API_BASE}/actions/simulate_trade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, direction, strategy }),
+  });
+  return res.json();
+}
+
+

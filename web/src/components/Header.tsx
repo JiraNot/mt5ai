@@ -12,10 +12,11 @@ import {
   Settings as SettingsIcon,
   BarChart3,
   LayoutDashboard,
+  Play,
   PanelRight,
   PanelRightClose,
 } from 'lucide-react';
-import { StatusResponse, ReadinessData, triggerPanic, setTradingMode } from '../services/api';
+import { StatusResponse, ReadinessData, triggerPanic, setTradingMode, simulatePaperTrade } from '../services/api';
 
 interface HeaderProps {
   status: StatusResponse | null;
@@ -49,6 +50,19 @@ export const Header: React.FC<HeaderProps> = ({
   const [panicLoading, setPanicLoading] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
   const [panicResult, setPanicResult] = useState<string | null>(null);
+  const [simulating, setSimulating] = useState(false);
+
+  const handleSimulateTrade = async () => {
+    setSimulating(true);
+    try {
+      await simulatePaperTrade(activeSymbol, 'BUY', 'CHoCH + Order Block');
+      onRefresh();
+    } catch (err: any) {
+      alert('Simulate trade error: ' + err.message);
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   const handlePanicConfirm = async () => {
     setPanicLoading(true);
@@ -241,6 +255,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden lg:inline">PRO DESK</span>
             </button>
           </div>
+        )}
+
+        {/* Simulate Paper Order Button */}
+        {isPaper && (
+          <button
+            onClick={handleSimulateTrade}
+            disabled={simulating}
+            className="px-3 py-2 rounded-lg text-xs font-semibold font-mono flex items-center space-x-1.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 min-h-[44px] min-w-[44px] active:scale-95 transition-all"
+            title="จำลองให้ AI เปิดออเดอร์ซ้อมเทรดตามโครงสร้าง SMC ทันที (พร้อม SL/TP ในโหมด Paper)"
+          >
+            <Play className={`w-3.5 h-3.5 text-emerald-400 ${simulating ? 'animate-spin' : ''}`} />
+            <span className="hidden xl:inline">SIMULATE ORDER</span>
+          </button>
         )}
 
         {/* Panic Button */}

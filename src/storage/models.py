@@ -222,10 +222,14 @@ def ensure_database_parent(database_url: str) -> None:
 def get_engine(database_url: str):
     """Create async SQLAlchemy engine."""
     ensure_database_parent(database_url)
+    connect_args = {}
+    if "sqlite" in database_url:
+        connect_args = {"timeout": 30.0}
     return create_async_engine(
         database_url,
         echo=False,
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
 
 

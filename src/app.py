@@ -85,7 +85,7 @@ class TradingPlatform:
         Binance Data → Structure Engine → Strategy Plugins → AI Scorer → Risk Engine → Execute
     """
 
-    def __init__(self, max_cycles: int | None = None) -> None:
+    def __init__(self, max_cycles: int | None = None, gateway: Any | None = None) -> None:
         self._max_cycles = max_cycles
         self._cycle_count = 0
         self._cycle_errors = 0
@@ -94,17 +94,21 @@ class TradingPlatform:
         from src.execution.paper_gateway import PaperGateway
         from src.market.binance_gateway import BinanceGateway
 
-        raw_binance = BinanceGateway()
-        has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
-        is_paper = settings.binance_mode == "paper" or not has_credentials
-        self._gateway = (
-            PaperGateway(raw_binance) if is_paper else raw_binance
-        )
-        if not has_credentials and settings.binance_mode != "paper":
-            logger.warning(
-                "BINANCE_MODE=%s but credentials are empty; defaulting execution to safe PAPER mode.",
-                settings.binance_mode,
+        if gateway is not None:
+            self._gateway = gateway
+            is_paper = isinstance(gateway, PaperGateway)
+        else:
+            raw_binance = BinanceGateway()
+            has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
+            is_paper = settings.binance_mode == "paper" or not has_credentials
+            self._gateway = (
+                PaperGateway(raw_binance) if is_paper else raw_binance
             )
+            if not has_credentials and settings.binance_mode != "paper":
+                logger.warning(
+                    "BINANCE_MODE=%s but credentials are empty; defaulting execution to safe PAPER mode.",
+                    settings.binance_mode,
+                )
         logger.info("Market venue enabled: Binance (%s, execution=%s)", settings.binance_mode, "paper" if is_paper else "exchange")
 
         self._data_feed = DataFeed(self._gateway)
