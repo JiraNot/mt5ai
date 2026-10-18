@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-18 (Multi-Root Google/Antigravity OAuth Discovery & Account Email Badge)
+
+- **Multi-Root OAuth Token Discovery & Account Email Recognition (`src/core/ai_auth_service.py`)**:
+  - Implemented multi-root path resolution across container environments (`/config/.gemini`, `/root/.gemini`, `/app/data/cli-home/.gemini`, `/app/data/.gemini`).
+  - Added automatic extraction of authenticated user email (`jira34yu@gmail.com (Google AI Pro)`) from JWT `id_token` in `jetski-standalone-oauth-token` and `app_storage.json`.
+  - Added automatic synchronization of credentials between terminal root session and web application worker home directory so terminal logins via `agy` are immediately active in the web dashboard.
+  - Added cross-candidate discovery and auto-sync for Codex / ChatGPT `auth.json`.
+- **Resilient Antigravity / Gemini CLI Binary Lookup (`src/ai/gemini_evaluator.py`, `scripts/container-entrypoint.sh`)**:
+  - Expanded `_find_cli()` candidate resolution to discover `antigravity`, `agy`, `/usr/bin/antigravity`, `/usr/local/bin/agy`, and user local bin paths.
+  - Automatically configured `/usr/local/bin/agy` symlink on container startup in `scripts/container-entrypoint.sh`.
+  - Injected credentials home directory into subprocess `child_env` so Antigravity CLI evaluations execute seamlessly.
+- **Verification & Testing (`tests/unit/test_ai_auth_service.py`)**:
+  - Added unit tests for multi-root JWT email extraction and CLI candidate resolution.
+  - All 321 unit tests passing cleanly.
+
 ## 2026-10-18 (Autonomous Paper Learning & Council Exploration Engine)
 
 - **Adaptive Paper Learning & Exploration Engine (`src/ai/ai_council.py`)**:

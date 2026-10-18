@@ -5,12 +5,13 @@ uses Vertex AI, gcloud, Application Default Credentials, or a Gemini API key.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import asyncio
 import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.core.runtime_provider_settings import get_provider_settings
 
@@ -76,9 +77,26 @@ Format การตอบ (JSON):
     @staticmethod
     def _find_cli() -> str | None:
         configured = get_provider_settings()["gemini"]["cli_bin"]
-        if os.path.isabs(configured) and os.access(configured, os.X_OK):
-            return configured
-        return shutil.which(configured)
+        candidates = [
+            configured,
+            "agy",
+            "antigravity",
+            "/usr/bin/antigravity",
+            "/usr/local/bin/agy",
+            "/usr/local/bin/antigravity",
+            "/root/.local/bin/agy",
+            "/config/.gemini/antigravity/bin/agy",
+            str(Path.home() / ".local" / "bin" / "agy"),
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if os.path.isabs(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+            resolved = shutil.which(candidate)
+            if resolved:
+                return resolved
+        return None
 
     async def evaluate(self, setup_context: dict) -> GeminiVerdict:
         """ส่ง Setup context ให้ Gemini วิเคราะห์."""
@@ -115,6 +133,11 @@ Format การตอบ (JSON):
 
         prompt = self._build_prompt(setup_context)
         child_env = os.environ.copy()
+        # Ensure HOME points to a directory containing active .gemini credentials
+        for cand in [Path.home(), Path("/config"), Path("/root"), Path("/app/data/cli-home")]:
+            if (cand / ".gemini" / "jetski-standalone-oauth-token").is_file():
+                child_env["HOME"] = str(cand)
+                break
         api_key = get_provider_settings()["gemini"]["api_key"]
         if api_key:
             child_env["GEMINI_API_KEY"] = api_key

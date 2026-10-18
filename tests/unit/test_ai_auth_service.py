@@ -74,3 +74,44 @@ async def test_api_ai_auth_endpoints():
         test_data = res_test.json()
         assert test_data["ok"] is False
         assert test_data["result"]["status"] == "error"
+
+
+def test_gemini_oauth_discovery_and_email_extraction(tmp_path, monkeypatch):
+    """Test discovery of tokens in candidate root and JWT email extraction."""
+    import base64
+    import json
+    from src.core.ai_auth_service import AIAuthService
+
+    fake_gemini = tmp_path / ".gemini"
+    fake_gemini.mkdir()
+
+    # Construct mock JWT id_token with email
+    header_b64 = base64.urlsafe_b64encode(b'{"alg":"RS256"}').decode("utf-8").rstrip("=")
+    payload_b64 = base64.urlsafe_b64encode(b'{"email":"jira34yu@gmail.com","sub":"12345"}').decode("utf-8").rstrip("=")
+    fake_jwt = f"{header_b64}.{payload_b64}.fakesig"
+
+    token_file = fake_gemini / "jetski-standalone-oauth-token"
+    token_file.write_text(json.dumps({"token": "fake", "id_token": fake_jwt}))
+
+    service = AIAuthService()
+    monkeypatch.setattr(service, "_candidate_home_roots", lambda: [tmp_path])
+
+    info = service._find_gemini_oauth()
+    assert info["has_oauth"] is True
+    assert info["email"] == "jira34yu@gmail.com"
+    assert "jira34yu@gmail.com" in info["account_label"]
+    assert "Google AI Pro" in info["account_label"]
+
+
+def test_gemini_evaluator_find_cli(tmp_path, monkeypatch):
+    """Test GeminiEvaluator locates CLI candidates."""
+    from src.ai.gemini_evaluator import GeminiEvaluator
+
+    fake_bin = tmp_path / "antigravity"
+    fake_bin.write_text("#!/bin/sh\necho ok")
+    fake_bin.chmod(0o755)
+
+    monkeypatch.setattr("shutil.which", lambda name: str(fake_bin) if "antigravity" in name else None)
+    cli = GeminiEvaluator._find_cli()
+    assert cli is not None
+

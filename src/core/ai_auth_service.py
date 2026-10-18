@@ -9,6 +9,8 @@ and provides on-demand connection testing with latency measurement.
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import logging
 import os
 import re
@@ -62,23 +64,146 @@ class AIAuthService:
         self._cache_expires_at = now + 15.0
         return response
 
+    @staticmethod
+    def _candidate_home_roots() -> list[Path]:
+        seen = set()
+        roots = []
+        raw = [
+            Path.home(),
+            Path(os.environ.get("HOME", "/root")),
+            Path("/root"),
+            Path("/config"),
+            Path("/app/data/cli-home"),
+            Path("/app/data"),
+        ]
+        for p in raw:
+            try:
+                resolved = str(p.resolve())
+            except Exception:
+                resolved = str(p)
+            if resolved not in seen and p.exists() and p.is_dir():
+                seen.add(resolved)
+                roots.append(p)
+        return roots
+
+    def _find_gemini_oauth(self) -> dict[str, Any]:
+        """Discover Google/Antigravity OAuth tokens across container roots and extract user email."""
+        has_oauth = False
+        email: str | None = None
+        source_gemini_dir: Path | None = None
+
+        candidate_roots = self._candidate_home_roots()
+        candidate_gemini_dirs = [r / ".gemini" for r in candidate_roots]
+
+        # 1. Search candidate roots for token files and JWT id_token
+        for gdir in candidate_gemini_dirs:
+            if not gdir.is_dir():
+                continue
+            token_p = gdir / "jetski-standalone-oauth-token"
+            oauth_creds = gdir / "oauth_creds.json"
+            google_accs = gdir / "google_accounts.json"
+            state_p = gdir / "antigravity" / "antigravity_state.pbtxt"
+
+            if token_p.is_file() or oauth_creds.is_file() or google_accs.is_file() or state_p.is_file():
+                has_oauth = True
+                if not source_gemini_dir:
+                    source_gemini_dir = gdir
+
+            if token_p.is_file() and not email:
+                try:
+                    raw = json.loads(token_p.read_text(errors="ignore"))
+                    id_token = raw.get("id_token")
+                    if id_token and "." in str(id_token):
+                        parts = str(id_token).split(".")
+                        if len(parts) >= 2:
+                            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+                            jwt_payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+                            email = jwt_payload.get("email")
+                except Exception as exc:
+                    logger.debug("Failed parsing jetski JWT payload: %s", exc)
+
+        # 2. Check app_storage.json for email if not found in JWT
+        if not email:
+            storage_candidates = [
+                Path("/config/antigravity-data/app_storage.json"),
+                Path("/root/.config/antigravity/app_storage.json"),
+                Path("/app/data/cli-home/.config/antigravity/app_storage.json"),
+                Path("/app/data/antigravity-data/app_storage.json"),
+                Path.home() / ".config" / "antigravity" / "app_storage.json",
+            ]
+            for sp in storage_candidates:
+                if sp.is_file():
+                    try:
+                        s_data = json.loads(sp.read_text(errors="ignore"))
+                        uname = s_data.get("jetski.onboarding.lastLoginUsername")
+                        if uname and "@" in str(uname):
+                            email = str(uname).strip()
+                            has_oauth = True
+                            break
+                    except Exception:
+                        pass
+
+        # 3. Synchronize credentials across homes so web worker & CLI commands share state
+        target_gemini_dir = Path.home() / ".gemini"
+        if source_gemini_dir and source_gemini_dir != target_gemini_dir:
+            try:
+                target_gemini_dir.mkdir(parents=True, exist_ok=True)
+                for item in source_gemini_dir.iterdir():
+                    dest = target_gemini_dir / item.name
+                    if not dest.exists():
+                        if item.is_file():
+                            shutil.copy2(item, dest)
+                        elif item.is_dir():
+                            shutil.copytree(item, dest, dirs_exist_ok=True)
+            except Exception as sync_exc:
+                logger.debug("Failed syncing gemini credentials to %s: %s", target_gemini_dir, sync_exc)
+
+        account_label = f"{email} (Google AI Pro)" if email else "Google OAuth session"
+        note = (
+            f"Google OAuth credentials active for {email}. Ready to evaluate trades."
+            if email
+            else "Google OAuth credentials active for Antigravity / Gemini CLI."
+        )
+
+        return {
+            "has_oauth": has_oauth,
+            "account_label": account_label,
+            "email": email,
+            "note": note,
+        }
+
     async def inspect_codex(self) -> dict[str, Any]:
         """Check Codex / ChatGPT CLI login state locally (0 quota consumed)."""
         checked_at = datetime.now(timezone.utc).isoformat()
+
+        # Multi-root check for auth.json to synchronize between root terminal and cli-home
+        for r in self._candidate_home_roots():
+            candidate_auth = r / ".codex" / "auth.json"
+            if candidate_auth.is_file():
+                dest_auth = Path.home() / ".codex" / "auth.json"
+                if not dest_auth.is_file():
+                    try:
+                        dest_auth.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(candidate_auth, dest_auth)
+                    except Exception:
+                        pass
+                break
+
         codex_bin = shutil.which("codex")
         if not codex_bin:
-            # Fallback: check ~/.codex/auth.json
-            auth_file = Path.home() / ".codex" / "auth.json"
-            if auth_file.is_file():
-                return {
-                    "id": "codex",
-                    "name": "ChatGPT / Codex",
-                    "auth_type": "oauth-login",
-                    "state": "configured",
-                    "checked_at": checked_at,
-                    "account_label": "Local auth.json",
-                    "note": "Codex session file is present locally in ~/.codex/auth.json.",
-                }
+            # Fallback: check ~/.codex/auth.json in candidate roots
+            for r in self._candidate_home_roots():
+                auth_file = r / ".codex" / "auth.json"
+                if auth_file.is_file():
+                    return {
+                        "id": "codex",
+                        "name": "ChatGPT / Codex",
+                        "auth_type": "oauth-login",
+                        "state": "configured",
+                        "checked_at": checked_at,
+                        "account_label": "Local auth.json",
+                        "note": "Codex session file is present locally in ~/.codex/auth.json.",
+                    }
             return {
                 "id": "codex",
                 "name": "ChatGPT / Codex",
@@ -151,25 +276,17 @@ class AIAuthService:
         settings = get_runtime_settings(mask_secrets=False)
         gemini_key = settings.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
 
-        # Check OAuth files
-        gemini_root = Path.home() / ".gemini"
-        has_standalone_token = (gemini_root / "jetski-standalone-oauth-token").is_file()
-        has_oauth = (
-            has_standalone_token
-            or (gemini_root / "oauth_creds.json").is_file()
-            or (gemini_root / "google_accounts.json").is_file()
-            or (gemini_root / "antigravity" / "antigravity_state.pbtxt").is_file()
-        )
+        oauth_info = self._find_gemini_oauth()
 
-        if has_oauth:
+        if oauth_info["has_oauth"]:
             return {
                 "id": "gemini",
                 "name": "Google Gemini / Antigravity",
                 "auth_type": "oauth-login",
                 "state": "authenticated",
                 "checked_at": checked_at,
-                "account_label": "Google OAuth session",
-                "note": "Google OAuth credentials active for Antigravity / Gemini CLI.",
+                "account_label": oauth_info["account_label"],
+                "note": oauth_info["note"],
             }
         if gemini_key.strip():
             return {
@@ -343,25 +460,23 @@ class AIAuthService:
         }
 
     async def _test_gemini(self, t0: float) -> dict[str, Any]:
-        gemini_root = Path.home() / ".gemini"
-        has_oauth = (
-            (gemini_root / "jetski-standalone-oauth-token").is_file()
-            or (gemini_root / "oauth_creds.json").is_file()
-            or (gemini_root / "google_accounts.json").is_file()
-            or (gemini_root / "antigravity" / "antigravity_state.pbtxt").is_file()
-        )
+        oauth_info = self._find_gemini_oauth()
         settings = get_runtime_settings(mask_secrets=False)
         gemini_key = (settings.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")).strip()
 
         latency_ms = int((time.time() - t0) * 1000)
-        if has_oauth:
+        if oauth_info["has_oauth"]:
             return {
                 "ok": True,
                 "provider": "gemini",
                 "status": "ready",
                 "latency_ms": latency_ms,
-                "message": f"Antigravity CLI / Google OAuth credentials are ready ({latency_ms}ms).",
-                "details": {"has_oauth": True},
+                "message": f"Antigravity CLI / {oauth_info['account_label']} credentials are ready ({latency_ms}ms).",
+                "details": {
+                    "has_oauth": True,
+                    "account": oauth_info["account_label"],
+                    "email": oauth_info.get("email"),
+                },
             }
         if gemini_key:
             # Quick ping to Gemini models endpoint if key is present

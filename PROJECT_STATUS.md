@@ -63,6 +63,7 @@ DISABLED
 - [x] Dynamic weight normalization for AI Council (prevents score penalty from unavailable providers)
 - [x] Built-in SMC Bull & Bear Heuristics for offline/paper trading resilience
 - [x] 24/7 Crypto spread and session filter allowance in Risk Engine for Binance USDT-M pairs
+- [x] Multi-root Google/Antigravity and Codex OAuth credential discovery & account email badge
 - [x] On-demand Paper Simulator API (`POST /api/actions/simulate_trade`) and UI buttons in Header & Pro Desk
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades
