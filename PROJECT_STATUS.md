@@ -66,6 +66,7 @@ DISABLED
 - [x] Multi-root Google/Antigravity and Codex OAuth credential discovery & account email badge
 - [x] 100% Real Trade Telemetry on Pro Desk (Eliminated mock template numbers, linked to user capital & SQLite trades)
 - [x] Aggressive Risk Presets (1%, 3%, 5%) with auto-synchronized Daily Loss limits and Crypto Futures exposure scaling
+- [x] Interactive User Guide & Live Trading Roadmap Modal (`GUIDE` button in Header with 5 Thai manual tabs)
 - [x] On-demand Paper Simulator API (`POST /api/actions/simulate_trade`) and UI buttons in Header & Pro Desk
 - [x] Initial position/deal reconciliation and duplicate-order protection
 - [x] Verified outcomes close venue-aware journal trades

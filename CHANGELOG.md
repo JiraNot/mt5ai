@@ -15,6 +15,13 @@
   - Added visual helper indicator: `"🧪 โหมดจำลองพอร์ตเล็ก Micro ($10 - $50)"` vs standard testing.
 - **Isolated Pytest Environment (`tests/conftest.py`)**:
   - Added automatic runtime settings isolation fixture so running unit tests never pollutes or gets overridden by persistent web runtime state.
+- **Interactive User Guide & Live Trading Roadmap Modal (`web/src/components/UserGuideModal.tsx`, `web/src/components/Header.tsx`)**:
+  - Added dedicated `GUIDE` button in Header that opens a 5-tab comprehensive interactive Thai manual.
+  - Tab 1: System Status breakdown (PAPER live data vs DEMO Binance Testnet vs LIVE Fail-Closed safeguards).
+  - Tab 2: 4-Step Live Trading Journey from $10 paper practice to testnet and live execution.
+  - Tab 3: Step-by-step Binance API Setup & 3 Golden Security Rules (strictly enable Futures, never enable Withdrawals, IP restriction).
+  - Tab 4: $10 Micro-Capital Altcoin Blueprint with minimum notional comparison table (DOGE, XRP, SOL vs BTC).
+  - Tab 5: Institutional Safety Guardrails (Server-Side Stop Loss, Daily Circuit Breakers, Consecutive Loss Limiter, PANIC button).
 - **Verification & Testing**:
   - All 321 unit tests passing.
   - Frontend built successfully via Vite.

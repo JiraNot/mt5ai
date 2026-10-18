@@ -7,6 +7,7 @@ import { AICouncilCard } from './components/AICouncilCard';
 import { PositionsTable } from './components/PositionsTable';
 import { SettingsModal } from './components/SettingsModal';
 import { BacktestModal } from './components/BacktestModal';
+import { UserGuideModal } from './components/UserGuideModal';
 import { ProAnalyticsDashboard } from './components/ProAnalyticsDashboard';
 import {
   fetchStatus,
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
   const [sidebarTab, setSidebarTab] = useState<'watchlist' | 'council'>('watchlist');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBacktestOpen, setIsBacktestOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Load all initial state
   const loadAllData = useCallback(async () => {
@@ -150,6 +152,7 @@ export const App: React.FC = () => {
         candidatesCount={watchlist?.candidates?.length}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBacktest={() => setIsBacktestOpen(true)}
+        onOpenGuide={() => setIsGuideOpen(true)}
         viewMode={viewMode}
         onToggleViewMode={setViewMode}
       />
@@ -272,6 +275,13 @@ export const App: React.FC = () => {
         isOpen={isBacktestOpen}
         onClose={() => setIsBacktestOpen(false)}
         activeSymbol={activeSymbol}
+      />
+
+      {/* User Guide & Live Trading Modal */}
+      <UserGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import {
   Play,
   PanelRight,
   PanelRightClose,
+  BookOpen,
 } from 'lucide-react';
 import { StatusResponse, ReadinessData, triggerPanic, setTradingMode, simulatePaperTrade } from '../services/api';
 
@@ -29,6 +30,7 @@ interface HeaderProps {
   candidatesCount?: number;
   onOpenSettings?: () => void;
   onOpenBacktest?: () => void;
+  onOpenGuide?: () => void;
   viewMode?: 'chart' | 'dashboard';
   onToggleViewMode?: (mode: 'chart' | 'dashboard') => void;
 }
@@ -44,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   candidatesCount,
   onOpenSettings,
   onOpenBacktest,
+  onOpenGuide,
   viewMode = 'chart',
   onToggleViewMode,
 }) => {
@@ -224,6 +227,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden md:inline">BACKTEST</span>
+          </button>
+        )}
+
+        {/* User Guide Button */}
+        {onOpenGuide && (
+          <button
+            onClick={onOpenGuide}
+            className="px-3.5 py-2 rounded-lg text-xs font-semibold font-mono flex items-center space-x-1.5 border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:text-white hover:bg-cyan-500/20 min-h-[44px] min-w-[44px] active:scale-95 transition-all shadow-xs"
+            title="เปิดคู่มือการใช้งานและวิธีเชื่อมต่อเงินจริง"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden md:inline font-bold">GUIDE</span>
           </button>
         )}
 
