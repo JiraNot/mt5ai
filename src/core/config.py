@@ -67,7 +67,7 @@ class AIConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    name: str = "Freebuff Trading Platform"
+    name: str = "ApexTrader AI Trading Platform"
     version: str = "0.1.0"
     mode: str = "paper"
 

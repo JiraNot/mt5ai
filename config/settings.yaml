@@ -1,5 +1,5 @@
 app:
-  name: "Freebuff Trading Platform"
+  name: "ApexTrader AI Trading Platform"
   version: "0.1.0"
   mode: "paper"  # paper / testnet / live
 

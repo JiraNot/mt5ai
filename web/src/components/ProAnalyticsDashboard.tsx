@@ -159,7 +159,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span className="font-mono font-bold tracking-wider text-white text-xs">
-              SWINGFRONTRUN <span className="text-brand-gold">v0.10</span>
+              APEXTRADER <span className="text-brand-gold">AI PRO v0.10</span>
             </span>
           </div>
 

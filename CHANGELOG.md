@@ -16,6 +16,8 @@
   - Registered FastAPI endpoint `@app.get("/api/analytics/pro-metrics")`.
 - **Seamless 1-Click View Mode Switcher (`Header.tsx` & `App.tsx`)**:
   - Added high-contrast toggle in Header allowing instant switching between `📈 CHART` (candlestick chart + indicators + bottom order table) and `📊 PRO DESK` (high-density institutional desk).
+- **Rebranded Platform to ApexTrader AI**:
+  - Updated all UI headers, web metadata `<title>`, package manifests, FastAPI documentation, and settings to **ApexTrader AI Terminal** (`APEXTRADER AI PRO`).
 - **Test Suite**:
   - Added `test_api_pro_metrics` and `test_api_trade_markers` in `tests/unit/test_web_api.py`.
   - Full suite passing cleanly (347 tests).

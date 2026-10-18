@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("FastAPI Web server shut down cleanly")
 
 
-app = FastAPI(title="Freebuff Pro Crypto Terminal API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="ApexTrader AI Pro Terminal API", version="2.0.0", lifespan=lifespan)
 
 # CORS setup
 app.add_middleware(
@@ -1078,7 +1078,7 @@ async def serve_spa(full_path: str):
         return FileResponse(index_file)
     return JSONResponse({
         "ok": True,
-        "message": "Freebuff Trading Platform API is running. Web UI dist loading...",
+        "message": "ApexTrader AI Trading Platform API is running. Web UI dist loading...",
         "status": "ready",
     })
 

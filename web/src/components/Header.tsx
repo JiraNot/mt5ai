@@ -97,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold tracking-wider text-sm text-white">FREEBUFF</span>
+              <span className="font-bold tracking-wider text-sm text-white">APEXTRADER</span>
               <span className="text-[10px] bg-brand-gold/10 text-brand-gold px-1.5 py-0.5 rounded font-mono font-semibold">
                 AI TERMINAL
               </span>
