@@ -11,6 +11,7 @@ import {
   Terminal as TerminalIcon,
   Settings as SettingsIcon,
   BarChart3,
+  LayoutDashboard,
   PanelRight,
   PanelRightClose,
 } from 'lucide-react';
@@ -27,6 +28,8 @@ interface HeaderProps {
   candidatesCount?: number;
   onOpenSettings?: () => void;
   onOpenBacktest?: () => void;
+  viewMode?: 'chart' | 'dashboard';
+  onToggleViewMode?: (mode: 'chart' | 'dashboard') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
   candidatesCount,
   onOpenSettings,
   onOpenBacktest,
+  viewMode = 'chart',
+  onToggleViewMode,
 }) => {
   const [panicLoading, setPanicLoading] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
@@ -206,6 +211,36 @@ export const Header: React.FC<HeaderProps> = ({
             <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden md:inline">BACKTEST</span>
           </button>
+        )}
+
+        {/* View Mode Toggle: Chart vs Institutional Pro Desk */}
+        {onToggleViewMode && (
+          <div className="flex items-center bg-dark-800/90 border border-dark-700 rounded-lg p-0.5">
+            <button
+              onClick={() => onToggleViewMode('chart')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold font-mono flex items-center space-x-1 transition-all ${
+                viewMode === 'chart'
+                  ? 'bg-dark-700 text-cyan-300 shadow-xs border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="สลับเป็นกราฟแท่งเทียน Candlestick Chart"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">CHART</span>
+            </button>
+            <button
+              onClick={() => onToggleViewMode('dashboard')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold font-mono flex items-center space-x-1 transition-all ${
+                viewMode === 'dashboard'
+                  ? 'bg-amber-500/20 text-brand-gold border border-brand-gold/50 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="สลับเป็นหน้า Institutional Prop Desk (SwingFrontRun Dashboard)"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-brand-gold" />
+              <span className="hidden lg:inline">PRO DESK</span>
+            </button>
+          </div>
         )}
 
         {/* Panic Button */}

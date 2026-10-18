@@ -546,6 +546,13 @@ async def test_ai_provider_endpoint(
     return {"ok": result.get("ok", False), "result": result}
 
 
+@app.get("/api/analytics/pro-metrics")
+async def get_pro_metrics_endpoint(symbol: str = "BTCUSDT") -> dict[str, Any]:
+    """Return institutional prop-desk analytics for the SwingFrontRun dashboard view."""
+    from src.analytics.pro_metrics_service import get_pro_dashboard_metrics
+    return await get_pro_dashboard_metrics(symbol)
+
+
 @app.get("/api/trades/markers")
 async def get_trade_markers(symbol: str = "BTCUSDT") -> dict[str, Any]:
     """Return chart markers and detailed trade explanations for the specified symbol."""

@@ -348,3 +348,134 @@ export async function testAIProvider(provider: string): Promise<AITestResponse> 
   return res.json();
 }
 
+export interface ProFinancials {
+  balance: number;
+  equity: number;
+  floating_pnl: number;
+  deposit: number;
+  today_pnl: number;
+  today_trades: number;
+  today_won: number;
+  week_pnl: number;
+  week_trades: number;
+  month_pnl: number;
+  month_trading_days: number;
+  return_pct: number;
+  profit_factor: number;
+  win_rate_pct: number;
+  drawdown_now_pct: number;
+  drawdown_max_pct: number;
+}
+
+export interface StrategyLegItem {
+  leg: string;
+  id: string;
+  name: string;
+  status: string;
+  status_color: string;
+  today_pnl: number;
+  month_pnl: number;
+  trades_count: number;
+  win_pct: number;
+  pf: number;
+  per_trade: string;
+  last_20: number[];
+}
+
+export interface CalendarDayItem {
+  day: number;
+  trades: number;
+  pnl: number;
+  is_green: boolean | null;
+  is_today: boolean;
+  is_past: boolean;
+}
+
+export interface CalendarWeekItem {
+  week: string;
+  pnl: number;
+  trades: number;
+}
+
+export interface CalendarSummary {
+  month_name: string;
+  month_pnl: number;
+  green_days: number;
+  total_active_days: number;
+  best_day: number;
+  best_day_date: number;
+  worst_day: number;
+  worst_day_date: number;
+}
+
+export interface ExecutionQualityLeg {
+  leg: string;
+  fills: number;
+  entry_med: string;
+  entry_p90: string;
+  exit_med: string;
+  worst: string;
+  latency: number;
+  slip_cost: number;
+  slip_vs_edge: number;
+}
+
+export interface HourlySlipDistribution {
+  hour: number;
+  slip: number;
+  status: string;
+}
+
+export interface ExecutionQuality {
+  broker_grade: string;
+  median_slip: string;
+  p90_slip: string;
+  slip_over_3_pct: number;
+  avg_latency_ms: number;
+  total_fills: number;
+  slip_cost: number;
+  legs: ExecutionQualityLeg[];
+  hourly_distribution: HourlySlipDistribution[];
+}
+
+export interface EquityPoint {
+  date: string;
+  actual: number;
+  edge: number;
+}
+
+export interface EquitySummary {
+  closed_pnl: number;
+  lost_to_slip: number;
+  peak: number;
+  from_peak: number;
+  curve: EquityPoint[];
+}
+
+export interface LiveGuardItem {
+  name: string;
+  value: string;
+  status: 'ok' | 'warning' | 'critical';
+  desc: string;
+}
+
+export interface ProMetricsResponse {
+  ok: boolean;
+  symbol: string;
+  updated_at: string;
+  financials: ProFinancials;
+  legs: StrategyLegItem[];
+  total_leg: StrategyLegItem;
+  calendar_days: CalendarDayItem[];
+  weeks_summary: CalendarWeekItem[];
+  calendar_summary: CalendarSummary;
+  execution_quality: ExecutionQuality;
+  equity_summary: EquitySummary;
+  guards: LiveGuardItem[];
+}
+
+export async function fetchProMetrics(symbol = 'BTCUSDT'): Promise<ProMetricsResponse> {
+  const res = await fetch(`${API_BASE}/analytics/pro-metrics?symbol=${symbol}`);
+  return res.json();
+}
+

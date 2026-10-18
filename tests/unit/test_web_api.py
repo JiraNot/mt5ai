@@ -110,3 +110,29 @@ def test_api_actions_scan(client):
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
+
+
+def test_api_pro_metrics(client):
+    response = client.get("/api/analytics/pro-metrics?symbol=BTCUSDT")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert data["symbol"] == "BTCUSDT"
+    assert "financials" in data
+    assert "legs" in data
+    assert len(data["legs"]) == 4
+    assert "calendar_days" in data
+    assert len(data["calendar_days"]) == 31
+    assert "execution_quality" in data
+    assert "equity_summary" in data
+    assert "guards" in data
+
+
+def test_api_trade_markers(client):
+    response = client.get("/api/trades/markers?symbol=BTCUSDT")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert "markers" in data
+    assert "trades" in data
+

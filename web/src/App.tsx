@@ -7,6 +7,7 @@ import { AICouncilCard } from './components/AICouncilCard';
 import { PositionsTable } from './components/PositionsTable';
 import { SettingsModal } from './components/SettingsModal';
 import { BacktestModal } from './components/BacktestModal';
+import { ProAnalyticsDashboard } from './components/ProAnalyticsDashboard';
 import {
   fetchStatus,
   fetchWatchlist,
@@ -24,6 +25,7 @@ import { wsClient } from './services/websocket';
 
 export const App: React.FC = () => {
   const [activeSymbol, setActiveSymbol] = useState('BTCUSDT');
+  const [viewMode, setViewMode] = useState<'chart' | 'dashboard'>('dashboard');
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistData | null>(null);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
@@ -148,18 +150,28 @@ export const App: React.FC = () => {
         candidatesCount={watchlist?.candidates?.length}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBacktest={() => setIsBacktestOpen(true)}
+        viewMode={viewMode}
+        onToggleViewMode={setViewMode}
       />
 
       {/* Main Trading Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left/Center: TradingView Candlestick Chart */}
-        <TradingChart
-          symbol={activeSymbol}
-          positions={positions}
-          lastTick={lastTick}
-          onToggleSidebar={handleToggleSidebar}
-          isSidebarOpen={isSidebarOpen}
-        />
+        {/* Left/Center: TradingView Candlestick Chart OR Institutional Pro Analytics Desk */}
+        {viewMode === 'dashboard' ? (
+          <ProAnalyticsDashboard
+            symbol={activeSymbol}
+            onSelectSymbol={handleSelectSymbol}
+            onSwitchToChart={() => setViewMode('chart')}
+          />
+        ) : (
+          <TradingChart
+            symbol={activeSymbol}
+            positions={positions}
+            lastTick={lastTick}
+            onToggleSidebar={handleToggleSidebar}
+            isSidebarOpen={isSidebarOpen}
+          />
+        )}
 
         {/* Mobile/Tablet Backdrop Overlay */}
         {isSidebarOpen && (
@@ -239,12 +251,14 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Positions & Order History Table */}
-      <PositionsTable
-        positions={positions}
-        history={history}
-        onRefresh={loadAllData}
-      />
+      {/* Bottom Positions & Order History Table (in Chart View) */}
+      {viewMode === 'chart' && (
+        <PositionsTable
+          positions={positions}
+          history={history}
+          onRefresh={loadAllData}
+        />
+      )}
 
       {/* Dynamic Settings Modal */}
       <SettingsModal

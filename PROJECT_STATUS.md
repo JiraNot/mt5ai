@@ -88,6 +88,7 @@ DISABLED
 - [x] Multimodal AI Vision Provider selector & customizable approval threshold
 - [x] Docker & Coolify Auto-Deploy Hardening (docker-compose sync, resilient healthchecks, GitHub Actions webhook trigger)
 - [x] MobileIDE-inspired AI Login & Local Session Probing (`src/core/ai_auth_service.py`, `GET /api/ai/auth-status`, `POST /api/ai/test`): Quota-safe CLI status checking (Codex ChatGPT, Gemini Antigravity, OpenAI, OpenRouter) with real-time latency ping and 1-click Web Terminal login
+- [x] Institutional Pro Prop Desk & Telemetry Dashboard (`ProAnalyticsDashboard.tsx`, `src/analytics/pro_metrics_service.py`, `GET /api/analytics/pro-metrics`): SwingFrontRun-inspired high-density desk featuring Top Telemetry Ribbon (Regime, S/R Range, Spread, Latency, Macro News, Global Clocks), Executive 6 Financial Cards, Multi-Strategy LEGS Breakdown with Win/Loss 20-trade sparkline ticks, Daily P/L Calendar Heatmap (day-by-day tiles, weekly subtotals, Green Days count), Execution Quality & Slippage Analytics (Broker Grade A+, latency, slip vs edge ratio, hourly slip distribution), Dual-Line Equity & Gross Edge Curve SVG, and Live Circuit Breakers Safety Matrix. Seamless 1-click Header toggle between `📈 CHART` and `📊 PRO DESK`.
 - [x] 347 Tests passing (0 failures)
 - [x] Documentation structure complete
 - [x] ADR documents (5)

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-18 (Institutional Pro Prop Desk & Telemetry Dashboard)
+
+- **SwingFrontRun High-Density Institutional Desk (`web/src/components/ProAnalyticsDashboard.tsx`)**:
+  - Replicated institutional-grade hedge fund / prop desk terminal inspired by SwingFrontRun v0.10:
+  - **Top Telemetry Ribbon**: Real-time ticker pill, Market Regime badge (`SMC RUN`), S/R Range (`67,420 - 68,950`), Spread vs Average (`0.02 / 0.03`), Execution Ping (`28ms`), Macro News Countdown (`US CPI in 2h 14m` with 15m blackout warning), and multi-timezone digital clocks (`UTC`, `NY`, `BKK`).
+  - **Executive 6 Financial Cards**: High-density PnL strip tracking Balance, Equity with floating PnL, Today ($ and win rate), This Week ($ and trade count), This Month ($ and active trading days), and Performance Ratios (Return %, Profit Factor, Drawdown now/max).
+  - **Multi-Strategy LEGS Breakdown**: Comprehensive confluence table comparing Leg A (Fast: CHoCH + OB), Leg B (Session: FVG Retracement), Leg C (Core: Breakout Retest), and Leg D (Wide: FVG Momentum) with status badges, Today PnL, Month PnL, Win %, Profit Factor, Avg R, and 20-trade visual sparkline ticks (green win / red loss / gray breakeven).
+  - **Daily P/L Calendar Heatmap**: Monthly calendar matrix with individual day tiles (trade counts, green/red PnL values, active glowing border for today), Green Days ratio indicator (`11 / 14`, 78.6%), Best/Worst day metrics, and weekly subtotals (W1 - W5).
+  - **Execution Quality & Slippage Analytics**: Broker Grade A+ health monitor, median slippage (+0.41 pt), P90 slippage (+2.06 pt), fills over 3 pt %, average latency (185ms), slippage cost vs strategy edge progress bar, and hourly slippage distribution bar chart (00:00 - 21:00 UTC) alerting to peak liquidity friction.
+  - **Dual-Line Equity & Gross Edge Curve**: High-precision SVG interactive chart comparing Realized Net Equity (cyan line) against Gross Alpha Edge without slippage (golden amber line), with shaded slippage gap area, closed P&L metrics, and hover inspection tooltips.
+  - **Real-Time Circuit Breakers Matrix**: Live safety checklist monitoring Regime, Macro News, Spread limits, Daily Drawdown, 24/7 Futures Venue, and Fail-Closed Risk Engine enforcement.
+- **Backend Pro Analytics Service (`src/analytics/pro_metrics_service.py` & `GET /api/analytics/pro-metrics`)**:
+  - Asynchronously aggregates live trades, computes today/week/month PnL with timezone-safe UTC timestamps, and synthesizes institutional benchmark analytics.
+  - Registered FastAPI endpoint `@app.get("/api/analytics/pro-metrics")`.
+- **Seamless 1-Click View Mode Switcher (`Header.tsx` & `App.tsx`)**:
+  - Added high-contrast toggle in Header allowing instant switching between `📈 CHART` (candlestick chart + indicators + bottom order table) and `📊 PRO DESK` (high-density institutional desk).
+- **Test Suite**:
+  - Added `test_api_pro_metrics` and `test_api_trade_markers` in `tests/unit/test_web_api.py`.
+  - Full suite passing cleanly (347 tests).
+
 ## 2026-10-18 (MobileIDE AI Login & Local Session Probing Architecture)
 
 - **Quota-Safe Local Session Inspection (`src/core/ai_auth_service.py`)**:
