@@ -1,6 +1,17 @@
 # Changelog
 
-## 2026-10-18 (Multi-Root Google/Antigravity OAuth Discovery & Account Email Badge)
+## 2026-10-18 (Real Trade Analytics & Elimination of Mock Seed Data on Pro Desk)
+
+- **100% Real Trade Telemetry on Pro Desk (`src/analytics/pro_metrics_service.py`)**:
+  - Eliminated all hardcoded mock/benchmark numbers (`$100,000`, `+$324.50`, mock calendar seed data, sine-wave equity curve).
+  - Dynamically calculates Today, Week, Month P&L, Win Rate, and Drawdown from actual SQLite `Trade` records.
+  - Linked account balance and metrics directly to the user's configured `paper_initial_balance` (e.g. $100.00).
+  - Strategy Legs (CHoCH+OB, FVG Retracement, Breakout Retest, FVG Volume) and Daily Calendar tiles now reflect real trades executed in the current session.
+  - Live unrealized floating P&L now reflects active open positions from the trading gateway.
+- **Accurate Position Exit Accounting (`src/web/server.py`)**:
+  - When positions are closed manually or via web interface, real `exit_price`, `profit`, and `net_profit` are recorded to SQLite `Trade` rows.
+- **Frontend Real-Data Coalescing (`web/src/components/ProAnalyticsDashboard.tsx`)**:
+  - Replaced template fallback values in JSX cards with clean zero-state indicators to eliminate false positive metrics.
 
 - **Multi-Root OAuth Token Discovery & Account Email Recognition (`src/core/ai_auth_service.py`)**:
   - Implemented multi-root path resolution across container environments (`/config/.gemini`, `/root/.gemini`, `/app/data/cli-home/.gemini`, `/app/data/.gemini`).

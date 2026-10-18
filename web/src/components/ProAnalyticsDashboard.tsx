@@ -259,11 +259,11 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Balance</div>
           <div className="text-base sm:text-lg font-mono font-bold text-white mt-0.5">
-            ${fin?.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100,000.00'}
+            ${fin?.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100.00'}
           </div>
           <div className="text-[10px] font-mono text-emerald-400 flex items-center space-x-0.5 mt-0.5">
             <ArrowUpRight className="w-3 h-3" />
-            <span>+${((fin?.balance ?? 100000) - (fin?.deposit ?? 100000)).toLocaleString(undefined, { minimumFractionDigits: 2 })} all-time</span>
+            <span>+${((fin?.balance ?? 100) - (fin?.deposit ?? 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })} all-time</span>
           </div>
         </div>
 
@@ -271,12 +271,12 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Equity</div>
           <div className="text-base sm:text-lg font-mono font-bold text-cyan-300 mt-0.5">
-            ${fin?.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100,425.80'}
+            ${fin?.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100.00'}
           </div>
           <div className="text-[10px] font-mono text-cyan-400 flex items-center space-x-1 mt-0.5">
-            <span>Float +${fin?.floating_pnl.toFixed(2)}</span>
+            <span>Float {(fin?.floating_pnl ?? 0) >= 0 ? '+' : ''}${fin?.floating_pnl.toFixed(2) ?? '0.00'}</span>
             <span className="text-slate-600">•</span>
-            <span className="text-emerald-400">1 open</span>
+            <span className="text-emerald-400">{fin?.today_trades ? `${fin.today_trades} trade` : 'idle'}</span>
           </div>
         </div>
 
@@ -284,10 +284,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Today</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            +${fin?.today_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '324.50'}
+            {(fin?.today_pnl ?? 0) >= 0 ? '+' : ''}${fin?.today_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.today_won ?? 4} / {fin?.today_trades ?? 5} won • <span className="text-emerald-400 font-semibold">{((fin?.today_won ?? 4) / (fin?.today_trades || 1) * 100).toFixed(1)}%</span>
+            {fin?.today_won ?? 0} / {fin?.today_trades ?? 0} won • <span className="text-emerald-400 font-semibold">{fin?.today_trades ? ((fin.today_won / fin.today_trades) * 100).toFixed(1) : '0.0'}%</span>
           </div>
         </div>
 
@@ -295,10 +295,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">This Week</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            +${fin?.week_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '1,460.80'}
+            {(fin?.week_pnl ?? 0) >= 0 ? '+' : ''}${fin?.week_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.week_trades ?? 41} trades • <span className="text-slate-300 font-semibold">1.84R</span>
+            {fin?.week_trades ?? 0} trades
           </div>
         </div>
 
@@ -306,10 +306,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">This Month</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            +${fin?.month_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '3,520.00'}
+            {(fin?.month_pnl ?? 0) >= 0 ? '+' : ''}${fin?.month_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.month_trading_days ?? 14} active days • <span className="text-emerald-400 font-semibold">+${((fin?.month_pnl ?? 3520) / (fin?.month_trading_days || 1)).toFixed(0)}/d</span>
+            {fin?.month_trading_days ?? 0} active days
           </div>
         </div>
 
@@ -317,10 +317,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Return / Drawdown</div>
           <div className="text-base sm:text-lg font-mono font-bold text-brand-gold mt-0.5">
-            +{fin?.return_pct ?? 35.2}%
+            {(fin?.return_pct ?? 0) >= 0 ? '+' : ''}{fin?.return_pct ?? 0.0}%
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            PF <strong className="text-slate-200">{fin?.profit_factor ?? 2.45}</strong> • DD <strong className="text-amber-400">{fin?.drawdown_now_pct ?? 0.4}%</strong> <span className="text-[9px] text-slate-500">(max {fin?.drawdown_max_pct ?? 2.1}%)</span>
+            PF <strong className="text-slate-200">{fin?.profit_factor ?? 0.0}</strong> • DD <strong className="text-amber-400">{fin?.drawdown_now_pct ?? 0.0}%</strong> <span className="text-[9px] text-slate-500">(max {fin?.drawdown_max_pct ?? 0.0}%)</span>
           </div>
         </div>
       </div>

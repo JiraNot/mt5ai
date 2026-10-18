@@ -1008,7 +1008,18 @@ async def action_close_position(req: PositionActionRequest) -> dict[str, Any]:
         try:
             result = await gateway.close_position(req.ticket)
             if result.success:
-                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ"}
+                pnl = float(result.metadata.get("pnl", 0.0))
+                async with get_db_session() as session:
+                    ot = await session.get(Trade, req.ticket)
+                    if ot and ot.status == "OPEN":
+                        ot.status = "CLOSED"
+                        ot.exit_price = result.price
+                        ot.profit = pnl
+                        ot.net_profit = pnl
+                        ot.exit_time = datetime.now(timezone.utc)
+                        ot.comment = "Closed manually via web interface"
+                        await session.commit()
+                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ (P&L: {pnl:+.2f} USDT)"}
         except Exception:
             pass
 
@@ -1016,11 +1027,19 @@ async def action_close_position(req: PositionActionRequest) -> dict[str, Any]:
         async with get_db_session() as session:
             ot = await session.get(Trade, req.ticket)
             if ot and ot.status == "OPEN":
+                tick = await gateway.get_current_price(ot.symbol)
+                exit_price = tick.bid if ot.direction == "BUY" else tick.ask
+                pnl = float((exit_price - float(ot.entry_price)) * float(ot.volume))
+                if ot.direction == "SELL":
+                    pnl = -pnl
                 ot.status = "CLOSED"
+                ot.exit_price = exit_price
+                ot.profit = pnl
+                ot.net_profit = pnl
                 ot.comment = "Closed manually via web interface"
                 ot.exit_time = datetime.now(timezone.utc)
                 await session.commit()
-                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ"}
+                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ (P&L: {pnl:+.2f} USDT)"}
 
         return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ"}
     except Exception as exc:
