@@ -54,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     max_daily_loss_pct: 0.03,
     max_open_positions: 3,
     min_rr: 2.0,
+    entry_min_score: 70,
     binance_mode: 'paper',
     binance_base_url: 'https://testnet.binancefuture.com',
     binance_api_key: '',
@@ -893,7 +894,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="text-[11px] font-semibold text-slate-300">เกณฑ์คะแนนขั้นต่ำ (Min Approval Score)</label>
+                          <label className="text-[11px] font-semibold text-slate-300">คะแนนขั้นต่ำเพื่อส่งให้ Risk Engine</label>
+                          <span className="text-xs font-mono font-bold text-brand-gold">{formData.entry_min_score ?? 70}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="50"
+                          max="90"
+                          step="5"
+                          value={formData.entry_min_score ?? 70}
+                          onChange={(e) => setFormData({ ...formData, entry_min_score: parseInt(e.target.value) })}
+                          className="w-full accent-brand-gold bg-dark-900 rounded-lg cursor-pointer"
+                        />
+                        <div className="text-[10px] text-slate-500 mt-0.5">คะแนนนี้กำหนดเกณฑ์ triage, AI Council และ AI confidence; ทุกคำสั่งยังต้องผ่าน Risk Engine, SL และ TP</div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">เกณฑ์คะแนนยืนยันภาพขั้นต่ำ (Vision Score)</label>
                           <span className="text-xs font-mono font-bold text-brand-gold">{formData.vision_min_score || 65}%</span>
                         </div>
                         <input

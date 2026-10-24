@@ -25,6 +25,9 @@ class RiskConfig(BaseModel):
     risk_per_trade_pct: float = 0.01
     max_daily_loss_pct: float = 0.03
     max_trades_per_day: int = 5
+    max_concurrent_positions: int = 2
+    leverage: int = Field(default=5, ge=1, le=20)
+    max_margin_utilization_pct: float = Field(default=0.8, ge=0.1, le=1.0)
     max_consecutive_losses: int = 3
     min_rr: float = 2.0
     max_spread_pips: float = 5.0
@@ -213,9 +216,17 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
             if "max_daily_loss_pct" in persisted:
                 s.risk.max_daily_loss_pct = float(persisted["max_daily_loss_pct"])
             if "max_open_positions" in persisted:
-                s.risk.max_trades_per_day = int(persisted["max_open_positions"])
+                s.risk.max_concurrent_positions = int(persisted["max_open_positions"])
+            if "max_consecutive_losses" in persisted:
+                s.risk.max_consecutive_losses = int(persisted["max_consecutive_losses"])
+            if "emergency_stop_loss_pct" in persisted:
+                s.risk.emergency_stop_loss_pct = float(persisted["emergency_stop_loss_pct"])
+            if "news_filter_enabled" in persisted:
+                s.risk.news_filter_enabled = bool(persisted["news_filter_enabled"])
             if "min_rr" in persisted:
                 s.risk.min_rr = float(persisted["min_rr"])
+            if "entry_min_score" in persisted:
+                s.ai.min_combined_score = int(persisted["entry_min_score"])
             if "paper_initial_balance" in persisted:
                 s.paper_initial_balance = float(persisted["paper_initial_balance"])
     except Exception:

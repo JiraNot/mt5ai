@@ -91,6 +91,20 @@ def check_momentum_confirmation(
 
     rsi = calculate_rsi(candles, period=rsi_period)
     vol_ratio = calculate_volume_ratio(candles, period=20)
+    try:
+        from src.core.runtime_settings import get_runtime_settings
+        runtime = get_runtime_settings(mask_secrets=False)
+        rsi_filter_enabled = bool(runtime.get("rsi_filter_enabled", True))
+        volume_filter_enabled = bool(runtime.get("volume_filter_enabled", True))
+    except Exception:
+        rsi_filter_enabled = True
+        volume_filter_enabled = True
+    volume_confirmed = vol_ratio >= min_volume_ratio
+
+    if not rsi_filter_enabled:
+        if volume_filter_enabled and volume_confirmed:
+            return True, rsi, vol_ratio, f"Volume confirmation {vol_ratio:.1f}x; RSI filter disabled"
+        return True, rsi, vol_ratio, "RSI momentum filter disabled"
 
     if direction == Direction.BUY:
         # Overbought filter: Avoid buying at extreme tops
@@ -98,14 +112,13 @@ def check_momentum_confirmation(
             return False, rsi, vol_ratio, f"RSI Overbought ({rsi:.1f} > 75) เสี่ยงติดดอยที่แนวต้าน"
         
         # Bullish momentum check
-        is_vol_confirmed = vol_ratio >= min_volume_ratio
         if 40.0 <= rsi <= 72.0:
-            if is_vol_confirmed:
+            if volume_filter_enabled and volume_confirmed:
                 return True, rsi, vol_ratio, f"โมเมนตัมขาขึ้นสมบูรณ์ (RSI {rsi:.1f}) พร้อม Volume ขยายตัว {vol_ratio:.1f}x"
             return True, rsi, vol_ratio, f"RSI ขาขึ้นอยู่ในโซนปลอดภัย ({rsi:.1f})"
         
         # Oversold bounce condition
-        if rsi < 35.0 and is_vol_confirmed:
+        if rsi < 35.0 and volume_filter_enabled and volume_confirmed:
             return True, rsi, vol_ratio, f"RSI Oversold ({rsi:.1f}) เริ่มมีแรงซื้อสวนกลับ Volume {vol_ratio:.1f}x"
 
         return True, rsi, vol_ratio, f"RSI ปกติ ({rsi:.1f})"
@@ -116,14 +129,13 @@ def check_momentum_confirmation(
             return False, rsi, vol_ratio, f"RSI Oversold ({rsi:.1f} < 25) เสี่ยงติดกับดักแนวรับ"
 
         # Bearish momentum check
-        is_vol_confirmed = vol_ratio >= min_volume_ratio
         if 28.0 <= rsi <= 60.0:
-            if is_vol_confirmed:
+            if volume_filter_enabled and volume_confirmed:
                 return True, rsi, vol_ratio, f"โมเมนตัมขาลงชัดเจน (RSI {rsi:.1f}) พร้อม Volume ทุบ {vol_ratio:.1f}x"
             return True, rsi, vol_ratio, f"RSI ขาลงอยู่ในโซนปลอดภัย ({rsi:.1f})"
 
         # Overbought exhaustion condition
-        if rsi > 65.0 and is_vol_confirmed:
+        if rsi > 65.0 and volume_filter_enabled and volume_confirmed:
             return True, rsi, vol_ratio, f"RSI Overbought ({rsi:.1f}) เริ่มหมดแรง เกิดแรงเทขาย Volume {vol_ratio:.1f}x"
 
         return True, rsi, vol_ratio, f"RSI ปกติ ({rsi:.1f})"

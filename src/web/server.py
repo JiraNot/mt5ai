@@ -54,8 +54,10 @@ def get_gateway() -> BinanceGateway | PaperGateway:
     if _gateway is None:
         raw = BinanceGateway()
         has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
-        is_paper = settings.binance_mode == "paper" or not has_credentials
+        is_paper = get_runtime_trading_mode(settings.trading_mode) == "paper"
         _gateway = PaperGateway(raw) if is_paper else raw
+        if not has_credentials and get_runtime_trading_mode(settings.trading_mode) == "demo":
+            logger.error("DEMO is selected without Binance Testnet credentials; keeping execution fail-closed")
     return _gateway
 
 
@@ -235,6 +237,10 @@ class SettingsUpdateRequest(BaseModel):
     max_daily_loss_pct: float | None = None
     max_open_positions: int | None = None
     min_rr: float | None = None
+    entry_min_score: int | None = None
+    max_consecutive_losses: int | None = None
+    emergency_stop_loss_pct: float | None = None
+    news_filter_enabled: bool | None = None
     binance_mode: str | None = None
     binance_base_url: str | None = None
     binance_api_key: str | None = None
@@ -245,6 +251,10 @@ class SettingsUpdateRequest(BaseModel):
     gemini_api_key: str | None = None
     openrouter_api_key: str | None = None
     openrouter_model: str | None = None
+    vision_provider: str | None = None
+    vision_min_score: int | None = None
+    volume_filter_enabled: bool | None = None
+    rsi_filter_enabled: bool | None = None
     telegram_enabled: bool | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
@@ -1024,44 +1034,42 @@ async def action_close_position(req: PositionActionRequest) -> dict[str, Any]:
     """Manually close a single position."""
     gateway = get_gateway()
     try:
-        try:
-            result = await gateway.close_position(req.ticket)
-            if result.success:
-                pnl = float(result.metadata.get("pnl", 0.0))
-                async with get_db_session() as session:
-                    ot = await session.get(Trade, req.ticket)
-                    if ot and ot.status == "OPEN":
-                        ot.status = "CLOSED"
-                        ot.exit_price = result.price
-                        ot.profit = pnl
-                        ot.net_profit = pnl
-                        ot.exit_time = datetime.now(timezone.utc)
-                        ot.comment = "Closed manually via web interface"
-                        await session.commit()
-                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ (P&L: {pnl:+.2f} USDT)"}
-        except Exception:
-            pass
+        positions = await gateway.get_positions(req.symbol)
+        target = next((position for position in positions if position.ticket == req.ticket), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Open position not found")
+        result = await gateway.close_position(req.ticket)
+        if not result.success:
+            raise HTTPException(status_code=502, detail=result.error_message or "Binance did not confirm the close order")
 
-        # If not closed by in-memory gateway, check database
+        exit_price = result.price or target.current_price
+        closed_volume = float(result.volume if result.volume is not None else target.volume)
+        direction = target.direction.value if hasattr(target.direction, "value") else str(target.direction)
+        contract_size = settings.symbols.get(target.symbol).contract_size if target.symbol in settings.symbols else 1
+        pnl = (exit_price - target.open_price) * closed_volume * contract_size
+        if direction == "SELL":
+            pnl = -pnl
         async with get_db_session() as session:
-            ot = await session.get(Trade, req.ticket)
-            if ot and ot.status == "OPEN":
-                tick = await gateway.get_current_price(ot.symbol)
-                exit_price = tick.bid if ot.direction == "BUY" else tick.ask
-                pnl = float((exit_price - float(ot.entry_price)) * float(ot.volume))
-                if ot.direction == "SELL":
-                    pnl = -pnl
+            query = (
+                select(Trade)
+                .where(Trade.status == "OPEN", Trade.symbol == target.symbol, Trade.direction == direction)
+                .order_by(Trade.id.desc())
+                .limit(1)
+            )
+            db_result = await session.execute(query)
+            ot = db_result.scalar_one_or_none()
+            if ot:
                 ot.status = "CLOSED"
                 ot.exit_price = exit_price
                 ot.profit = pnl
                 ot.net_profit = pnl
-                ot.comment = "Closed manually via web interface"
                 ot.exit_time = datetime.now(timezone.utc)
+                ot.comment = "Closed manually via web interface"
                 await session.commit()
-                return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ (P&L: {pnl:+.2f} USDT)"}
-
-        return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ"}
+        return {"ok": True, "message": f"ปิดตำแหน่งไม้ #{req.ticket} สำเร็จ (P&L: {pnl:+.2f} USDT)"}
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -1072,21 +1080,15 @@ async def action_break_even(req: PositionActionRequest) -> dict[str, Any]:
     try:
         positions = await gateway.get_positions(req.symbol)
         target = next((p for p in positions if p.ticket == req.ticket), None)
-        if target:
-            if hasattr(gateway, "modify_order"):
-                await gateway.modify_order(target.ticket, sl=target.open_price, tp=target.tp)
-            return {"ok": True, "message": f"ขยับ Stop Loss บังหน้าทุน (BE @ {target.open_price}) สำเร็จ"}
-
-        # Also check database
-        async with get_db_session() as session:
-            ot = await session.get(Trade, req.ticket)
-            if ot and ot.status == "OPEN":
-                ot.sl = ot.entry_price
-                await session.commit()
-                return {"ok": True, "message": f"ขยับ Stop Loss บังหน้าทุน (BE @ {ot.entry_price}) สำเร็จ"}
-
-        return {"ok": True, "message": f"ขยับ Stop Loss บังหน้าทุน สำเร็จ"}
+        if target is None:
+            raise HTTPException(status_code=404, detail="Open position not found")
+        result = await gateway.modify_position(target.ticket, sl=target.open_price, tp=target.tp or None)
+        if not result.success:
+            raise HTTPException(status_code=502, detail=result.error_message or "Stop update was not confirmed")
+        return {"ok": True, "message": f"ขยับ Stop Loss บังหน้าทุน (BE @ {target.open_price}) สำเร็จ"}
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=str(exc))
 
 

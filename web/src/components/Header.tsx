@@ -105,9 +105,9 @@ export const Header: React.FC<HeaderProps> = ({
   const isPaper = (status?.mode ?? 'PAPER').toUpperCase() === 'PAPER';
 
   return (
-    <header className="h-[9.5rem] sm:h-[6.5rem] lg:h-14 border-b border-dark-800 bg-dark-900 px-2 sm:px-3 xl:px-4 flex flex-wrap content-center justify-between gap-y-1.5 z-20 shrink-0">
+    <header className="min-h-[9.5rem] sm:min-h-[6.5rem] 2xl:h-14 2xl:min-h-0 border-b border-dark-800 bg-dark-900 px-2 sm:px-3 xl:px-4 flex flex-wrap content-center justify-between gap-y-1.5 z-20 shrink-0">
       {/* Brand & Market Context */}
-      <div className="w-full lg:w-auto min-w-0 flex items-center space-x-2.5 sm:space-x-4 shrink-0 whitespace-nowrap">
+      <div className="basis-full 2xl:basis-auto w-full 2xl:w-auto min-w-0 flex items-center space-x-2.5 sm:space-x-4 shrink-0 whitespace-nowrap">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-gold to-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/10 shrink-0">
             <Zap className="w-5 h-5 text-dark-950 font-bold" />
@@ -145,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Middle Stats & Readiness */}
-      <div className="hidden lg:flex items-center space-x-3 lg:space-x-5 shrink-0 whitespace-nowrap">
+      <div className="hidden 2xl:flex items-center space-x-3 lg:space-x-5 shrink-0 whitespace-nowrap">
         {/* Account Info */}
         <div className="flex items-center space-x-3 lg:space-x-4 font-mono text-xs">
           <div>
@@ -179,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Controls: Mode Toggle + AI Login + Panic + Sidebar Toggle */}
-      <div className="w-full lg:w-auto flex flex-wrap items-center justify-between lg:justify-end gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap">
+      <div className="basis-full 2xl:basis-auto w-full 2xl:w-auto flex flex-wrap items-center justify-between 2xl:justify-end gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap">
         {/* Mode Badge */}
         <button
           onClick={handleToggleMode}

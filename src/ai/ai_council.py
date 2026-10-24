@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from src.ai.gemini_evaluator import GeminiEvaluator, GeminiVerdict
 from src.ai.gpt_evaluator import GPTEvaluator, GPTVerdict
 from src.ai.openrouter_evaluator import OpenRouterEvaluator
+from src.core.config import settings
 from src.core.runtime_control import get_runtime_trading_mode
 from src.core.runtime_provider_settings import get_provider_settings
 
@@ -75,6 +76,10 @@ class AICouncil:
     async def evaluate(self, setup_context: dict) -> CouncilDecision:
         """รับ Setup context แล้วให้ AI Council ตัดสิน."""
         self._refresh_bull_provider()
+        from src.core.runtime_settings import get_runtime_settings
+        entry_min_score = int(get_runtime_settings(mask_secrets=False).get("entry_min_score", self.min_combined_score))
+        self.min_rule_score = entry_min_score
+        self.min_combined_score = entry_min_score
         rule_score = setup_context.get("rule_score", 0)
 
         if rule_score < self.min_rule_score:
@@ -105,12 +110,12 @@ class AICouncil:
                 bear_case=[], trap_identified="", counter_argument="", raw_response="",
             )
 
-        is_paper = (
-            setup_context.get("is_paper")
-            or (setup_context.get("trading_mode") == "paper")
-            or (get_runtime_trading_mode() == "paper")
+        runtime_mode = setup_context.get("trading_mode") or get_runtime_trading_mode(settings.trading_mode)
+        is_paper = bool(setup_context.get("is_paper")) or runtime_mode == "paper"
+        return self._make_decision(
+            gemini_result, gpt_result, rule_score,
+            is_paper=is_paper, runtime_mode=runtime_mode,
         )
-        return self._make_decision(gemini_result, gpt_result, rule_score, is_paper=is_paper)
 
     def _make_decision(
         self,
@@ -118,6 +123,7 @@ class AICouncil:
         gpt: GPTVerdict,
         rule_score: int,
         is_paper: bool = False,
+        runtime_mode: str = "paper",
     ) -> CouncilDecision:
         gemini_approve = gemini.verdict == "APPROVE"
         gpt_approve = gpt.verdict == "APPROVE"
@@ -188,11 +194,29 @@ class AICouncil:
             )
         )
 
+        is_demo = runtime_mode == "demo"
+        demo_rule_fallback = (
+            is_demo
+            and gemini_unavailable
+            and gpt_unavailable
+            and rule_score >= self.min_rule_score
+        )
+        demo_single_provider_fallback = (
+            is_demo
+            and one_approves
+            and (gemini_unavailable or gpt_unavailable)
+            and rule_score >= self.min_rule_score
+            and approving_confidence >= 60
+            and combined >= self.min_combined_score
+        )
+
         if (
             (both_approve and combined >= self.min_combined_score)
             or high_confidence_disagreement
             or single_provider_fallback
             or paper_exploration
+            or demo_rule_fallback
+            or demo_single_provider_fallback
         ):
             verdict = "EXECUTE"
         elif not gemini_approve and not gpt_approve:
@@ -202,6 +226,16 @@ class AICouncil:
 
         debate = self._build_debate_summary(gemini, gpt, verdict, combined, is_paper=is_paper)
         recommendation = self._build_recommendation(gemini, gpt, verdict, paper_exploration=paper_exploration)
+        if demo_rule_fallback:
+            debate += "\nDEMO rule fallback: AI providers unavailable; forwarded to Risk Engine."
+            recommendation = (
+                f"DEMO rule fallback at score {rule_score}; forwarded to Risk Engine for final approval."
+            )
+        elif demo_single_provider_fallback:
+            debate += "\nDEMO single-provider fallback: one analyst unavailable; forwarded to Risk Engine."
+            recommendation = (
+                f"DEMO single-provider fallback at score {combined}; forwarded to Risk Engine for final approval."
+            )
 
         logger.info(
             "AI Council: %s (Gemini=%s/GPT=%s, Combined=%d, Paper=%s)",

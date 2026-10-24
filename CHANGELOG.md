@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-24 (DEMO Execution, Risk Thresholds & Tablet Header)
+
+- **Tablet Header (`web/src/components/Header.tsx`)**: Use a content-driven two-row header below 2xl and hide inline balance/readiness details until the wide desktop breakpoint so the top controls fit tablet screens.
+- **Runtime Trading Settings (`src/core/runtime_settings.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Persist the visible entry-score and Volume/RSI controls. Entry score now drives candidate triage, the AI Council and Risk Engine confidence together; max-open positions now limits concurrent positions without changing the daily trade cap.
+- **DEMO Candidate Flow (`src/app.py`, `src/ai/ai_council.py`)**: Prefer the configured primary/watchlist symbols that exist in `config/symbols.yaml`. In DEMO only, unavailable AI analysts may forward a qualifying rule candidate to Risk Engine; they cannot authorize an order or bypass risk checks.
+- **Risk Sizing (`src/risk/manager.py`, `src/risk/limits.py`)**: Floor broker quantities at the configured step, reject a minimum quantity that exceeds the risk budget, and apply the configured concurrent-position limit.
+- **Binance Testnet Execution (`src/market/binance_gateway.py`)**: Route protective conditional orders through `/fapi/v1/algoOrder`; validate Testnet host, One-way mode, symbol status, tick/market-lot/minimum-notional rules, risk size and available margin; set Isolated margin and configured leverage; request a final market-fill result; keep server-side SL mandatory and attempt immediate reduce-only flattening if SL installation fails. Add confirmed Testnet close and replace-first protective-stop modification.
+- **Credential Failure Behavior (`src/app.py`, `src/web/server.py`)**: Keep the real Testnet gateway in DEMO when credentials are missing or rejected. Surface the error and block execution instead of silently substituting Paper execution.
+- **Operational Status**: Code is prepared for automated DEMO Testnet execution. The first exchange fill with active broker-side SL remains pending deployed observation; LIVE stays disabled.
+
 ## 2026-10-23 (Tablet Header, Closed-Candle Handoff & Runtime Decision Telemetry)
 
 - **Tablet Header (`web/src/components/Header.tsx`, `web/src/App.tsx`)**:

@@ -122,7 +122,7 @@ Checklist:
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 1201 | ❌ Not done | |
+| 1201 | 🟡 In progress | DEMO Testnet execution hardened 2026-10-24; awaiting first observed automated fill with server-side SL |
 | 1202 | ❌ Not done | |
 | 1203 | ❌ Not done | |
 | 1204 | ❌ Not done | |

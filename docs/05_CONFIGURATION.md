@@ -116,6 +116,8 @@ risk:
   max_weekly_loss: 0.04   # 4%
   max_drawdown: 0.10      # 10%
   max_open_positions: 2
+  leverage: 5
+  max_margin_utilization_pct: 0.8
   max_symbol_exposure: 1
   max_correlated_exposure: 2
   max_trades_per_day: 5
@@ -280,6 +282,8 @@ class RiskConfig(BaseModel):
 | max_trades_per_day | 1 | 20 | 5 | Daily trade limit |
 | max_consecutive_losses | 1 | 10 | 3 | Consecutive loss limit |
 | max_open_positions | 1 | 10 | 2 | Concurrent positions |
+| leverage | 1 | 20 | 5 | Binance Testnet isolated leverage |
+| max_margin_utilization_pct | 0.1 | 1.0 | 0.8 | Max share of free margin allocated to an entry |
 
 ## Config Override Priority
 

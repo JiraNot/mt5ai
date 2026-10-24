@@ -15,13 +15,15 @@ import time
 import zlib
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
 from src.core.config import settings
 from src.core.exceptions import FreebuffError
-from src.core.runtime_control import get_runtime_trading_mode, has_runtime_control
+from src.core.runtime_control import get_runtime_trading_mode
 from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, OrderResult, OrderStatus, Position, Tick, TradingMode
 
 logger = logging.getLogger(__name__)
@@ -40,8 +42,8 @@ class BinanceGateway:
 
     @staticmethod
     def _runtime_is_paper() -> bool:
-        """Use public market data only after the dashboard explicitly selects PAPER."""
-        return has_runtime_control() and get_runtime_trading_mode(settings.trading_mode) == "paper"
+        """Treat missing runtime controls according to the safe configured PAPER default."""
+        return get_runtime_trading_mode(settings.trading_mode) == "paper"
 
     def __init__(
         self,
@@ -57,6 +59,7 @@ class BinanceGateway:
         self._connected = False
         self._server_time_offset_ms = 0
         self._position_symbols: dict[int, str] = {}
+        self._position_protection: dict[int, dict[str, dict[str, Any]]] = {}
         self._submitted_orders: dict[str, OrderResult] = {}
 
     @property
@@ -72,6 +75,10 @@ class BinanceGateway:
             if "testnet.binancefuture.com" in effective_base
             else "wss://fstream.binance.com"
         )
+
+    def _uses_testnet_endpoint(self) -> bool:
+        effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
+        return urlparse(effective_base).hostname == "testnet.binancefuture.com"
 
     async def connect(self) -> bool:
         effective = (self._configured_base_url or settings.binance_base_url).rstrip("/")
@@ -165,6 +172,46 @@ class BinanceGateway:
                     pass
             raise
 
+    async def _find_existing_algo_order(self, symbol: str, client_id: str) -> dict[str, Any] | None:
+        """Find an existing conditional order by its idempotency key."""
+        try:
+            return await self._signed_request("GET", "/fapi/v1/algoOrder", {
+                "symbol": symbol.upper(), "clientAlgoId": client_id,
+            })
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 400:
+                try:
+                    if int(exc.response.json().get("code", 0)) in (-2011, -2013):
+                        return None
+                except (TypeError, ValueError):
+                    pass
+            raise
+
+    async def _open_algo_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
+        """List live conditional orders used to reconcile server-side protection."""
+        params = {"symbol": symbol.upper()} if symbol else {}
+        result = await self._signed_request("GET", "/fapi/v1/openAlgoOrders", params)
+        return result if isinstance(result, list) else []
+
+    async def _ensure_one_way_mode(self) -> None:
+        """Fail closed when account hedge mode needs positionSide-aware routing."""
+        result = await self._signed_request("GET", "/fapi/v1/positionSide/dual", {})
+        if bool(result.get("dualSidePosition")):
+            raise BinanceConnectionError(
+                "Binance Futures Hedge Mode is not supported by this execution adapter; use One-way Mode"
+            )
+
+    async def _cancel_algo_order(self, order: dict[str, Any]) -> dict[str, Any]:
+        """Cancel one conditional order using Binance's current algo-order API."""
+        params: dict[str, Any] = {"symbol": str(order.get("symbol", "")).upper()}
+        if order.get("algoId") is not None:
+            params["algoId"] = order["algoId"]
+        elif order.get("clientAlgoId"):
+            params["clientAlgoId"] = order["clientAlgoId"]
+        else:
+            raise BinanceConnectionError("Cannot cancel Binance algo order without an id")
+        return await self._signed_request("DELETE", "/fapi/v1/algoOrder", params)
+
     @staticmethod
     def _map_exchange_status(status: str) -> OrderStatus:
         return {
@@ -185,14 +232,15 @@ class BinanceGateway:
             protective_id = f"{client_id}-{suffix}"
             try:
                 if lookup_existing:
-                    existing = await self._find_existing_order(symbol, protective_id)
-                    if existing is not None:
+                    existing = await self._find_existing_algo_order(symbol, protective_id)
+                    if existing is not None and existing.get("algoStatus") in {"NEW", "TRIGGERED", "FINISHED"}:
                         protective[suffix] = existing
                         continue
-                protective[suffix] = await self._signed_request("POST", "/fapi/v1/order", {
-                    "symbol": symbol.upper(), "side": opposite, "type": order_type,
-                    "stopPrice": stop_price, "closePosition": "true",
-                    "workingType": "MARK_PRICE", "newClientOrderId": protective_id,
+                protective[suffix] = await self._signed_request("POST", "/fapi/v1/algoOrder", {
+                    "algoType": "CONDITIONAL", "symbol": symbol.upper(),
+                    "side": opposite, "type": order_type,
+                    "triggerPrice": stop_price, "closePosition": "true",
+                    "workingType": "MARK_PRICE", "clientAlgoId": protective_id,
                 })
             except Exception as exc:
                 return protective, f"Failed to place server-side {suffix.upper()}: {exc}"
@@ -326,8 +374,15 @@ class BinanceGateway:
         for item in response.json().get("symbols", []):
             if item.get("symbol") == symbol.upper():
                 filters = {item["filterType"]: item for item in item.get("filters", [])}
-                lot = filters.get("LOT_SIZE", {})
+                lot = filters.get("MARKET_LOT_SIZE") or filters.get("LOT_SIZE", {})
                 price = filters.get("PRICE_FILTER", {})
+                notional = filters.get("NOTIONAL") or filters.get("MIN_NOTIONAL", {})
+                min_notional = float(notional.get("notional", notional.get("minNotional", 0)))
+                applies_to_market = notional.get(
+                    "applyMinToMarket", notional.get("applyToMarket", True)
+                )
+                if isinstance(applies_to_market, str):
+                    applies_to_market = applies_to_market.lower() == "true"
                 return {
                     "symbol": item["symbol"], "status": item.get("status"),
                     "base_asset": item.get("baseAsset"), "quote_asset": item.get("quoteAsset"),
@@ -336,6 +391,7 @@ class BinanceGateway:
                     "volume_min": float(lot.get("minQty", 0)),
                     "volume_max": float(lot.get("maxQty", 0)),
                     "volume_step": float(lot.get("stepSize", 0)),
+                    "min_notional": min_notional if applies_to_market else 0.0,
                 }
         raise BinanceConnectionError(f"Symbol not found: {symbol}")
 
@@ -347,45 +403,37 @@ class BinanceGateway:
                 free_margin=settings.paper_initial_balance, currency="USDT", leverage=1,
                 mode=TradingMode.PAPER,
             )
-        if settings.binance_mode != "testnet":
+        if settings.binance_mode != "testnet" or not self._uses_testnet_endpoint():
             raise BinanceConnectionError("Signed Binance account access is restricted to BINANCE_MODE=testnet")
-        try:
-            row = await self._signed_request("GET", "/fapi/v2/account", {})
-            return AccountInfo(
-                login=0, name="Binance Futures", server="binance-testnet",
-                balance=float(row.get("totalWalletBalance", 0)),
-                equity=float(row.get("totalMarginBalance", 0)),
-                margin=float(row.get("totalInitialMargin", 0)),
-                free_margin=float(row.get("availableBalance", 0)),
-                profit=float(row.get("totalUnrealizedProfit", 0)),
-                currency="USDT", leverage=0,
-            )
-        except (BinanceConnectionError, httpx.HTTPStatusError) as exc:
-            status_code = getattr(getattr(exc, "response", None), "status_code", None)
-            if status_code in (401, 403) or isinstance(exc, BinanceConnectionError):
-                logger.warning(
-                    "⚠️ Binance account sync unauthorized or unconfigured (%s). Falling back to Paper Account simulation ($%s USDT).",
-                    exc, settings.paper_initial_balance,
-                )
-                return AccountInfo(
-                    login=0, name="Binance Testnet (Paper Fallback)", server="paper",
-                    balance=settings.paper_initial_balance, equity=settings.paper_initial_balance,
-                    free_margin=settings.paper_initial_balance, currency="USDT", leverage=1,
-                    mode=TradingMode.PAPER,
-                )
-            raise
+        row = await self._signed_request("GET", "/fapi/v2/account", {})
+        return AccountInfo(
+            login=0, name="Binance Futures Testnet", server="binance-testnet",
+            balance=float(row.get("totalWalletBalance", 0)),
+            equity=float(row.get("totalMarginBalance", 0)),
+            margin=float(row.get("totalInitialMargin", 0)),
+            free_margin=float(row.get("availableBalance", 0)),
+            profit=float(row.get("totalUnrealizedProfit", 0)),
+            currency="USDT", leverage=0, mode=TradingMode.DEMO,
+        )
 
     async def send_order(self, request: OrderRequest) -> OrderResult:
-        if get_runtime_trading_mode(settings.trading_mode) == "live":
+        trading_mode = get_runtime_trading_mode(settings.trading_mode)
+        if trading_mode == "live":
             return OrderResult(
                 success=False,
                 venue=self.venue,
                 error_message="Binance LIVE execution is disabled; use DEMO with Binance testnet safeguards",
             )
+        if trading_mode != "demo":
+            return OrderResult(success=False, venue=self.venue, error_message="Broker execution is disabled in PAPER mode")
         if settings.binance_mode != "testnet":
             return OrderResult(success=False, venue=self.venue, error_message="Binance execution requires BINANCE_MODE=testnet")
+        if not self._uses_testnet_endpoint():
+            return OrderResult(success=False, venue=self.venue, error_message="DEMO execution requires the Binance Futures Testnet endpoint")
         if not settings.binance_api_key or not settings.binance_api_secret:
             return OrderResult(success=False, venue=self.venue, error_message="Binance testnet credentials are not configured")
+        if request.symbol.upper() not in settings.symbols:
+            return OrderResult(success=False, venue=self.venue, error_message=f"Unsupported Binance symbol: {request.symbol}")
         if request.sl <= 0 or request.tp <= 0:
             return OrderResult(success=False, venue=self.venue, error_message="Server-side SL and TP are required")
         client_id = re.sub(r"[^A-Za-z0-9_-]", "-", request.execution_key or request.comment or "freebuff")[:28]
@@ -393,43 +441,269 @@ class BinanceGateway:
             previous = self._submitted_orders[client_id]
             return previous.model_copy(update={"metadata": {**previous.metadata, "duplicate": True}})
         side = "BUY" if request.direction == Direction.BUY else "SELL"
+        execution_sl = Decimal(str(request.sl))
+        execution_tp = Decimal(str(request.tp))
+        await self._ensure_one_way_mode()
         filled = await self._find_existing_order(request.symbol, client_id)
         recovered = filled is not None
         if filled is None:
+            existing_positions = await self.get_positions(request.symbol)
+            if existing_positions:
+                return OrderResult(
+                    success=False, venue=self.venue,
+                    error_message=f"Binance already has an open {request.symbol} position; refusing to add exposure",
+                )
+            for stale_order in await self._open_algo_orders(request.symbol):
+                if str(stale_order.get("closePosition", "false")).lower() == "true":
+                    try:
+                        await self._cancel_algo_order(stale_order)
+                    except Exception as exc:
+                        return OrderResult(
+                            success=False, venue=self.venue,
+                            error_message=f"Could not clear stale protective order before entry: {exc}",
+                        )
+            await self.set_margin_type(request.symbol, "ISOLATED")
+            await self.set_leverage(request.symbol, settings.risk.leverage)
+            try:
+                symbol_info = await self.get_symbol_info(request.symbol)
+            except Exception as exc:
+                return OrderResult(success=False, venue=self.venue, error_message=f"Could not read Binance symbol rules: {exc}")
+            if symbol_info.get("status") != "TRADING":
+                return OrderResult(success=False, venue=self.venue, error_message=f"Binance symbol is not trading: {request.symbol}")
+            step = Decimal(str(symbol_info.get("volume_step", 0)))
+            min_volume = Decimal(str(symbol_info.get("volume_min", 0)))
+            max_volume = Decimal(str(symbol_info.get("volume_max", 0)))
+            if step <= 0:
+                return OrderResult(success=False, venue=self.venue, error_message=f"Invalid Binance quantity step for {request.symbol}")
+            requested_volume = Decimal(str(request.volume))
+            actual_volume = (requested_volume / step).to_integral_value(rounding=ROUND_DOWN) * step
+            if actual_volume < min_volume or actual_volume <= 0:
+                return OrderResult(success=False, venue=self.venue, error_message="Risk-approved size is below Binance's minimum quantity")
+            if max_volume > 0:
+                actual_volume = min(actual_volume, max_volume)
+
+            tick_size = Decimal(str(symbol_info.get("price_tick_size", 0)))
+            if tick_size <= 0:
+                return OrderResult(success=False, venue=self.venue, error_message=f"Invalid Binance price tick for {request.symbol}")
+            sl = execution_sl
+            tp = execution_tp
+            if request.direction == Direction.BUY:
+                sl = (sl / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
+                tp = (tp / tick_size).to_integral_value(rounding=ROUND_DOWN) * tick_size
+            else:
+                sl = (sl / tick_size).to_integral_value(rounding=ROUND_DOWN) * tick_size
+                tp = (tp / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
+            market = await self.get_current_price(request.symbol)
+            reference_price = request.price or market.last
+            valid_bracket = (
+                (request.direction == Direction.BUY and sl < Decimal(str(reference_price)) < tp)
+                or (request.direction == Direction.SELL and tp < Decimal(str(reference_price)) < sl)
+            )
+            if not valid_bracket:
+                return OrderResult(success=False, venue=self.venue, error_message="Entry price moved outside the proposed SL/TP range")
+            execution_sl = sl
+            execution_tp = tp
+            adjusted_risk = abs(Decimal(str(reference_price)) - sl)
+            adjusted_reward = abs(tp - Decimal(str(reference_price)))
+            if adjusted_risk <= 0 or adjusted_reward / adjusted_risk < Decimal(str(settings.risk.min_rr)):
+                return OrderResult(success=False, venue=self.venue, error_message="Tick-aligned stop and target fall below the minimum risk-reward ratio")
+            account = await self._signed_request("GET", "/fapi/v2/account", {})
+            free_margin = Decimal(str(account.get("availableBalance", 0)))
+            margin_budget = free_margin * Decimal(str(settings.risk.max_margin_utilization_pct))
+            max_margin_volume = (margin_budget * Decimal(str(settings.risk.leverage))) / Decimal(str(reference_price))
+            margin_volume = (max_margin_volume / step).to_integral_value(rounding=ROUND_DOWN) * step
+            actual_volume = min(actual_volume, margin_volume)
+            if actual_volume < min_volume:
+                return OrderResult(
+                    success=False, venue=self.venue,
+                    error_message="Available Testnet margin is below the minimum Binance order size",
+                )
+            min_notional = Decimal(str(symbol_info.get("min_notional", 0)))
+            if min_notional > 0 and actual_volume * Decimal(str(reference_price)) < min_notional:
+                return OrderResult(
+                    success=False, venue=self.venue,
+                    error_message=(
+                        "Risk-approved size is below Binance's minimum notional; "
+                        "raising the quantity would exceed the configured risk budget"
+                    ),
+                )
             filled = await self._signed_request("POST", "/fapi/v1/order", {
                 "symbol": request.symbol.upper(), "side": side, "type": "MARKET",
-                "quantity": request.volume, "newClientOrderId": client_id,
+                "quantity": format(actual_volume.normalize(), "f"),
+                "newClientOrderId": client_id, "newOrderRespType": "RESULT",
             })
         order_id = str(filled.get("orderId", ""))
         status = self._map_exchange_status(str(filled.get("status", "")))
         fill_price = float(filled.get("avgPrice") or filled.get("price") or 0) or None
+        filled_volume = float(filled.get("executedQty", request.volume))
         protective, protective_error = await self._place_protective_orders(
-            request.symbol, side, client_id, request.sl, request.tp, lookup_existing=recovered
+            request.symbol, side, client_id, float(execution_sl), float(execution_tp),
+            lookup_existing=recovered,
         ) if status in (OrderStatus.FILLED, OrderStatus.PARTIAL) else ({}, "Primary order is not filled")
         if recovered and status not in (OrderStatus.FILLED, OrderStatus.PARTIAL):
             protective_error = f"Existing Binance order is {filled.get('status', 'UNKNOWN')}"
+        warning = None
+        emergency_close = None
+        if protective_error and protective.get("sl"):
+            # A failed TP must not hide a successfully protected entry. Keep the
+            # position journaled with its server-side stop and surface the TP issue.
+            warning = protective_error
+            logger.error("Binance position %s has its server-side SL but no TP: %s", order_id, warning)
+            protective_error = None
+        elif protective_error and status in (OrderStatus.FILLED, OrderStatus.PARTIAL):
+            # Never leave a filled entry unprotected if the stop order was rejected.
+            try:
+                emergency_close = await self._signed_request("POST", "/fapi/v1/order", {
+                    "symbol": request.symbol.upper(),
+                    "side": "SELL" if side == "BUY" else "BUY",
+                    "type": "MARKET", "quantity": filled.get("executedQty", request.volume),
+                    "reduceOnly": "true", "newClientOrderId": f"fc-{client_id}"[:36],
+                    "newOrderRespType": "RESULT",
+                })
+                protective_error = f"{protective_error}; entry flattened as fail-safe"
+                logger.critical("Protective SL failed; flattened Binance entry order %s", order_id)
+            except Exception as close_exc:
+                protective_error = f"{protective_error}; emergency flatten failed: {close_exc}"
+                logger.critical("Unprotected Binance position after failed SL; emergency flatten failed: %s", close_exc)
         result = OrderResult(
             success=protective_error is None, ticket=int(order_id) if order_id.isdigit() else None,
-            price=fill_price, volume=float(filled.get("executedQty", request.volume)),
+            price=fill_price, volume=filled_volume,
             venue=self.venue, external_order_id=order_id, status=status,
-            error_message=protective_error, metadata={"primary": filled, "protective": protective, "duplicate": recovered},
+            error_message=protective_error,
+            metadata={"primary": filled, "protective": protective, "duplicate": recovered,
+                      "warning": warning, "emergency_close": emergency_close,
+                      "execution_sl": float(execution_sl), "execution_tp": float(execution_tp)},
         )
         self._submitted_orders[client_id] = result
         return result
 
     async def modify_position(self, ticket: int, sl: float | None = None, tp: float | None = None) -> OrderResult:
-        return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
+        if get_runtime_trading_mode(settings.trading_mode) != "demo" or settings.binance_mode != "testnet" or not self._uses_testnet_endpoint():
+            return OrderResult(success=False, ticket=ticket, error_message="Position modification requires DEMO on Binance Testnet")
+        positions = await self.get_positions(self._position_symbols.get(ticket))
+        position = next((pos for pos in positions if pos.ticket == ticket), None)
+        if position is None:
+            return OrderResult(success=False, ticket=ticket, error_message="Binance position not found")
+        current = await self._open_algo_orders(position.symbol)
+        order_side = "SELL" if position.direction == Direction.BUY else "BUY"
+        kind_by_field = {"sl": "STOP_MARKET", "tp": "TAKE_PROFIT_MARKET"}
+        replacements: dict[str, dict[str, Any]] = {}
+        tick_size = Decimal(str((await self.get_symbol_info(position.symbol)).get("price_tick_size", 0)))
+        if tick_size <= 0:
+            return OrderResult(success=False, ticket=ticket, error_message="Invalid Binance price tick")
+        market_price = Decimal(str(position.current_price))
+        for field, price in (("sl", sl), ("tp", tp)):
+            if price is None or price <= 0:
+                continue
+            new_price = Decimal(str(price))
+            if new_price <= 0 or new_price % tick_size != 0:
+                return OrderResult(success=False, ticket=ticket, error_message=f"New {field.upper()} is not aligned to Binance's price tick")
+            old_price = Decimal(str(getattr(position, field)))
+            if field == "sl":
+                is_valid = (
+                    new_price < market_price and (old_price <= 0 or new_price >= old_price)
+                    if position.direction == Direction.BUY
+                    else new_price > market_price and (old_price <= 0 or new_price <= old_price)
+                )
+            else:
+                is_valid = new_price > market_price if position.direction == Direction.BUY else new_price < market_price
+            if not is_valid:
+                return OrderResult(success=False, ticket=ticket, error_message=f"New {field.upper()} would trigger immediately or loosen protection")
+            client_id = f"pm-{ticket}-{field}-{int(time.time() * 1000)}"[:36]
+            try:
+                replacements[field] = await self._signed_request("POST", "/fapi/v1/algoOrder", {
+                    "algoType": "CONDITIONAL", "symbol": position.symbol, "side": order_side,
+                    "type": kind_by_field[field], "triggerPrice": str(new_price),
+                    "closePosition": "true", "workingType": "MARK_PRICE", "clientAlgoId": client_id,
+                })
+            except Exception as exc:
+                return OrderResult(success=False, ticket=ticket, error_message=f"Failed to place replacement {field.upper()}: {exc}")
+
+            old_orders = [
+                order for order in current
+                if order.get("symbol") == position.symbol and order.get("side") == order_side
+                and order.get("orderType") == kind_by_field[field]
+                and str(order.get("algoStatus", "NEW")) == "NEW"
+            ]
+            for old_order in old_orders:
+                if old_order.get("clientAlgoId") == client_id:
+                    continue
+                try:
+                    await self._cancel_algo_order(old_order)
+                except Exception as exc:
+                    logger.warning("Replacement %s is active but old algo order could not be canceled: %s", field.upper(), exc)
+
+        self._position_protection[ticket] = replacements or self._position_protection.get(ticket, {})
+        return OrderResult(success=True, ticket=ticket, volume=position.volume, metadata={"protective": replacements})
 
     async def close_position(self, ticket: int, volume: float | None = None) -> OrderResult:
-        return OrderResult(success=False, ticket=ticket, error_message="Binance execution is not enabled")
+        if get_runtime_trading_mode(settings.trading_mode) != "demo" or settings.binance_mode != "testnet" or not self._uses_testnet_endpoint():
+            return OrderResult(success=False, ticket=ticket, error_message="Position close requires DEMO on Binance Testnet")
+        try:
+            await self._ensure_one_way_mode()
+            symbol = self._position_symbols.get(ticket)
+            positions = await self.get_positions(symbol)
+            position = next((pos for pos in positions if pos.ticket == ticket), None)
+            if position is None:
+                return OrderResult(success=False, ticket=ticket, error_message="Binance position not found")
+            symbol_info = await self.get_symbol_info(position.symbol)
+            step = Decimal(str(symbol_info.get("volume_step", 0)))
+            min_volume = Decimal(str(symbol_info.get("volume_min", 0)))
+            if step <= 0:
+                return OrderResult(success=False, ticket=ticket, error_message="Invalid Binance quantity step")
+            requested = Decimal(str(position.volume if volume is None else min(volume, position.volume)))
+            close_volume = (requested / step).to_integral_value(rounding=ROUND_DOWN) * step
+            if close_volume < min_volume or close_volume <= 0:
+                return OrderResult(success=False, ticket=ticket, error_message="Close quantity is below Binance's minimum quantity")
+            client_id = f"close-{ticket}-{int(time.time() * 1000)}"[:36]
+            response = await self._signed_request("POST", "/fapi/v1/order", {
+                "symbol": position.symbol, "side": "SELL" if position.direction == Direction.BUY else "BUY",
+                "type": "MARKET", "quantity": format(close_volume.normalize(), "f"),
+                "reduceOnly": "true", "newClientOrderId": client_id, "newOrderRespType": "RESULT",
+            })
+            closed_volume = float(response.get("executedQty", 0))
+            requested_volume = float(close_volume)
+            remaining = await self.get_positions(position.symbol)
+            still_open = any(pos.ticket == ticket for pos in remaining)
+            fill_confirmed = closed_volume + float(step) / 2 >= requested_volume
+            closes_full_position = close_volume >= Decimal(str(position.volume)) - step / 2
+            close_confirmed = fill_confirmed and (not closes_full_position or not still_open)
+            warnings: list[str] = []
+            if not still_open:
+                for order in await self._open_algo_orders(position.symbol):
+                    if order.get("side") == ("SELL" if position.direction == Direction.BUY else "BUY") and order.get("orderType") in {"STOP_MARKET", "TAKE_PROFIT_MARKET"}:
+                        try:
+                            await self._cancel_algo_order(order)
+                        except Exception as exc:
+                            warnings.append(f"Could not cancel stale protective order {order.get('algoId')}: {exc}")
+                self._position_protection.pop(ticket, None)
+            order_id = str(response.get("orderId", ""))
+            return OrderResult(
+                success=close_confirmed, ticket=int(order_id) if order_id.isdigit() else ticket,
+                price=float(response.get("avgPrice") or response.get("price") or 0) or None,
+                volume=closed_volume, venue=self.venue, external_order_id=order_id,
+                status=self._map_exchange_status(str(response.get("status", ""))),
+                error_message=(
+                    None if close_confirmed else
+                    f"Binance close incomplete: filled {closed_volume:g}/{requested_volume:g}; "
+                    f"position_remaining={still_open}"
+                ),
+                metadata={
+                    "position_ticket": ticket, "requested_volume": requested_volume,
+                    "remaining_position": still_open, "warnings": warnings,
+                },
+            )
+        except Exception as exc:
+            return OrderResult(success=False, ticket=ticket, venue=self.venue, error_message=f"Binance close failed: {exc}")
 
     async def get_positions(self, symbol: str | None = None) -> list[Position]:
         if self._runtime_is_paper():
             return []
-        if settings.binance_mode != "testnet":
+        if settings.binance_mode != "testnet" or not self._uses_testnet_endpoint():
             raise BinanceConnectionError("Binance positions require BINANCE_MODE=testnet")
         params = {"symbol": symbol.upper()} if symbol else {}
         rows = await self._signed_request("GET", "/fapi/v2/positionRisk", params)
+        algo_orders = await self._open_algo_orders(symbol) if rows else []
         positions: list[Position] = []
         for row in rows:
             amount = float(row.get("positionAmt", 0))
@@ -439,14 +713,26 @@ class BinanceGateway:
             synthetic_id = zlib.crc32(f"{symbol_name}:{row.get('positionSide', 'BOTH')}".encode())
             self._position_symbols[synthetic_id] = symbol_name
             direction = Direction.BUY if amount > 0 else Direction.SELL
+            close_side = "SELL" if direction == Direction.BUY else "BUY"
+            protection: dict[str, dict[str, Any]] = {}
+            for order in algo_orders:
+                if order.get("symbol") != symbol_name or order.get("side") != close_side:
+                    continue
+                if order.get("algoStatus") != "NEW" or not order.get("closePosition"):
+                    continue
+                if order.get("orderType") == "STOP_MARKET":
+                    protection["sl"] = order
+                elif order.get("orderType") == "TAKE_PROFIT_MARKET":
+                    protection["tp"] = order
+            self._position_protection[synthetic_id] = protection
             positions.append(Position(
                 ticket=synthetic_id, identifier=synthetic_id, symbol=symbol_name,
                 direction=direction, volume=abs(amount), open_price=float(row.get("entryPrice", 0)),
                 current_price=float(row.get("markPrice", 0)),
-                # Binance's liquidation price is not the strategy's protective
-                # stop. Keep SL unset rather than exposing it as an executable
-                # stop level to the position manager.
-                sl=0.0,
+                # Read strategy protection from conditional orders; liquidation
+                # price is never presented as an executable stop.
+                sl=float(protection.get("sl", {}).get("triggerPrice", 0) or 0),
+                tp=float(protection.get("tp", {}).get("triggerPrice", 0) or 0),
                 profit=float(row.get("unRealizedProfit", 0)),
                 open_time=datetime.fromtimestamp(float(row.get("updateTime", 0)) / 1000, tz=timezone.utc),
                 comment="binance-position-risk",

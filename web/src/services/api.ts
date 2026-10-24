@@ -188,6 +188,7 @@ export interface RuntimeSettings {
   max_daily_loss_pct: number;
   max_open_positions: number;
   min_rr: number;
+  entry_min_score: number;
   max_consecutive_losses?: number;
   emergency_stop_loss_pct?: number;
   news_filter_enabled?: boolean;

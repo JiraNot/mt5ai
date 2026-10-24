@@ -100,15 +100,12 @@ class TradingPlatform:
         else:
             raw_binance = BinanceGateway()
             has_credentials = bool(settings.binance_api_key.strip() and settings.binance_api_secret.strip())
-            is_paper = settings.binance_mode == "paper" or not has_credentials
+            is_paper = get_runtime_trading_mode(settings.trading_mode) == "paper"
             self._gateway = (
                 PaperGateway(raw_binance) if is_paper else raw_binance
             )
-            if not has_credentials and settings.binance_mode != "paper":
-                logger.warning(
-                    "BINANCE_MODE=%s but credentials are empty; defaulting execution to safe PAPER mode.",
-                    settings.binance_mode,
-                )
+            if not has_credentials and get_runtime_trading_mode(settings.trading_mode) == "demo":
+                logger.error("DEMO mode is selected but Binance Testnet credentials are missing; execution stays fail-closed")
         logger.info("Market venue enabled: Binance (%s, execution=%s)", settings.binance_mode, "paper" if is_paper else "exchange")
 
         self._data_feed = DataFeed(self._gateway)
@@ -173,11 +170,29 @@ class TradingPlatform:
         return self._spread_monitors[symbol]
 
     def _get_active_trading_symbols(self) -> list[str]:
-        """Resolve active symbols to monitor: primary symbol + top Watchlist candidates."""
+        """Resolve configured, supported symbols before considering screener candidates."""
         from pathlib import Path
         import json
+        from src.core.runtime_settings import get_runtime_settings
 
-        symbols = [self._trading_symbol]
+        runtime_settings = get_runtime_settings(mask_secrets=False)
+        supported = settings.symbols
+        configured = runtime_settings.get("active_symbols", [])
+        if isinstance(configured, str):
+            configured = configured.split(",")
+        primary = str(runtime_settings.get("primary_symbol") or self._trading_symbol).upper()
+        symbols: list[str] = []
+
+        if primary in supported and primary.endswith("USDT"):
+            symbols.append(primary)
+        for value in configured:
+            sym = str(value).strip().upper()
+            if sym in supported and sym.endswith("USDT") and sym not in symbols and len(symbols) < 5:
+                symbols.append(sym)
+
+        if not symbols and "BTCUSDT" in supported:
+            symbols.append("BTCUSDT")
+
         watchlist_file = (
             Path("/app/data/crypto_watchlist.json")
             if Path("/app/data/crypto_watchlist.json").is_file()
@@ -190,27 +205,13 @@ class TradingPlatform:
                     candidates = data.get("candidates", [])
                     for cand in candidates:
                         sym = cand.get("symbol")
-                        if sym and sym not in symbols and len(symbols) < 5:
-                            symbols.append(sym)
+                        if (
+                            sym and sym.upper() in supported and sym.upper().endswith("USDT")
+                            and sym.upper() not in symbols and len(symbols) < 5
+                        ):
+                            symbols.append(sym.upper())
             except Exception as exc:
                 logger.warning("Failed to load watchlist for active symbols: %s", exc)
-
-        # Fallback to configured Binance symbols if watchlist has only 1
-        if len(symbols) == 1:
-            try:
-                from src.core.runtime_settings import get_runtime_settings
-                active_cfg = get_runtime_settings(mask_secrets=False).get("active_symbols", [])
-                for s in active_cfg:
-                    s_up = str(s).strip().upper()
-                    if s_up and s_up not in symbols and len(symbols) < 5:
-                        symbols.append(s_up)
-            except Exception:
-                pass
-
-        if len(symbols) == 1:
-            for s in ["ETHUSDT", "SOLUSDT"]:
-                if s not in symbols and s in settings.symbols and len(symbols) < 3:
-                    symbols.append(s)
 
         return symbols
 
@@ -286,26 +287,31 @@ class TradingPlatform:
                 is_auth_error = (
                     status_code in (401, 403)
                     or "401" in str(exc)
+                    or "-2014" in str(exc)
+                    or "-2015" in str(exc)
                     or "credentials" in str(exc).lower()
                     or "unauthorized" in str(exc).lower()
+                    or "api-key" in str(exc).lower()
+                    or "signature" in str(exc).lower()
                 )
-                if is_auth_error and sync_retries >= 2 and not isinstance(self._gateway, PaperGateway):
-                    logger.warning(
-                        "⚠️ Binance account sync unauthorized (401/403: %s). "
-                        "Auto-switching execution to safe PAPER mode so trading engine, candles, and AI scoring operate normally.",
+                if (
+                    is_auth_error and sync_retries >= 2
+                    and not isinstance(self._gateway, PaperGateway)
+                    and get_runtime_trading_mode(settings.trading_mode) == "demo"
+                ):
+                    update_runtime_status(
+                        state="waiting_for_testnet_credentials",
+                        last_decision="EXECUTION_BLOCKED",
+                        last_reason="DEMO requires valid Binance Futures Testnet credentials",
+                        last_error=str(exc),
+                        binance_connected=True,
+                    )
+                    logger.error(
+                        "DEMO account sync failed; remaining on Binance Testnet without paper fallback: %s",
                         exc,
                     )
-                    from src.execution.paper_gateway import PaperGateway
-                    raw_binance = self._gateway if not isinstance(self._gateway, PaperGateway) else self._gateway._market
-                    self._gateway = PaperGateway(raw_binance)
-                    self._data_feed = DataFeed(self._gateway)
-                    self._order_manager = OrderManager(self._gateway)
-                    self._position_tracker = PositionTracker(self._gateway)
-                    from src.execution.position_manager import PositionManager
-                    self._position_manager = PositionManager(gateway=self._gateway, order_manager=self._order_manager)
-                    account = await self._gateway.get_account_info()
-                    update_runtime_status(last_error="Binance API 401 Unauthorized: Auto-switched to safe PAPER mode")
-                    break
+                    await asyncio.sleep(10)
+                    continue
 
                 logger.warning(
                     "Account sync failed for %s: %s. "
@@ -673,6 +679,7 @@ class TradingPlatform:
 
         # Step 2f: AI Council Debate (Gemini Bull vs GPT Bear)
         setup_context = {
+            "trading_mode": get_runtime_trading_mode(settings.trading_mode),
             "symbol": candidate.symbol,
             "direction": candidate.direction.value,
             "entry_price": float(candidate.entry_price or current_price),
@@ -794,7 +801,12 @@ class TradingPlatform:
             result = await self._order_manager.send_market_order(request)
 
             if result.success:
-                update_runtime_status(last_decision="TRADE_EXECUTED", last_ticket=result.ticket, last_error=None)
+                request.sl = float(result.metadata.get("execution_sl", request.sl))
+                request.tp = float(result.metadata.get("execution_tp", request.tp))
+                update_runtime_status(
+                    last_decision="TRADE_EXECUTED", last_ticket=result.ticket,
+                    last_error=result.metadata.get("warning"),
+                )
                 setup_id = None
                 if self._trade_learner and result.ticket:
                     snapshot["fill_price"] = result.price

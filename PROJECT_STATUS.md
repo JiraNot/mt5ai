@@ -90,12 +90,14 @@ DISABLED
 - [x] Tablet header stays within the viewport with compact controls and a two-row portrait layout; sidebar follows the responsive header height.
 - [x] Strategy engine consumes the latest closed candle once; runtime decision status includes the last decision timestamp, candidate score, reason, and execution mode.
 - [x] Pro Desk uses runtime health and reported open positions; it no longer presents trade history as worker health or fabricates equity, position, slippage, or latency data.
-- [x] Binance Testnet 401 Unauthorized auto-fallback to safe Paper execution & robust SPA routing
+- [x] Explicit PAPER mode remains simulated; DEMO Testnet authentication failures remain visible and block execution
 - [x] Technical Indicators & Dynamic S/R Overlays (EMA 20, EMA 50, EMA 200, Resistance, Support, Pivot) with real-time value strip and toggle controls
 - [x] Candlestick Trade Markers & Trade Retrospective Drawer (Why entered, Why won/lost in Thai, with interactive chart focus)
 - [x] Dynamic Settings Management & Modal (`SettingsModal.tsx` + `src/core/runtime_settings.py`) allowing seamless configuration of Risk, Binance API, AI, and Telegram without .env redeployments
 - [x] Docker Persistent Volume (`/app/data`) Synchronization across Screener, Watchlist, and Council triage
 - [x] Dynamic Binance Gateway & Telegram Re-initialization upon runtime configuration updates
+- [x] DEMO Testnet orders use Binance algo-order protective SL/TP, exchange quantity rules, Isolated margin, and configured leverage
+- [x] Runtime entry score, max concurrent positions, RSI, and volume settings apply across the execution pipeline
 - [x] Institutional Volume Spike & RSI Momentum Filters (`src/strategies/indicators.py`, `choch_orderblock` v1.1.0, `breakout_retest` v1.1.0)
 - [x] One-Click In-App Strategy Backtester (`BacktestModal.tsx` + `POST /api/backtest/run`) with SVG Equity Curve and simulated trade log
 - [x] Multimodal AI Vision Provider selector & customizable approval threshold
@@ -134,6 +136,7 @@ DISABLED
 - Execution mode can be changed from the dashboard and is persisted under `/app/data`; LIVE remains locked behind explicit arming and Binance safeguards.
 - Candidate triage records all strategy outputs above the observation floor, sends only immediate candidates to the AI Council, and exposes its policy/status through the local MCP server.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
+- The 2026-10-24 Testnet execution hardening is included in source; first automated Testnet fill and broker-side SL still need operational confirmation. LIVE remains disabled.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
@@ -197,7 +200,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-10-23
+2026-10-24
 
 
 ## AI audit remediation — 2026-09-10

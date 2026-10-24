@@ -41,6 +41,8 @@
 - [ ] ขยายปุ่มสัมผัสที่ยังสูง 32–36px ให้ได้อย่างน้อย 44px
 - [x] ยืนยัน Header UX หลังแก้ไขที่ 5 ขนาดจอ — ผลตรวจ: docs/testing/TABLET_UX_VERIFICATION.md (2026-10-23)
 - [x] แสดง worker, execution mode และผล pipeline ล่าสุดพร้อมเวลาตัดสินใจบน Pro Desk (2026-10-23)
+- [x] ให้ Settings API บันทึก entry score และ Volume/RSI toggles ที่ UI แสดง พร้อมผูกค่าเข้ากับ candidate triage และ strategy filters (2026-10-24)
+- [x] ปรับ header ให้ใช้ความสูงตามเนื้อหาจนถึง 2xl เพื่อไม่ให้เมนู 2 แถวล้นแท็บเล็ตแนวนอน (2026-10-24)
 
 **Acceptance:**
 - Dashboard accessible

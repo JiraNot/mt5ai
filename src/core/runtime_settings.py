@@ -41,6 +41,7 @@ DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "max_daily_loss_pct": 0.03,
     "max_open_positions": 3,
     "min_rr": 2.0,
+    "entry_min_score": 70,
     "max_consecutive_losses": 3,
     "emergency_stop_loss_pct": 0.05,
     "news_filter_enabled": True,
@@ -175,8 +176,13 @@ def get_runtime_settings(mask_secrets: bool = True) -> dict[str, Any]:
 
     result["risk_per_trade_pct"] = float(persisted.get("risk_per_trade_pct", settings.risk.risk_per_trade_pct))
     result["max_daily_loss_pct"] = float(persisted.get("max_daily_loss_pct", settings.risk.max_daily_loss_pct))
-    result["max_open_positions"] = int(persisted.get("max_open_positions", settings.risk.max_trades_per_day))
+    result["max_open_positions"] = int(persisted.get("max_open_positions", settings.risk.max_concurrent_positions))
     result["min_rr"] = float(persisted.get("min_rr", settings.risk.min_rr))
+    if "entry_min_score" in persisted:
+        result["entry_min_score"] = int(persisted["entry_min_score"])
+    else:
+        from src.core.runtime_control import get_candidate_policy
+        result["entry_min_score"] = int(get_candidate_policy()["immediate_min_score"])
     result["max_consecutive_losses"] = int(persisted.get("max_consecutive_losses", settings.risk.max_consecutive_losses))
     result["emergency_stop_loss_pct"] = float(persisted.get("emergency_stop_loss_pct", settings.risk.emergency_stop_loss_pct))
     result["news_filter_enabled"] = bool(persisted.get("news_filter_enabled", settings.risk.news_filter_enabled))
@@ -267,11 +273,45 @@ def save_runtime_settings(changes: dict[str, Any]) -> dict[str, Any]:
         except (ValueError, TypeError):
             pass
 
+    if "max_consecutive_losses" in changes:
+        try:
+            val = int(changes["max_consecutive_losses"])
+            if 1 <= val <= 10:
+                updated["max_consecutive_losses"] = val
+        except (ValueError, TypeError):
+            pass
+
+    if "emergency_stop_loss_pct" in changes:
+        try:
+            val = float(changes["emergency_stop_loss_pct"])
+            if 0.01 <= val <= 0.20:
+                updated["emergency_stop_loss_pct"] = val
+        except (ValueError, TypeError):
+            pass
+
+    if "news_filter_enabled" in changes:
+        updated["news_filter_enabled"] = bool(changes["news_filter_enabled"])
+
     if "min_rr" in changes:
         try:
             val = float(changes["min_rr"])
             if 1.0 <= val <= 10.0:
                 updated["min_rr"] = val
+        except (ValueError, TypeError):
+            pass
+
+    if "entry_min_score" in changes:
+        try:
+            val = int(changes["entry_min_score"])
+            if 50 <= val <= 90:
+                updated["entry_min_score"] = val
+                from src.core.runtime_control import get_candidate_policy, set_candidate_policy
+                policy = get_candidate_policy()
+                set_candidate_policy(
+                    observe_min_score=min(policy["observe_min_score"], val),
+                    batch_min_score=val,
+                    immediate_min_score=val,
+                )
         except (ValueError, TypeError):
             pass
 
@@ -365,9 +405,17 @@ def _sync_to_global_settings(cfg: dict[str, Any]) -> None:
         if "max_daily_loss_pct" in cfg:
             settings.risk.max_daily_loss_pct = cfg["max_daily_loss_pct"]
         if "max_open_positions" in cfg:
-            settings.risk.max_trades_per_day = cfg["max_open_positions"]
+            settings.risk.max_concurrent_positions = cfg["max_open_positions"]
+        if "max_consecutive_losses" in cfg:
+            settings.risk.max_consecutive_losses = cfg["max_consecutive_losses"]
+        if "emergency_stop_loss_pct" in cfg:
+            settings.risk.emergency_stop_loss_pct = cfg["emergency_stop_loss_pct"]
+        if "news_filter_enabled" in cfg:
+            settings.risk.news_filter_enabled = cfg["news_filter_enabled"]
         if "min_rr" in cfg:
             settings.risk.min_rr = cfg["min_rr"]
+        if "entry_min_score" in cfg:
+            settings.ai.min_combined_score = cfg["entry_min_score"]
         if "paper_initial_balance" in cfg:
             settings.paper_initial_balance = cfg["paper_initial_balance"]
     except Exception as exc:

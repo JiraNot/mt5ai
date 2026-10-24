@@ -35,7 +35,7 @@ class LimitChecker:
         Run all limit checks. Returns (approved, rejection_reason).
         """
         from src.core.runtime_control import get_runtime_trading_mode
-        is_paper = get_runtime_trading_mode() == "paper"
+        is_paper = get_runtime_trading_mode(settings.trading_mode) == "paper"
 
         checks = [
             await self.check_daily_loss(balance),
@@ -116,9 +116,10 @@ class LimitChecker:
         return True, None
 
     def check_max_open_positions(
-        self, open_positions_count: int, max_open: int = 10
+        self, open_positions_count: int
     ) -> tuple[bool, str | None]:
         """Check concurrent open positions limit."""
+        max_open = settings.risk.max_concurrent_positions
         if open_positions_count >= max_open:
             return False, f"Max concurrent open positions reached: {open_positions_count} >= {max_open}"
         return True, None

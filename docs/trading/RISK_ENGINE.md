@@ -139,6 +139,8 @@ System still:
 ## Position Size Calculation
 
 ```python
+from math import floor
+
 def calculate_position_size(
     balance: float,
     risk_percent: float,
@@ -162,11 +164,23 @@ def calculate_position_size(
     # Calculate position size
     volume = risk_amount / (sl_distance * pip_value * symbol_info.contract_size)
 
-    # Round to volume step
-    volume = round(volume / symbol_info.volume_step) * symbol_info.volume_step
+    # Floor to volume step so broker rounding cannot exceed the risk budget.
+    volume = floor(volume / symbol_info.volume_step) * symbol_info.volume_step
 
-    # Clamp to min/max
-    volume = max(symbol_info.min_volume, min(symbol_info.max_volume, volume))
+    # Reject if the broker minimum would exceed the risk budget; otherwise cap max.
+    if volume < symbol_info.min_volume:
+        minimum_risk = symbol_info.min_volume * sl_distance * symbol_info.contract_size
+        if minimum_risk > risk_amount:
+            return 0.0
+        volume = symbol_info.min_volume
+    volume = min(symbol_info.max_volume, volume)
 
     return volume
 ```
+
+## Binance DEMO Limits
+
+- Runtime `entry_min_score` controls candidate triage, AI Council, and Risk Engine confidence together. DEMO can use 50–90; the Risk Engine remains the final authority.
+- `max_open_positions` maps to concurrent open positions and does not change `max_trades_per_day`.
+- Binance order quantity is additionally capped by available Testnet margin, configured leverage, and the selected margin-utilization ceiling. Quantity is floored to the exchange market-lot step.
+- Runtime volume and RSI switches are read by CHoCH+OB and Breakout Retest momentum confirmation. Disabling them removes only those optional confirmations; it does not bypass stop, RR, daily loss, exposure, or position limits.

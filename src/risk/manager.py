@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal, ROUND_DOWN
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,7 +123,7 @@ class RiskEngine:
             is_safe = BinanceGateway.is_stop_loss_safe_from_liquidation(
                 entry_price=candidate.entry_price,
                 stop_loss=candidate.stop_loss,
-                leverage=10,
+                leverage=settings.risk.leverage,
                 direction=candidate.direction,
                 buffer_ratio=0.85,
             )
@@ -140,6 +141,14 @@ class RiskEngine:
             candidate=candidate,
             balance=account_balance,
         )
+        if position_size <= 0:
+            return self._reject(
+                candidate,
+                "Minimum broker quantity would exceed the configured risk budget",
+                account_balance,
+                open_positions_count,
+                total_exposure,
+            )
 
         risk_amount = account_balance * settings.risk.risk_per_trade_pct
         risk_pct = settings.risk.risk_per_trade_pct
@@ -179,29 +188,31 @@ class RiskEngine:
 
         For XAUUSD: contract_size = 100, pip_value = 0.1
         """
-        risk_amount = balance * settings.risk.risk_per_trade_pct
-        sl_distance = abs(candidate.entry_price - candidate.stop_loss)
+        risk_amount = Decimal(str(balance * settings.risk.risk_per_trade_pct))
+        sl_distance = Decimal(str(abs(candidate.entry_price - candidate.stop_loss)))
 
-        if sl_distance <= 0:
+        if sl_distance <= 0 or risk_amount <= 0:
             return 0.0
 
         # For XAUUSD: 1 lot = 100 oz, each $1 move = $100
         # volume (lots) = risk_amount / (sl_distance * contract_size)
         symbol_config = settings.symbols.get(candidate.symbol)
-        contract_size = symbol_config.contract_size if symbol_config else 100
+        contract_size = Decimal(str(symbol_config.contract_size if symbol_config else 100))
+        volume_step = Decimal(str(symbol_config.volume_step if symbol_config else 0.01))
+        min_vol = Decimal(str(symbol_config.min_volume if symbol_config else 0.01))
+        max_vol = Decimal(str(symbol_config.max_volume if symbol_config else 100.0))
 
-        volume = risk_amount / (sl_distance * contract_size)
-
-        # Round to volume step
-        volume_step = symbol_config.volume_step if symbol_config else 0.01
-        volume = round(volume / volume_step) * volume_step
-
-        # Clamp to min/max
-        min_vol = symbol_config.min_volume if symbol_config else 0.01
-        max_vol = symbol_config.max_volume if symbol_config else 100.0
-        volume = max(min_vol, min(max_vol, volume))
-
-        return round(volume, 2)
+        # Floor to the broker's quantity step. Rounding BTC's 0.001 step to two
+        # decimals silently turned valid $1-risk sizes into zero-sized orders.
+        raw_volume = risk_amount / (sl_distance * contract_size)
+        volume = (raw_volume / volume_step).to_integral_value(rounding=ROUND_DOWN) * volume_step
+        if volume < min_vol:
+            minimum_risk = min_vol * sl_distance * contract_size
+            if minimum_risk > risk_amount:
+                return 0.0
+            volume = min_vol
+        volume = min(volume, max_vol)
+        return float(volume)
 
     def _reject(
         self,

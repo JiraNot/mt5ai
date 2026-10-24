@@ -192,4 +192,7 @@
 - [x] Binance WebSocket market data with reconnect and server-time sync
 - [x] Binance Futures Testnet signed orders with server-side SL/TP
 - [x] Restart reconciliation, duplicate-order protection, partial-fill status
+- [x] Current `/fapi/v1/algoOrder` protective-order routing, Testnet-only host guard, risk-sized exchange quantity, isolated margin, and configured leverage (2026-10-24)
+- [x] DEMO missing/invalid credentials remain visible and fail closed; no silent Paper fallback (2026-10-24)
+- [ ] Observe an automated Testnet market fill with active broker-side SL before marking DEMO acceptance complete
 - [ ] Production DEMO rollout after acceptance tests

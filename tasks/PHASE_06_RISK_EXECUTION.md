@@ -40,7 +40,7 @@
 
 - [ ] Risk-based position sizing
 - [ ] Symbol specification
-- [ ] Lot step validation
+- [x] Lot step validation against Binance market filters; floor quantity without exceeding risk budget
 
 **Acceptance:**
 - Position size correct
@@ -143,6 +143,17 @@
 | 0607 | ✅ Done | |
 | 0610 | ✅ Done | |
 | 0611 | ✅ Done | |
-| 0612 | ⚠️ Partial | |
+| 0612 | ⚠️ Partial | Testnet safeguards implemented; end-to-end fill still needs confirmation |
 | 0613 | ✅ Done | |
 | 0620 | ✅ Done | |
+
+## Binance Testnet Hardening (2026-10-24)
+
+- [x] Route conditional SL/TP through Binance `/fapi/v1/algoOrder`.
+- [x] Validate supported symbol, One-way mode, Testnet host, exchange tick/lot rules, and available margin.
+- [x] Install Isolated margin and configured leverage before a new entry.
+- [x] Flatten immediately if server-side SL placement fails; keep DEMO execution fail-closed.
+- [x] Implement reduce-only position close and replace-first server-side stop modification.
+- [ ] Confirm one automated Testnet fill and broker-side SL through the deployed worker.
+
+Task 0612 remains partial until the Testnet fill and protection are observed in the deployment.

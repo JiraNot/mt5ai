@@ -104,6 +104,12 @@ class TradeFilter:
 
     def check_news(self, dt: datetime | None = None) -> tuple[bool, str | None]:
         """Check if trading is blocked by a high-impact economic news window."""
+        try:
+            from src.core.runtime_settings import get_runtime_settings
+            if not bool(get_runtime_settings(mask_secrets=False).get("news_filter_enabled", True)):
+                return True, None
+        except Exception:
+            pass
         res = self._news_filter.check_news_window(dt)
         if res.is_blocked:
             return False, res.reason
@@ -119,7 +125,7 @@ class TradeFilter:
         """Run all filters. Returns first failure or (True, None)."""
         is_crypto = candidate.symbol.upper().endswith(("USDT", "BUSD", "USDC", "BTC", "ETH"))
         from src.core.runtime_control import get_runtime_trading_mode
-        is_paper = get_runtime_trading_mode() == "paper"
+        is_paper = get_runtime_trading_mode(settings.trading_mode) == "paper"
 
         filters = [
             self.check_rr(candidate),
