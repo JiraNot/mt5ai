@@ -30,7 +30,7 @@ Candidate review policy is persisted in `/app/data/runtime_control.json`:
   "observe_min_score": 0,
   "batch_min_score": 55,
   "immediate_min_score": 70,
-  "max_immediate_per_bar": 3,
+  "max_immediate_per_bar": 4,
   "summary_window": 25
 }
 ```
