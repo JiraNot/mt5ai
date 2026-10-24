@@ -32,7 +32,10 @@ def update_runtime_status(**fields: Any) -> None:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             pass
         current.update(fields)
-        current["updated_at"] = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        current["updated_at"] = now
+        if "last_decision" in fields:
+            current["last_decision_at"] = now
         fd, temporary_name = tempfile.mkstemp(prefix="runtime_status.", dir=path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:

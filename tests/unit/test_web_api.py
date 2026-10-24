@@ -31,6 +31,13 @@ def test_api_status(client):
     assert "mode" in data
     assert "venue" in data
     assert "account" in data
+    for field in (
+        "execution_mode", "worker_state", "cycle_count", "cycle_errors",
+        "candidate_count", "last_candidate", "last_candidate_symbol",
+        "last_candidate_score", "last_decision", "last_decision_at",
+        "last_reason", "last_error",
+    ):
+        assert field in data
 
 
 def test_api_watchlist(client):
@@ -78,6 +85,8 @@ def test_api_council_latest(client):
     assert "latest" in data
     assert "decision" in data["latest"]
     assert "score" in data["latest"]
+    assert data["latest"]["vision_verdict"] is None
+    assert "timestamp" in data["latest"]
 
 
 def test_api_history(client):
@@ -124,6 +133,12 @@ def test_api_pro_metrics(client):
     assert "calendar_days" in data
     assert len(data["calendar_days"]) == 31
     assert "execution_quality" in data
+    assert data["execution_quality"]["avg_latency_ms"] is None
+    assert data["execution_quality"]["slip_over_3_pct"] is None
+    assert data["execution_quality"]["total_fills"] is None
+    assert all(leg["fills"] is None for leg in data["execution_quality"]["legs"])
+    assert data["execution_quality"]["hourly_distribution"] == []
+    assert data["equity_summary"]["lost_to_slip"] is None
     assert "equity_summary" in data
     assert "guards" in data
 

@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   TrendingUp,
   Shield,
-  Clock,
-  Radio,
   Zap,
   CheckCircle2,
   AlertTriangle,
@@ -12,10 +10,7 @@ import {
   Calendar,
   Activity,
   ArrowUpRight,
-  ArrowDownRight,
   Sliders,
-  DollarSign,
-  Maximize2
 } from 'lucide-react';
 import {
   fetchProMetrics,
@@ -26,17 +21,25 @@ import {
   ExecutionQualityLeg,
   HourlySlipDistribution,
   LiveGuardItem,
+  PositionItem,
   simulatePaperTrade
 } from '../services/api';
+import { StatusResponse } from '../services/api';
 
 interface ProAnalyticsDashboardProps {
   symbol: string;
+  status: StatusResponse | null;
+  positions: PositionItem[];
+  positionsLoaded: boolean;
   onSelectSymbol?: (symbol: string) => void;
   onSwitchToChart?: () => void;
 }
 
 export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
   symbol,
+  status,
+  positions,
+  positionsLoaded,
   onSelectSymbol,
   onSwitchToChart,
 }) => {
@@ -121,6 +124,34 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
   const exec = data?.execution_quality;
   const eqSum = data?.equity_summary;
   const guards = data?.guards || [];
+  const recordedTradeLegs = legs.filter((leg: StrategyLegItem) => leg.trades_count > 0).length;
+  const decisionLabels: Record<string, string> = {
+    NO_CANDIDATE: 'NO SETUP',
+    AI_SKIP: 'AI SCORE FILTERED',
+    COUNCIL_SKIP: 'AI COUNCIL SKIPPED',
+    RISK_REJECTED: 'RISK ENGINE REJECTED',
+    ORDER_FAILED: 'ORDER FAILED',
+    TRADE_EXECUTED: 'TRADE EXECUTED',
+    RISK_APPROVED: 'RISK APPROVED',
+    RECORDED_CANDIDATE: 'RECORDED CANDIDATE',
+    NO_RECENT_DECISION: 'NO RECENT DECISION',
+  };
+  const decisionLabel = status?.last_decision
+    ? decisionLabels[status.last_decision] ?? status.last_decision.replace(/_/g, ' ')
+    : 'NO WORKER DECISION';
+  const decisionDetail = status?.last_reason || status?.last_error || 'No pipeline result has been recorded yet.';
+  const decisionTime = status?.last_decision_at
+    ? new Date(status.last_decision_at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })
+    : 'not recorded';
+  const workerRunning = status?.worker_state?.toLowerCase() === 'running';
+  const systemHealthy = workerRunning && !!status?.binance_connected;
+  const liveStateLabel = status
+    ? status.is_live_armed ? 'LIVE ARMED' : 'LIVE DISARMED'
+    : 'LIVE STATE UNKNOWN';
+  const calendarMonthLabel = calSum?.month_name ?? new Date().toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
 
   // SVG dimensions for equity curve
   const curvePoints = eqSum?.curve || [];
@@ -171,7 +202,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         {/* Left: Branding & Core Market State */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span className={`w-2 h-2 rounded-full ${systemHealthy ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`} />
             <span className="font-mono font-bold tracking-wider text-white text-xs">
               APEXTRADER <span className="text-brand-gold">AI PRO v0.10</span>
             </span>
@@ -182,47 +213,11 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
           {/* Symbol Pill */}
           <div className="flex items-center space-x-1.5 bg-[#121a30] border border-[#223154] px-2.5 py-0.5 rounded-full font-mono text-[11px]">
             <span className="font-bold text-amber-400">{symbol}</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-slate-300">H1 SMC</span>
-          </div>
-
-          {/* Regime */}
-          <div className="hidden md:flex items-center space-x-1.5 text-[11px] font-mono">
-            <span className="text-slate-400">REGIME:</span>
-            <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.2 rounded font-bold">
-              SMC RUN (78.4)
-            </span>
-          </div>
-
-          {/* S/R Range */}
-          <div className="hidden lg:flex items-center space-x-1 text-[11px] font-mono text-slate-400">
-            <span>RANGE:</span>
-            <span className="text-slate-200 font-semibold">S/R 67,420 - 68,950</span>
-          </div>
-
-          {/* Spread */}
-          <div className="hidden xl:flex items-center space-x-1 text-[11px] font-mono">
-            <span className="text-slate-400">SPREAD:</span>
-            <span className="text-emerald-400 font-semibold">0.02</span>
-            <span className="text-slate-500">(avg 0.03)</span>
-          </div>
-
-          {/* Latency */}
-          <div className="hidden sm:flex items-center space-x-1 text-[11px] font-mono text-slate-400">
-            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
-            <span className="text-cyan-300 font-semibold">28ms</span>
           </div>
         </div>
 
-        {/* Right: Macro Countdown, Clocks & Action buttons */}
+        {/* Right: Real clocks and dashboard actions */}
         <div className="flex items-center space-x-3 text-[11px] font-mono">
-          {/* Macro news countdown */}
-          <div className="flex items-center space-x-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2.5 py-0.5 rounded">
-            <Clock className="w-3 h-3 text-amber-400" />
-            <span className="font-bold">US CPI in 2h 14m</span>
-            <span className="text-[10px] text-amber-400/80">(blackout 15m)</span>
-          </div>
-
           {/* Clocks */}
           <div className="hidden md:flex items-center space-x-2 text-slate-400">
             <span>UTC <strong className="text-slate-200">{clocks.utc}</strong></span>
@@ -253,17 +248,37 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         </div>
       </div>
 
+      {/* Live worker and decision telemetry */}
+      <div className="mx-3.5 mt-2 rounded-lg border border-[#18233c] bg-[#0b101f] px-3 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] font-mono">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${workerRunning ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+            WORKER <strong className={workerRunning ? 'text-emerald-400' : 'text-rose-300'}>{status?.worker_state?.toUpperCase() ?? 'UNKNOWN'}</strong>
+          </span>
+          <span>MARKET DATA <strong className={status?.binance_connected ? 'text-emerald-400' : 'text-rose-300'}>{status?.binance_connected ? 'CONNECTED' : 'DISCONNECTED'}</strong></span>
+          <span>EXECUTION <strong className="text-slate-200">{status?.execution_mode?.toUpperCase() ?? 'UNKNOWN'}</strong></span>
+          <span>CYCLES <strong className="text-slate-200">{status?.cycle_count ?? 0}</strong></span>
+          <span>CANDIDATES <strong className="text-slate-200">{status?.candidate_count ?? 0}</strong></span>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-slate-300">
+          <span className="text-brand-gold font-bold">{decisionLabel}</span>
+          {status?.last_candidate && <span>{status.last_candidate_symbol} · {status.last_candidate}</span>}
+          <span className="break-all">{decisionDetail}</span>
+          <span className="text-slate-500">{decisionTime}</span>
+        </div>
+      </div>
+
       {/* 2. EXECUTIVE 6 FINANCIAL CARDS (Institutional Capital Strip) */}
       <div className="p-3.5 pb-2 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
         {/* Card 1: Balance */}
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Balance</div>
           <div className="text-base sm:text-lg font-mono font-bold text-white mt-0.5">
-            ${fin?.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100.00'}
+            {fin ? `$${fin.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
           </div>
           <div className="text-[10px] font-mono text-emerald-400 flex items-center space-x-0.5 mt-0.5">
             <ArrowUpRight className="w-3 h-3" />
-            <span>+${((fin?.balance ?? 100) - (fin?.deposit ?? 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })} all-time</span>
+            <span>{fin ? `+$${(fin.balance - fin.deposit).toLocaleString(undefined, { minimumFractionDigits: 2 })} all-time` : '—'}</span>
           </div>
         </div>
 
@@ -271,12 +286,12 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Equity</div>
           <div className="text-base sm:text-lg font-mono font-bold text-cyan-300 mt-0.5">
-            ${fin?.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '100.00'}
+            {fin ? `$${fin.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
           </div>
           <div className="text-[10px] font-mono text-cyan-400 flex items-center space-x-1 mt-0.5">
-            <span>Float {(fin?.floating_pnl ?? 0) >= 0 ? '+' : ''}${fin?.floating_pnl.toFixed(2) ?? '0.00'}</span>
+            <span>{fin ? `Float ${fin.floating_pnl >= 0 ? '+' : ''}$${fin.floating_pnl.toFixed(2)}` : 'Float —'}</span>
             <span className="text-slate-600">•</span>
-            <span className="text-emerald-400">{fin?.today_trades ? `${fin.today_trades} trade` : 'idle'}</span>
+            <span className="text-emerald-400">{fin ? (fin.today_trades ? `${fin.today_trades} trade` : '0 trades') : '—'}</span>
           </div>
         </div>
 
@@ -284,10 +299,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Today</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            {(fin?.today_pnl ?? 0) >= 0 ? '+' : ''}${fin?.today_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
+            {fin ? `${fin.today_pnl >= 0 ? '+' : '-'}$${Math.abs(fin.today_pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.today_won ?? 0} / {fin?.today_trades ?? 0} won • <span className="text-emerald-400 font-semibold">{fin?.today_trades ? ((fin.today_won / fin.today_trades) * 100).toFixed(1) : '0.0'}%</span>
+            {fin ? <>{fin.today_won} / {fin.today_trades} won • <span className="text-emerald-400 font-semibold">{fin.today_trades ? ((fin.today_won / fin.today_trades) * 100).toFixed(1) : '0.0'}%</span></> : '—'}
           </div>
         </div>
 
@@ -295,10 +310,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">This Week</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            {(fin?.week_pnl ?? 0) >= 0 ? '+' : ''}${fin?.week_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
+            {fin ? `${fin.week_pnl >= 0 ? '+' : '-'}$${Math.abs(fin.week_pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.week_trades ?? 0} trades
+            {fin ? `${fin.week_trades} trades` : '—'}
           </div>
         </div>
 
@@ -306,10 +321,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">This Month</div>
           <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 mt-0.5">
-            {(fin?.month_pnl ?? 0) >= 0 ? '+' : ''}${fin?.month_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
+            {fin ? `${fin.month_pnl >= 0 ? '+' : '-'}$${Math.abs(fin.month_pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            {fin?.month_trading_days ?? 0} active days
+            {fin ? `${fin.month_trading_days} active days` : '—'}
           </div>
         </div>
 
@@ -317,10 +332,10 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
         <div className="bg-[#0b101f] border border-[#18233c] hover:border-[#28385e] rounded-lg p-3 transition-colors">
           <div className="text-[10px] font-mono font-semibold tracking-wider text-slate-400 uppercase">Return / Drawdown</div>
           <div className="text-base sm:text-lg font-mono font-bold text-brand-gold mt-0.5">
-            {(fin?.return_pct ?? 0) >= 0 ? '+' : ''}{fin?.return_pct ?? 0.0}%
+            {fin ? `${fin.return_pct >= 0 ? '+' : ''}${fin.return_pct}%` : '—'}
           </div>
           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-            PF <strong className="text-slate-200">{fin?.profit_factor ?? 0.0}</strong> • DD <strong className="text-amber-400">{fin?.drawdown_now_pct ?? 0.0}%</strong> <span className="text-[9px] text-slate-500">(max {fin?.drawdown_max_pct ?? 0.0}%)</span>
+            {fin ? <>PF <strong className="text-slate-200">{fin.profit_factor}</strong> • DD <strong className="text-amber-400">{fin.drawdown_now_pct}%</strong> <span className="text-[9px] text-slate-500">(max {fin.drawdown_max_pct}%)</span></> : '—'}
           </div>
         </div>
       </div>
@@ -335,11 +350,11 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                 STRATEGY LEGS ARCHITECTURE & CONFLUENCE
               </span>
               <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
-                (Deterministic 4-Leg Execution with Tick Visualizer)
+                (Historical trade outcomes by strategy)
               </span>
             </div>
             <div className="text-[11px] font-mono text-slate-400">
-              Active Strategy Engine: <span className="text-emerald-400 font-bold">4 / 4 ONLINE</span>
+              Closed trade history: <span className="text-slate-200 font-bold">{recordedTradeLegs} / {legs.length} strategies</span>
             </div>
           </div>
 
@@ -378,6 +393,8 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                             ? 'bg-sky-500/15 border border-sky-500/40 text-sky-400'
                             : leg.status_color === 'purple'
                             ? 'bg-purple-500/15 border border-purple-500/40 text-purple-300'
+                            : leg.status_color === 'slate'
+                            ? 'bg-slate-500/10 border border-slate-500/30 text-slate-400'
                             : 'bg-amber-500/15 border border-amber-500/40 text-amber-400'
                         }`}
                       >
@@ -479,20 +496,20 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
               <div className="flex items-center space-x-2">
                 <Calendar className="w-3.5 h-3.5 text-brand-gold" />
                 <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
-                  DAILY P/L CALENDAR ({calSum?.month_name ?? 'October 2026'})
+                  DAILY P/L CALENDAR ({calendarMonthLabel})
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-[11px] font-mono">
                 <span className="text-slate-400">
-                  Green Days: <strong className="text-emerald-400">{calSum?.green_days ?? 11}</strong> / {calSum?.total_active_days ?? 14} ({(((calSum?.green_days ?? 11) / (calSum?.total_active_days || 1)) * 100).toFixed(1)}%)
+                  Green Days: <strong className="text-emerald-400">{calSum?.green_days ?? 0}</strong> / {calSum?.total_active_days ?? 0} ({(((calSum?.green_days ?? 0) / (calSum?.total_active_days || 1)) * 100).toFixed(1)}%)
                 </span>
                 <span className="text-slate-600 hidden sm:inline">•</span>
                 <span className="text-slate-400 hidden sm:inline">
-                  Best: <strong className="text-emerald-400">+${calSum?.best_day ?? 62.61}</strong>
+                  Best: <strong className="text-emerald-400">+${calSum?.best_day ?? 0}</strong>
                 </span>
                 <span className="text-slate-600 hidden sm:inline">•</span>
                 <span className="text-slate-400 hidden sm:inline">
-                  Worst: <strong className="text-rose-400">-${Math.abs(calSum?.worst_day ?? 83.24)}</strong>
+                  Worst: <strong className="text-rose-400">-${Math.abs(calSum?.worst_day ?? 0)}</strong>
                 </span>
               </div>
             </div>
@@ -596,15 +613,15 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                 <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
                   EXECUTION QUALITY & SLIPPAGE FRICTION
                 </span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/40">
-                  {exec?.broker_grade ?? 'GRADE A+'}
+                <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-500/10 text-slate-300 font-mono font-bold border border-slate-500/30">
+                  {exec?.broker_grade ?? 'NOT TRACKED'}
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400">
-                <span>Median: <strong className="text-slate-200">{exec?.median_slip ?? '+0.41'} pt</strong></span>
-                <span>P90: <strong className="text-slate-200">{exec?.p90_slip ?? '+2.06'} pt</strong></span>
-                <span>Slip &gt; 3pt: <strong className="text-amber-400">{exec?.slip_over_3_pct ?? 3.8}%</strong></span>
-                <span>Latency: <strong className="text-cyan-400">{exec?.avg_latency_ms ?? 185}ms</strong></span>
+                <span>Median: <strong className="text-slate-200">{exec?.median_slip ?? '—'} pt</strong></span>
+                <span>P90: <strong className="text-slate-200">{exec?.p90_slip ?? '—'} pt</strong></span>
+                <span>Slip &gt; 3pt: <strong className="text-amber-400">{exec?.slip_over_3_pct ?? '—'}{exec?.slip_over_3_pct == null ? '' : '%'}</strong></span>
+                <span>Latency: <strong className="text-cyan-400">{exec?.avg_latency_ms ?? '—'}{exec?.avg_latency_ms == null ? '' : 'ms'}</strong></span>
               </div>
             </div>
 
@@ -628,23 +645,25 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                   {exec?.legs.map((l: ExecutionQualityLeg) => (
                     <tr key={l.leg} className={`hover:bg-[#111930] transition-colors ${l.leg === 'All' ? 'bg-[#121c38] font-bold border-t border-[#203056]' : ''}`}>
                       <td className="py-2 px-3 text-amber-400 font-bold">{l.leg}</td>
-                      <td className="py-2 px-3 text-center text-slate-300">{l.fills}</td>
+                      <td className="py-2 px-3 text-center text-slate-300">{l.fills ?? '—'}</td>
                       <td className="py-2 px-3 text-right text-slate-200">{l.entry_med} pt</td>
                       <td className="py-2 px-3 text-right text-slate-300">{l.entry_p90} pt</td>
                       <td className="py-2 px-3 text-right text-slate-300">{l.exit_med} pt</td>
                       <td className="py-2 px-3 text-right text-rose-400">{l.worst} pt</td>
-                      <td className="py-2 px-3 text-center text-cyan-300">{l.latency}ms</td>
-                      <td className="py-2 px-3 text-right text-rose-400">${l.slip_cost}</td>
+                      <td className="py-2 px-3 text-center text-cyan-300">{l.latency == null ? '—' : `${l.latency}ms`}</td>
+                      <td className="py-2 px-3 text-right text-rose-400">{l.slip_cost == null ? '—' : `$${l.slip_cost}`}</td>
                       <td className="py-2 px-3">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-20 bg-dark-800 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className="bg-amber-400 h-full rounded-full"
-                              style={{ width: `${Math.min(l.slip_vs_edge, 100)}%` }}
-                            />
+                        {l.slip_vs_edge == null ? '—' : (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-20 bg-dark-800 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-amber-400 h-full rounded-full"
+                                style={{ width: `${Math.min(l.slip_vs_edge, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-400">{l.slip_vs_edge}% edge</span>
                           </div>
-                          <span className="text-[10px] text-slate-400">{l.slip_vs_edge}% edge</span>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -653,12 +672,13 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
             </div>
 
             {/* Hourly slippage bar chart */}
-            <div className="p-3 bg-[#090e1c] border-t border-[#18233c] flex items-center justify-between">
+            <div className="p-3 bg-[#090e1c] border-t border-[#18233c] flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] font-mono text-slate-400 uppercase font-semibold">
                 Hourly Slippage Distribution (UTC):
               </span>
-              <div className="flex items-center space-x-2.5">
-                {exec?.hourly_distribution.map((h: HourlySlipDistribution) => (
+              {exec?.hourly_distribution.length ? (
+                <div className="flex items-center space-x-2.5">
+                  {exec.hourly_distribution.map((h: HourlySlipDistribution) => (
                   <div key={h.hour} className="flex flex-col items-center space-y-1">
                     <div
                       className={`w-3.5 rounded-2xs ${
@@ -669,8 +689,11 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                     />
                     <span className="text-[9px] font-mono text-slate-500">{h.hour}h</span>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[10px] text-slate-500 font-mono">No slippage samples recorded</span>
+              )}
             </div>
           </div>
         </div>
@@ -684,7 +707,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
                 <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
-                  REALIZED EQUITY VS GROSS EDGE
+                  REALIZED EQUITY VS GROSS P&L
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-[10px] font-mono">
@@ -694,7 +717,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                 </div>
                 <div className="flex items-center space-x-1">
                   <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="text-amber-300 font-semibold">Edge (No Slip)</span>
+                  <span className="text-amber-300 font-semibold">Gross P&amp;L</span>
                 </div>
               </div>
             </div>
@@ -704,31 +727,36 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
               <div>
                 <div className="text-[9px] text-slate-500 uppercase">Closed P&L</div>
                 <div className="text-xs font-bold text-emerald-400">
-                  +${eqSum?.closed_pnl.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '3,520.00'}
+                  {eqSum ? `${eqSum.closed_pnl >= 0 ? '+' : '-'}$${Math.abs(eqSum.closed_pnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                 </div>
               </div>
               <div>
-                <div className="text-[9px] text-slate-500 uppercase">Lost to Slip</div>
+                <div className="text-[9px] text-slate-500 uppercase">Slippage Cost</div>
                 <div className="text-xs font-bold text-rose-400">
-                  ${eqSum?.lost_to_slip.toFixed(2) ?? '-211.00'}
+                  {eqSum?.lost_to_slip == null ? '—' : `$${eqSum.lost_to_slip.toFixed(2)}`}
                 </div>
               </div>
               <div>
                 <div className="text-[9px] text-slate-500 uppercase">Peak</div>
                 <div className="text-xs font-bold text-white">
-                  ${eqSum?.peak.toLocaleString(undefined, { minimumFractionDigits: 0 }) ?? '104,715'}
+                  {eqSum ? `$${eqSum.peak.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                 </div>
               </div>
               <div>
                 <div className="text-[9px] text-slate-500 uppercase">From Peak</div>
                 <div className="text-xs font-bold text-emerald-400">
-                  {eqSum?.from_peak ?? -0.01}%
+                  {eqSum ? `${eqSum.from_peak >= 0 ? '+' : ''}${eqSum.from_peak}%` : '—'}
                 </div>
               </div>
             </div>
 
             {/* SVG Interactive Dual Line Chart */}
             <div className="p-2 relative flex items-center justify-center bg-[#070c18]">
+              {curvePoints.length === 0 ? (
+                <div className="w-full h-40 flex items-center justify-center text-xs font-mono text-slate-500">
+                  No equity history available
+                </div>
+              ) : (
               <svg
                 viewBox={`0 0 ${svgWidth} ${svgHeight}`}
                 className="w-full h-auto overflow-visible"
@@ -813,6 +841,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                   );
                 })}
               </svg>
+              )}
 
               {/* Hover Tooltip Overlay */}
               {hoveredPoint && (
@@ -827,7 +856,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                     Gross Edge: ${hoveredPoint.edge.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-rose-400 text-[9px] mt-0.5">
-                    Slippage Friction: -${(hoveredPoint.edge - hoveredPoint.actual).toFixed(2)}
+                    Gross-to-Net Difference: ${(hoveredPoint.edge - hoveredPoint.actual).toFixed(2)}
                   </div>
                 </div>
               )}
@@ -840,11 +869,15 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
               <div className="flex items-center space-x-2">
                 <Shield className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
-                  LIVE SAFETY CIRCUIT BREAKERS & GUARDS
+                  SYSTEM & RISK GUARDS
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
-                FAIL-CLOSED ARMED
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${
+                !status ? 'text-slate-400 bg-slate-500/10 border-slate-500/30' : status.is_live_armed
+                  ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+                  : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+              }`}>
+                {liveStateLabel}
               </span>
             </div>
 
@@ -879,7 +912,7 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
           <div className="bg-[#0b101f] border border-[#18233c] rounded-lg overflow-hidden">
             <div className="px-3.5 py-2 border-b border-[#18233c] flex items-center justify-between">
               <span className="font-mono font-bold text-xs text-white uppercase tracking-wider">
-                ACTIVE POSITION TELEMETRY
+                OPEN POSITIONS
               </span>
               <button
                 onClick={handleSimulateTrade}
@@ -891,20 +924,33 @@ export const ProAnalyticsDashboard: React.FC<ProAnalyticsDashboardProps> = ({
                 <span>{simulating ? 'กำลังส่งคำสั่ง...' : '+ ซ้อมเปิดไม้จำลอง'}</span>
               </button>
             </div>
-            <div className="p-3 font-mono text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-[#141e33]">
-                <div className="flex items-center space-x-2">
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-bold">BUY</span>
-                  <span className="text-white font-bold">{symbol}</span>
-                  <span className="text-slate-400 text-[10px]">0.15 BTC</span>
+            <div className="p-3 font-mono text-xs space-y-2">
+              {!positionsLoaded ? (
+                <div className="text-slate-500">Position data unavailable</div>
+              ) : positions.length === 0 ? (
+                <div className="text-slate-500">No open positions returned by the API</div>
+              ) : positions.map((position: PositionItem) => (
+                <div key={position.ticket} className="py-1.5 border-b border-[#141e33] last:border-0">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${position.direction === 'BUY' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                        {position.direction}
+                      </span>
+                      <span className="text-white font-bold">{position.symbol}</span>
+                      <span className="text-slate-400 text-[10px]">{position.volume.toLocaleString()} units</span>
+                    </div>
+                    <div className={`font-bold ${position.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {position.profit >= 0 ? '+' : '-'}${Math.abs(position.profit).toFixed(2)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct.toFixed(2)}%)
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[10px] text-slate-400">
+                    <div>Entry: <strong className="text-slate-200">{position.open_price.toLocaleString()}</strong></div>
+                    <div>Mark: <strong className="text-slate-200">{position.current_price.toLocaleString()}</strong></div>
+                    <div>SL: <strong className="text-rose-400">{position.sl > 0 ? position.sl.toLocaleString() : '—'}</strong></div>
+                    <div>TP: <strong className="text-emerald-400">{position.tp > 0 ? position.tp.toLocaleString() : '—'}</strong></div>
+                  </div>
                 </div>
-                <div className="text-emerald-400 font-bold">+$425.80 (+2.84R)</div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 text-[10px] text-slate-400">
-                <div>Entry: <strong className="text-slate-200">67,150.00</strong></div>
-                <div>SL: <strong className="text-rose-400">66,850.00</strong></div>
-                <div>TP: <strong className="text-emerald-400">68,450.00</strong></div>
-              </div>
+              ))}
             </div>
           </div>
         </div>

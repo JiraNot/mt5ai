@@ -1,13 +1,7 @@
-"""Institutional Pro Analytics & Performance Service.
+"""Build the Pro Desk dashboard from journaled trades and runtime status.
 
-Powers the high-density hedge fund / prop desk dashboard with 100% REAL trade data:
-- Top Telemetry Strip (Regime, S/R Range, Spread, Latency, Macro News, Global Clocks)
-- Executive Financial Cards (Balance, Equity, Today, Week, Month, All-Time Return, Drawdown)
-- Multi-Strategy LEGS Breakdown with Win/Loss Tick Sparklines
-- Daily P/L Calendar Heatmap (Day-by-day PnL tiles with weekly subtotals and Green Days count)
-- Execution Quality & Slippage Analytics (Broker Grade A+, Fill metrics, Slippage cost vs Edge)
-- Dual-Line Equity Curve (Realized Net Equity vs Gross Edge without Slippage)
-- Live Circuit Breakers & Safety Guards Checklist
+Execution quality fields that are not recorded by the journal remain unavailable;
+the service does not infer fills, slippage, or latency from trade counts.
 """
 
 from __future__ import annotations
@@ -21,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.config import settings
 from src.core.runtime_settings import get_runtime_settings
+from src.core.runtime_status import read_runtime_status
 from src.storage.models import Trade, get_engine, get_session_factory
 
 logger = logging.getLogger(__name__)
@@ -161,10 +156,10 @@ async def get_pro_dashboard_metrics(symbol: str = "BTCUSDT") -> dict[str, Any]:
             status = f"{len(strat_open)} open"
             status_color = "emerald"
         elif strat_cnt > 0:
-            status = "ready - active"
+            status = "has trade history"
             status_color = "sky"
         else:
-            status = "waiting setup"
+            status = "no trades yet"
             status_color = "slate"
 
         # Last 20 sparkline
@@ -194,11 +189,12 @@ async def get_pro_dashboard_metrics(symbol: str = "BTCUSDT") -> dict[str, Any]:
             "last_20": last_20,
         })
 
+    strategies_with_history = sum(1 for leg in legs if leg["trades_count"] > 0)
     total_row = {
         "leg": "Total",
         "id": "all",
         "name": "Combined Portfolio",
-        "status": f"{open_trades_cnt} active" if open_trades_cnt > 0 else "4 ready",
+        "status": f"{open_trades_cnt} active" if open_trades_cnt > 0 else f"{strategies_with_history}/4 with history",
         "status_color": "gold",
         "today_pnl": today_pnl,
         "month_pnl": month_pnl,
@@ -267,32 +263,30 @@ async def get_pro_dashboard_metrics(symbol: str = "BTCUSDT") -> dict[str, Any]:
         "worst_day_date": next((d["day"] for d in active_days_list if d["pnl"] == worst_d), 0),
     }
 
-    # 4. Execution Quality & Slippage Analytics (Broker & Fill Health)
+    # The journal stores trades, not exchange fill events. Do not estimate fill
+    # counts or execution quality from trade counts.
+    fill_stats_unavailable = {
+        "fills": None, "entry_med": "—", "entry_p90": "—", "exit_med": "—", "worst": "—",
+        "latency": None, "slip_cost": None, "slip_vs_edge": None,
+    }
+
+    # 4. Execution Quality & Slippage Analytics
     execution_quality = {
-        "broker_grade": "A+",
-        "median_slip": "+0.00",
-        "p90_slip": "+0.00",
-        "slip_over_3_pct": 0.0,
-        "avg_latency_ms": 24,
-        "total_fills": len(closed_trades) * 2 + open_trades_cnt,
-        "slip_cost": 0.0,
+        "broker_grade": "NOT TRACKED" if (closed_trades or open_trades) else "NO FILL DATA",
+        "median_slip": "—",
+        "p90_slip": "—",
+        "slip_over_3_pct": None,
+        "avg_latency_ms": None,
+        "total_fills": None,
+        "slip_cost": None,
         "legs": [
-            {"leg": "A", "fills": legs[0]["trades_count"] * 2, "entry_med": "+0.00", "entry_p90": "+0.00", "exit_med": "+0.00", "worst": "+0.00", "latency": 24, "slip_cost": 0, "slip_vs_edge": 0},
-            {"leg": "B", "fills": legs[1]["trades_count"] * 2, "entry_med": "+0.00", "entry_p90": "+0.00", "exit_med": "+0.00", "worst": "+0.00", "latency": 24, "slip_cost": 0, "slip_vs_edge": 0},
-            {"leg": "C", "fills": legs[2]["trades_count"] * 2, "entry_med": "+0.00", "entry_p90": "+0.00", "exit_med": "+0.00", "worst": "+0.00", "latency": 24, "slip_cost": 0, "slip_vs_edge": 0},
-            {"leg": "D", "fills": legs[3]["trades_count"] * 2, "entry_med": "+0.00", "entry_p90": "+0.00", "exit_med": "+0.00", "worst": "+0.00", "latency": 24, "slip_cost": 0, "slip_vs_edge": 0},
-            {"leg": "All", "fills": len(closed_trades) * 2 + open_trades_cnt, "entry_med": "+0.00", "entry_p90": "+0.00", "exit_med": "+0.00", "worst": "+0.00", "latency": 24, "slip_cost": 0, "slip_vs_edge": 0},
+            {"leg": "A", **fill_stats_unavailable},
+            {"leg": "B", **fill_stats_unavailable},
+            {"leg": "C", **fill_stats_unavailable},
+            {"leg": "D", **fill_stats_unavailable},
+            {"leg": "All", **fill_stats_unavailable},
         ],
-        "hourly_distribution": [
-            {"hour": 0, "slip": 0.0, "status": "low"},
-            {"hour": 4, "slip": 0.0, "status": "low"},
-            {"hour": 8, "slip": 0.0, "status": "low"},
-            {"hour": 12, "slip": 0.0, "status": "low"},
-            {"hour": 15, "slip": 0.0, "status": "low"},
-            {"hour": 16, "slip": 0.0, "status": "low"},
-            {"hour": 18, "slip": 0.0, "status": "low"},
-            {"hour": 21, "slip": 0.0, "status": "low"},
-        ]
+        "hourly_distribution": [],
     }
 
     # 5. Dual-Line Equity Curve (Realized Net Equity vs Gross Edge without Slippage)
@@ -323,20 +317,26 @@ async def get_pro_dashboard_metrics(symbol: str = "BTCUSDT") -> dict[str, Any]:
 
     equity_summary = {
         "closed_pnl": total_closed_pnl,
-        "lost_to_slip": 0.0,
+        "lost_to_slip": None,
         "peak": round(peak_eq, 2),
-        "from_peak": round(effective_equity - peak_eq, 2),
+        "from_peak": round((effective_equity - peak_eq) / peak_eq * 100, 2) if peak_eq > 0 else 0.0,
         "curve": curve_data,
     }
 
-    # 6. Active Live Guards (Real-Time Safety Checklist)
+    # 6. Runtime health and safety state
+    runtime = read_runtime_status()
+    worker_state = str(runtime.get("state", "unknown")).lower()
+    worker_errors = int(runtime.get("cycle_errors", 0) or 0)
+    market_connected = bool(runtime.get("binance_connected", False))
+    last_decision = str(runtime.get("last_decision", "not reported"))
+    execution_mode = str(cfg.get("binance_mode", settings.binance_mode)).upper()
     guards = [
-        {"name": "Regime", "value": "SMC RUN", "status": "ok", "desc": "Trend structure active"},
-        {"name": "Macro News", "value": "Continuous Market", "status": "ok", "desc": "Crypto 24/7 liquidity active"},
-        {"name": "Spread", "value": "Paper Protected", "status": "ok", "desc": "Within tolerance threshold"},
-        {"name": "Drawdown", "value": f"{drawdown_now}% < 3.0%", "status": "ok", "desc": "Daily loss circuit breaker disarmed"},
-        {"name": "Venue Hours", "value": "24/7 Futures", "status": "ok", "desc": "Continuous crypto liquidity"},
-        {"name": "Risk Engine", "value": "Fail-Closed & Armed", "status": "ok", "desc": "Final authority on every order"},
+        {"name": "Trading Worker", "value": worker_state.upper(), "status": "ok" if worker_state == "running" else "warning", "desc": f"{runtime.get('cycle_count', 0)} cycles; {worker_errors} cycle errors"},
+        {"name": "Market Data", "value": "Connected" if market_connected else "Disconnected", "status": "ok" if market_connected else "critical", "desc": "Binance gateway connection state"},
+        {"name": "Candidate Funnel", "value": last_decision.replace("_", " "), "status": "ok" if last_decision == "TRADE_EXECUTED" else "warning", "desc": str(runtime.get("last_reason") or f"{runtime.get('candidate_count', 0)} candidates in latest evaluation")},
+        {"name": "Execution Mode", "value": execution_mode, "status": "ok" if execution_mode in {"PAPER", "TESTNET"} else "warning", "desc": "Effective Binance order environment"},
+        {"name": "Journal Drawdown", "value": f"{drawdown_now}% from peak", "status": "warning" if drawdown_now > 0 else "ok", "desc": "Calculated from recorded trade outcomes"},
+        {"name": "Risk Authority", "value": "Risk Engine", "status": "ok", "desc": "Every order must pass the final risk gate"},
     ]
 
     return {

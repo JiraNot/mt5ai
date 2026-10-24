@@ -37,9 +37,10 @@
 - [ ] Next.js production (planned)
 - [x] ตรวจ Tablet ผ่าน Chromium จำลอง 5 ขนาด พร้อม HTTP/WebSocket จำลอง (2026-10-16)
 - [x] เพิ่ม regression checks: web/tests/tablet-ux.cjs
-- [ ] แก้ Header/PANIC ถูกตัดบนจอกว้าง 768/820px
+- [x] แก้ Header/PANIC ถูกตัดบนจอกว้าง 768/820px — ย้ายเมนูเป็น 2 แถวบน Tablet Portrait และย่อเป็นไอคอนบนจอแคบ (2026-10-23)
 - [ ] ขยายปุ่มสัมผัสที่ยังสูง 32–36px ให้ได้อย่างน้อย 44px
-- [ ] ยืนยัน Tablet UX หลังแก้ไข — ผลตรวจและหลักฐาน: docs/testing/TABLET_UX_VERIFICATION.md
+- [x] ยืนยัน Header UX หลังแก้ไขที่ 5 ขนาดจอ — ผลตรวจ: docs/testing/TABLET_UX_VERIFICATION.md (2026-10-23)
+- [x] แสดง worker, execution mode และผล pipeline ล่าสุดพร้อมเวลาตัดสินใจบน Pro Desk (2026-10-23)
 
 **Acceptance:**
 - Dashboard accessible
@@ -118,7 +119,7 @@
 |------|--------|-------|
 | 0801 | ⚠️ Not done | |
 | 0802 | ⚠️ Not done | |
-| 0803 | ✅ Done | Streamlit prototype |
+| 0803 | ✅ Done | Responsive Header และ live pipeline telemetry เพิ่มเติม 2026-10-23 |
 | 0804 | ✅ Done | Streamlit |
 | 0805 | ⚠️ Partial | |
 | 0806 | ✅ Done | Basic |

@@ -10,6 +10,7 @@
 
 - [x] Market data ingestion
 - [x] Strategy evaluation
+- [x] Latest closed candle reaches strategies without being dropped twice (2026-10-23)
 - [x] Risk evaluation
 - [x] Simulated execution
 
@@ -70,6 +71,7 @@
 - [x] All candidates logged
 - [x] Risk limits enforced (Broker-side SL, max drawdown, position sizing)
 - [x] Metrics tracked
+- [x] Runtime status records the timestamp and reason for the latest pipeline decision (2026-10-23)
 
 ---
 

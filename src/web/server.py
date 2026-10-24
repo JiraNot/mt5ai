@@ -291,15 +291,23 @@ async def get_status() -> dict[str, Any]:
     return {
         "ok": True,
         "mode": current_mode,
+        "execution_mode": "paper" if isinstance(gateway, PaperGateway) else settings.binance_mode,
         "is_live_armed": is_live_armed(),
         "venue": "Binance USDT-M Futures",
+        "worker_state": runtime.get("state", "unknown"),
         "binance_connected": runtime.get("binance_connected", gateway.connected),
         "account": account_info,
         "active_symbol": _active_chart_symbol,
         "cycle_count": runtime.get("cycle_count", 0),
+        "cycle_errors": runtime.get("cycle_errors", 0),
+        "candidate_count": runtime.get("candidate_count", 0),
         "last_candidate": runtime.get("last_candidate"),
+        "last_candidate_symbol": runtime.get("last_candidate_symbol"),
+        "last_candidate_score": runtime.get("last_candidate_score"),
         "last_decision": runtime.get("last_decision"),
+        "last_decision_at": runtime.get("last_decision_at"),
         "last_reason": runtime.get("last_reason"),
+        "last_error": runtime.get("last_error"),
         "updated_at": runtime.get("updated_at", datetime.now(timezone.utc).isoformat()),
     }
 
@@ -495,23 +503,34 @@ async def get_latest_council() -> dict[str, Any]:
 
     runtime = read_runtime_status()
     latest_item = recent[-1] if recent else {}
+    decision = runtime.get("last_decision")
+    no_candidate = bool(decision and (
+        decision == "NO_CANDIDATE" or str(decision).startswith("WAITING_FOR_CANDLES_")
+    ))
+    recorded_candidate = bool(latest_item)
+    if not decision:
+        decision = "RECORDED_CANDIDATE" if recorded_candidate else "NO_RECENT_DECISION"
 
     return {
         "ok": True,
         "latest": {
-            "decision": runtime.get("last_decision", latest_item.get("direction", "NEUTRAL")),
-            "candidate": runtime.get("last_candidate", latest_item.get("strategy_id", "SMC + FVG")),
-            "symbol": latest_item.get("symbol", _active_chart_symbol),
-            "score": latest_item.get("score", 85),
-            "reason": runtime.get("last_reason", "AI วิเคราะห์โครงสร้างราคาและตรวจจับความเสี่ยงผ่านเกณฑ์ พร้อมเปิดออเดอร์ตามแผน"),
-            "confluences": latest_item.get("confluences", ["fvg_present", "htf_aligned", "liquidity_sweep"]),
-            "vision_verdict": {
-                "confirmed": True,
-                "confidence": 0.92,
-                "rejection_wick": "มีไส้ปฏิเสธชัดเจนที่แนวรับสำคัญ",
-                "notes": "แท่งเทียนปิดยืนเหนือโซน FVG สอดคล้องกับโมเมนตัม",
-            },
-            "timestamp": latest_item.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "decision": decision,
+            "candidate": None if no_candidate else (
+                runtime.get("last_candidate") or latest_item.get("strategy_id")
+            ),
+            "symbol": None if no_candidate else (
+                runtime.get("last_candidate_symbol") or latest_item.get("symbol")
+            ),
+            "score": None if no_candidate else (
+                runtime.get("last_candidate_score", latest_item.get("score"))
+            ),
+            "reason": runtime.get("last_reason") or (
+                "ยังไม่มี candidate หรือผลการประเมินจาก worker"
+                if not recorded_candidate else "Candidate นี้เป็นรายการล่าสุดที่บันทึกไว้"
+            ),
+            "confluences": [] if no_candidate else latest_item.get("confluences", []),
+            "vision_verdict": None,
+            "timestamp": runtime.get("last_decision_at") or latest_item.get("timestamp"),
         },
         "history": list(reversed(recent)),
     }

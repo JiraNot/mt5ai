@@ -87,6 +87,9 @@ DISABLED
 - [x] Walk-Forward Backtesting Suite (Rolling in-sample/out-of-sample windows, Walk-Forward Efficiency WFE calculation)
 - [x] Modern Pro Crypto WebApp (React 19 + TypeScript + Vite + Tailwind CSS + TradingView Lightweight Charts + FastAPI WebSocket backend)
 - [x] Responsive Tablet & Touch UX for WebApp (Verified 65/65 checks passed: Header layout, PANIC visibility, >= 44px touch targets, 100dvh, haptic vibration across 5 screen sizes). See docs/testing/TABLET_UX_VERIFICATION.md.
+- [x] Tablet header stays within the viewport with compact controls and a two-row portrait layout; sidebar follows the responsive header height.
+- [x] Strategy engine consumes the latest closed candle once; runtime decision status includes the last decision timestamp, candidate score, reason, and execution mode.
+- [x] Pro Desk uses runtime health and reported open positions; it no longer presents trade history as worker health or fabricates equity, position, slippage, or latency data.
 - [x] Binance Testnet 401 Unauthorized auto-fallback to safe Paper execution & robust SPA routing
 - [x] Technical Indicators & Dynamic S/R Overlays (EMA 20, EMA 50, EMA 200, Resistance, Support, Pivot) with real-time value strip and toggle controls
 - [x] Candlestick Trade Markers & Trade Retrospective Drawer (Why entered, Why won/lost in Thai, with interactive chart focus)
@@ -194,7 +197,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-09-28
+2026-10-23
 
 
 ## AI audit remediation — 2026-09-10

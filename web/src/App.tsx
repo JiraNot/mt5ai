@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   const [watchlist, setWatchlist] = useState<WatchlistData | null>(null);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [positions, setPositions] = useState<PositionItem[]>([]);
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
   const [council, setCouncil] = useState<CouncilLatest | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [lastTick, setLastTick] = useState<{ bid: number; ask: number; last: number; timestamp: number } | null>(null);
@@ -61,7 +62,10 @@ export const App: React.FC = () => {
       if (sRes.status === 'fulfilled') setStatus(sRes.value);
       if (wRes.status === 'fulfilled' && wRes.value.ok) setWatchlist(wRes.value.data);
       if (rRes.status === 'fulfilled') setReadiness(rRes.value);
-      if (pRes.status === 'fulfilled' && pRes.value.ok) setPositions(pRes.value.positions);
+      if (pRes.status === 'fulfilled' && pRes.value.ok) {
+        setPositions(pRes.value.positions);
+        setPositionsLoaded(true);
+      }
       if (cRes.status === 'fulfilled') setCouncil(cRes.value);
       if (hRes.status === 'fulfilled' && hRes.value.ok) setHistory(hRes.value.trades);
     } catch (e) {
@@ -89,6 +93,7 @@ export const App: React.FC = () => {
     const unsubPos = wsClient.on('positions', (data) => {
       if (data.positions) {
         setPositions(data.positions);
+        setPositionsLoaded(true);
       }
     });
 
@@ -163,6 +168,9 @@ export const App: React.FC = () => {
         {viewMode === 'dashboard' ? (
           <ProAnalyticsDashboard
             symbol={activeSymbol}
+            status={status}
+            positions={positions}
+            positionsLoaded={positionsLoaded}
             onSelectSymbol={handleSelectSymbol}
             onSwitchToChart={() => setViewMode('chart')}
           />
@@ -187,7 +195,7 @@ export const App: React.FC = () => {
         {/* Right Sidebar: AI Watchlist + AI Council Verdict */}
         <div
           className={`
-            fixed lg:static top-14 bottom-0 right-0 z-40 lg:z-auto
+            fixed lg:static top-[9.5rem] sm:top-[6.5rem] lg:top-14 bottom-0 right-0 z-40 lg:z-auto
             w-80 md:w-84 max-w-[85vw] flex flex-col bg-dark-900 border-l border-dark-800 shadow-2xl lg:shadow-none
             transition-all duration-200 ease-in-out
             ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'}
@@ -224,7 +232,7 @@ export const App: React.FC = () => {
                 <span>AI Council</span>
                 {council?.latest && (
                   <span className="text-[10px] bg-dark-700 text-brand-blue px-1.5 py-0.2 rounded-full font-mono">
-                    {council.latest.score}
+                    {council.latest.score ?? '—'}
                   </span>
                 )}
               </button>

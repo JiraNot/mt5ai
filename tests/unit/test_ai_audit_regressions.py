@@ -146,14 +146,16 @@ async def test_candidate_context_reaches_council_then_risk_can_reject(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_forming_candle_is_not_used_by_main_loop(monkeypatch):
+async def test_main_loop_uses_latest_closed_feed_candle(monkeypatch):
     from src.app import TradingPlatform
     from src.core.types import Candle, Tick
     platform = TradingPlatform(max_cycles=1)
     stamp = datetime(2026, 9, 10, tzinfo=timezone.utc)
-    closed = Candle(timestamp=stamp, open=2000, high=2001, low=1999, close=2000)
-    forming = Candle(timestamp=stamp + timedelta(minutes=5), open=2000, high=2100, low=1900, close=2050)
-    platform._data_feed.get_cached_candles = MagicMock(return_value=[closed, forming])
+    previous_closed = Candle(timestamp=stamp, open=2000, high=2001, low=1999, close=2000)
+    latest_closed = Candle(timestamp=stamp + timedelta(minutes=5), open=2000, high=2002, low=1998, close=2001)
+    # DataFeed receives only closed bars from BinanceGateway; the latest one must
+    # survive the handoff to ContextBuilder instead of being dropped twice.
+    platform._data_feed.get_cached_candles = MagicMock(return_value=[previous_closed, latest_closed])
     platform._gateway.get_current_price = AsyncMock(return_value=Tick(timestamp=stamp, bid=2000, ask=2000.1))
     platform._position_tracker.sync_positions = AsyncMock(return_value=[])
     platform._process_strategies = AsyncMock()
@@ -162,8 +164,8 @@ async def test_forming_candle_is_not_used_by_main_loop(monkeypatch):
     await platform._main_loop('XAUUSD')
     assert platform._cycle_errors == 0
     context = platform._process_strategies.call_args.args[0]
-    assert context.primary_candle.timestamp == closed.timestamp
-    assert context.candles_by_tf['H1'] == [closed]
+    assert context.primary_candle.timestamp == latest_closed.timestamp
+    assert context.candles_by_tf['H1'] == [previous_closed, latest_closed]
 
 
 @pytest.mark.parametrize('reward,risk,expected', [(20, 10, 2), (30, 10, 3), (20, 0, 0), (-20, 10, 0)])

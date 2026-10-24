@@ -51,7 +51,10 @@ function check(view, name, passed, evidence) { report.checks.push({ view, name, 
         };
       });
       report.views.push({ view, layout });
-      check(view, 'header groups do not overlap', layout.groups.every((r, i, list) => i === 0 || r.x >= list[i - 1].right), layout.groups);
+      const groupsDoNotOverlap = layout.groups.every((a, i, list) => list.slice(i + 1).every(b =>
+        a.right <= b.x + 1 || b.right <= a.x + 1 || a.bottom <= b.y + 1 || b.bottom <= a.y + 1
+      ));
+      check(view, 'header groups do not overlap', groupsDoNotOverlap, layout.groups);
       check(view, 'header controls fit viewport', await page.locator('header button, header a').evaluateAll(els => els.filter(e => getComputedStyle(e).display !== 'none').every(e => { const r = e.getBoundingClientRect(); return r.x >= 0 && r.right <= innerWidth; })), layout.groups);
       check(view, 'touch controls are at least 44px', layout.controls.every(r => r.height >= 44 && r.width >= 44), layout.controls.filter(r => r.height < 44 || r.width < 44));
       check(view, 'chart has usable height', layout.canvas.height >= 240, layout.canvas);

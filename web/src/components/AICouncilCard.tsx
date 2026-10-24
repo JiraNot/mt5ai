@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, CheckCircle2, XCircle, Eye, ShieldCheck, Zap } from 'lucide-react';
+import { Bot, Eye, Zap } from 'lucide-react';
 import { CouncilLatest } from '../services/api';
 
 interface AICouncilCardProps {
@@ -34,11 +34,11 @@ export const AICouncilCard: React.FC<AICouncilCardProps> = ({ data }) => {
       <div className="min-h-[52px] py-1 px-3.5 border-b border-dark-800 flex items-center justify-between bg-dark-900/70 select-none">
         <div className="flex items-center space-x-2">
           <Bot className="w-4 h-4 text-brand-blue" />
-          <span className="text-xs font-bold tracking-wider text-slate-200">AI COUNCIL VERDICT</span>
+          <span className="text-xs font-bold tracking-wider text-slate-200">LATEST PIPELINE DECISION</span>
         </div>
         <div className="flex items-center space-x-1 font-mono text-[11px]">
           <span className="text-slate-400">Score:</span>
-          <span className="font-bold text-brand-gold">{latest.score}/100</span>
+          <span className="font-bold text-brand-gold">{latest.score == null ? '—' : `${latest.score}/100`}</span>
         </div>
       </div>
 
@@ -46,8 +46,8 @@ export const AICouncilCard: React.FC<AICouncilCardProps> = ({ data }) => {
       <div className="p-3.5 space-y-3 overflow-y-auto flex-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className="font-bold text-xs text-white">{latest.symbol}</span>
-            <span className="text-[11px] font-mono text-slate-400">({latest.candidate})</span>
+            <span className="font-bold text-xs text-white">{latest.symbol || '—'}</span>
+            {latest.candidate && <span className="text-[11px] font-mono text-slate-400">({latest.candidate})</span>}
           </div>
           <span className={`text-[11px] px-2 py-0.5 rounded font-mono font-bold uppercase border ${badgeColor}`}>
             {latest.decision}
@@ -58,12 +58,18 @@ export const AICouncilCard: React.FC<AICouncilCardProps> = ({ data }) => {
         <div className="p-2.5 rounded-lg bg-dark-800/80 border border-dark-700/60">
           <div className="text-[10px] text-slate-400 uppercase font-mono mb-1 flex items-center space-x-1">
             <Zap className="w-3 h-3 text-brand-gold" />
-            <span>AI Reasoning Analysis</span>
+            <span>Pipeline decision reason</span>
           </div>
           <p className="text-xs text-slate-200 leading-relaxed font-sans">
             {latest.reason}
           </p>
         </div>
+
+        {latest.timestamp && (
+          <div className="text-[10px] text-slate-500 font-mono">
+            Updated {new Date(latest.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
+          </div>
+        )}
 
         {/* Confluences */}
         {latest.confluences && latest.confluences.length > 0 && (

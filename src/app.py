@@ -443,14 +443,24 @@ class TradingPlatform:
                         spread_pips = monitor.get_spread_pips(tick.bid, tick.ask)
 
                         candles_by_tf = {
-                            "M5": self._data_feed.get_cached_candles("M5", symbol)[:-1],
-                            "M15": self._data_feed.get_cached_candles("M15", symbol)[:-1],
-                            "H1": self._data_feed.get_cached_candles("H1", symbol)[:-1],
-                            "H4": self._data_feed.get_cached_candles("H4", symbol)[:-1],
+                            # The Binance gateway and DataFeed cache closed candles only.
+                            # Do not discard the newest cached bar a second time: it is
+                            # the latest closed candle and is required for timely setup detection.
+                            "M5": self._data_feed.get_cached_candles("M5", symbol),
+                            "M15": self._data_feed.get_cached_candles("M15", symbol),
+                            "H1": self._data_feed.get_cached_candles("H1", symbol),
+                            "H4": self._data_feed.get_cached_candles("H4", symbol),
                         }
 
                         if not all(candles_by_tf.get(tf) for tf in ("M5", "M15", "H1")):
-                            update_runtime_status(last_decision=f"WAITING_FOR_CANDLES_{symbol}")
+                            update_runtime_status(
+                                last_decision=f"WAITING_FOR_CANDLES_{symbol}",
+                                last_candidate=None,
+                                last_candidate_symbol=None,
+                                last_candidate_score=None,
+                                candidate_count=0,
+                                last_reason="Waiting for closed M5, M15, and H1 candles",
+                            )
                             continue
 
                         ctx = self._context_builder.build(
@@ -519,7 +529,14 @@ class TradingPlatform:
         )
 
         if not candidates:
-            update_runtime_status(last_decision="NO_CANDIDATE", candidate_count=0)
+            update_runtime_status(
+                last_decision="NO_CANDIDATE",
+                last_candidate=None,
+                last_candidate_symbol=None,
+                last_candidate_score=None,
+                candidate_count=0,
+                last_reason="No strategy produced a setup from the latest closed candles",
+            )
             return
 
         update_runtime_status(candidate_count=len(candidates))
@@ -533,6 +550,7 @@ class TradingPlatform:
             allow_immediate = immediate_seen < max_immediate
             update_runtime_status(
                 last_candidate=f"{candidate.strategy_id}:{candidate.direction.value}",
+                last_candidate_symbol=candidate.symbol,
             )
             await self._process_candidate(
                 candidate, ctx, current_price, spread, session,
@@ -576,6 +594,11 @@ class TradingPlatform:
             spread=spread,
             session=session,
         )
+        update_runtime_status(
+            last_candidate=f"{candidate.strategy_id}:{candidate.direction.value}",
+            last_candidate_symbol=candidate.symbol,
+            last_candidate_score=ai_decision.combined_score,
+        )
         triage_priority = self._candidate_triage.observe(
             candidate, ai_decision.combined_score, session
         )
@@ -601,6 +624,10 @@ class TradingPlatform:
             return
 
         if not allow_immediate:
+            update_runtime_status(
+                last_decision="AI_SKIP",
+                last_reason="Immediate AI review budget reached for this candle",
+            )
             if self._setup_logger:
                 await self._setup_logger.log_skipped(
                     candidate,

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-23 (Tablet Header, Closed-Candle Handoff & Runtime Decision Telemetry)
+
+- **Tablet Header (`web/src/components/Header.tsx`, `web/src/App.tsx`)**:
+  - Use a two-row header below 1024px, compact icon controls below 1800px, and align the tablet sidebar below the expanded header.
+- **Latest Closed Candle Handoff (`src/app.py`)**:
+  - BinanceGateway and DataFeed already exclude forming candles; removed the second `[:-1]` trim so strategies now receive the newest closed candle.
+- **Current Pipeline Status (`src/core/runtime_status.py`, `src/web/server.py`, `web/src/components/ProAnalyticsDashboard.tsx`)**:
+  - Expose worker state, execution mode, current candidate count, result reason, and the timestamp of the last pipeline decision.
+  - Replace the historical-trade-derived “4/4 ONLINE” label with a closed trade history count; report strategy legs with no history as “no trades yet.”
+  - Remove fabricated vision confirmation, sample open positions, equity results, and placeholder regime, spread, latency, slippage, and broker-grade readings when those values are not recorded.
+
 ## 2026-10-18 (Aggressive Risk Presets 3-5% & Crypto Futures Exposure Scaling)
 
 - **Interactive Risk Presets in Web UI (`web/src/components/SettingsModal.tsx`)**:

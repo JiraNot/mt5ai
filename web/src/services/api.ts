@@ -1,8 +1,10 @@
 export interface StatusResponse {
   ok: boolean;
   mode: string;
+  execution_mode: string;
   is_live_armed: boolean;
   venue: string;
+  worker_state: string;
   binance_connected: boolean;
   account: {
     balance: number;
@@ -12,9 +14,15 @@ export interface StatusResponse {
   };
   active_symbol: string;
   cycle_count: number;
+  cycle_errors: number;
+  candidate_count: number;
   last_candidate: string | null;
+  last_candidate_symbol: string | null;
+  last_candidate_score: number | null;
   last_decision: string | null;
+  last_decision_at: string | null;
   last_reason: string | null;
+  last_error: string | null;
   updated_at: string;
 }
 
@@ -81,9 +89,9 @@ export interface CouncilLatest {
   ok: boolean;
   latest: {
     decision: string;
-    candidate: string;
-    symbol: string;
-    score: number;
+    candidate: string | null;
+    symbol: string | null;
+    score: number | null;
     reason: string;
     confluences: string[];
     vision_verdict?: {
@@ -91,8 +99,8 @@ export interface CouncilLatest {
       confidence: number;
       rejection_wick: string;
       notes: string;
-    };
-    timestamp: string;
+    } | null;
+    timestamp: string | null;
   };
   history: any[];
 }
@@ -410,14 +418,14 @@ export interface CalendarSummary {
 
 export interface ExecutionQualityLeg {
   leg: string;
-  fills: number;
+  fills: number | null;
   entry_med: string;
   entry_p90: string;
   exit_med: string;
   worst: string;
-  latency: number;
-  slip_cost: number;
-  slip_vs_edge: number;
+  latency: number | null;
+  slip_cost: number | null;
+  slip_vs_edge: number | null;
 }
 
 export interface HourlySlipDistribution {
@@ -430,10 +438,10 @@ export interface ExecutionQuality {
   broker_grade: string;
   median_slip: string;
   p90_slip: string;
-  slip_over_3_pct: number;
-  avg_latency_ms: number;
-  total_fills: number;
-  slip_cost: number;
+  slip_over_3_pct: number | null;
+  avg_latency_ms: number | null;
+  total_fills: number | null;
+  slip_cost: number | null;
   legs: ExecutionQualityLeg[];
   hourly_distribution: HourlySlipDistribution[];
 }
@@ -446,7 +454,7 @@ export interface EquityPoint {
 
 export interface EquitySummary {
   closed_pnl: number;
-  lost_to_slip: number;
+  lost_to_slip: number | null;
   peak: number;
   from_peak: number;
   curve: EquityPoint[];
