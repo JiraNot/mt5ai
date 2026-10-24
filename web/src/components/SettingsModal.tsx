@@ -43,6 +43,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     message: string;
     balance?: number;
     currency?: string;
+    exchange_code?: number;
   } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -64,7 +65,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     min_rr: 2.0,
     entry_min_score: 70,
     binance_mode: 'paper',
-    binance_base_url: 'https://testnet.binancefuture.com',
+    binance_base_url: 'https://demo-fapi.binance.com',
     binance_api_key: '',
     binance_api_secret: '',
     ai_provider: 'codex',
@@ -559,7 +560,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">สภาพแวดล้อม Binance</label>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">สภาพแวดล้อม Binance (Futures Demo/Testnet)</label>
                     <div className="grid grid-cols-3 gap-2">
                       {(['paper', 'testnet', 'live'] as const).map((bm) => (
                         <button
@@ -569,7 +570,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                             const url =
                               bm === 'live'
                                 ? 'https://fapi.binance.com'
-                                : 'https://testnet.binancefuture.com';
+                                : 'https://demo-fapi.binance.com';
                             setFormData({ ...formData, binance_mode: bm, binance_base_url: url });
                             setBinanceTestResult(null);
                           }}
@@ -579,7 +580,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                               : 'bg-dark-950/60 border-dark-700 text-slate-400 hover:text-slate-200'
                           }`}
                         >
-                          {bm}
+                          {bm === 'testnet' ? 'DEMO / TESTNET' : bm}
                         </button>
                       ))}
                     </div>
@@ -587,6 +588,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Binance Futures Base URL</label>
+                    <p className="text-[10px] text-slate-500 mb-1">คีย์ Futures Demo รุ่นปัจจุบันใช้ demo-fapi.binance.com; กดปุ่ม DEMO / TESTNET เพื่อเลือก URL นี้</p>
                     <input
                       type="text"
                       value={formData.binance_base_url || ''}
@@ -646,7 +648,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       <span>{testingBinance ? 'กำลังตรวจสอบ...' : 'ทดสอบ Binance API'}</span>
                     </button>
                     <p className="text-[10px] text-slate-500">
-                      ทดสอบอ่านข้อมูลบัญชี Binance Futures Testnet เท่านั้น ไม่มีการส่งคำสั่งซื้อขาย
+                      ทดสอบอ่านข้อมูลบัญชี Binance Futures Demo/Testnet เท่านั้น ไม่มีการส่งคำสั่งซื้อขาย
                     </p>
                     {binanceTestResult && (
                       <div className={`flex items-start space-x-2 rounded-lg border px-3 py-2 text-xs ${
@@ -659,6 +661,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                           : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
                         <span>
                           {binanceTestResult.message}
+                          {typeof binanceTestResult.exchange_code === 'number'
+                            ? ` (Binance ${binanceTestResult.exchange_code})`
+                            : ''}
                           {binanceTestResult.ok && typeof binanceTestResult.balance === 'number'
                             ? ` • Balance: ${binanceTestResult.balance.toFixed(2)} ${binanceTestResult.currency || 'USDT'}`
                             : ''}

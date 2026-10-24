@@ -47,7 +47,7 @@ DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "news_filter_enabled": True,
     # Binance Exchange
     "binance_mode": "paper",
-    "binance_base_url": "https://testnet.binancefuture.com",
+    "binance_base_url": "https://demo-fapi.binance.com",
     "binance_api_key": "",
     "binance_api_secret": "",
     # AI Providers & Vision

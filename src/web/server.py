@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,7 +34,7 @@ from src.core.runtime_control import (
 )
 from src.core.runtime_status import read_runtime_status, update_runtime_status
 from src.execution.paper_gateway import PaperGateway
-from src.market.binance_gateway import BinanceGateway
+from src.market.binance_gateway import BinanceGateway, is_binance_futures_testnet_url
 from src.market.crypto_screener import CryptoScreener
 from src.risk.promotion_gate import PromotionGate
 from src.storage.models import Trade, get_engine, get_session_factory
@@ -618,19 +617,11 @@ async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
         return {"ok": False, "message": "กรุณากรอก Binance API Key และ Secret ก่อนทดสอบ"}
 
     if (req.binance_mode or current.get("binance_mode", "")).lower() != "testnet":
-        return {"ok": False, "message": "เลือก Binance environment เป็น TESTNET ก่อนทดสอบ"}
+        return {"ok": False, "message": "เลือก Binance environment เป็น DEMO/TESTNET ก่อนทดสอบ"}
 
     base_url = (req.binance_base_url or current.get("binance_base_url") or "").strip().rstrip("/")
-    parsed_url = urlparse(base_url)
-    if (
-        parsed_url.scheme != "https"
-        or parsed_url.hostname != "testnet.binancefuture.com"
-        or parsed_url.netloc != "testnet.binancefuture.com"
-        or parsed_url.path not in ("", "/")
-        or parsed_url.query
-        or parsed_url.fragment
-    ):
-        return {"ok": False, "message": "ทดสอบได้เฉพาะ Binance Futures Testnet เท่านั้น"}
+    if not is_binance_futures_testnet_url(base_url):
+        return {"ok": False, "message": "ทดสอบได้เฉพาะ Binance Futures Demo/Testnet URL ที่รองรับเท่านั้น"}
 
     gateway = BinanceGateway(
         base_url=base_url,
@@ -641,27 +632,44 @@ async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
         account = await gateway.test_testnet_account_access()
         return {
             "ok": True,
-            "message": "เชื่อมต่อ Binance Futures Testnet สำเร็จ",
+            "message": "เชื่อมต่อ Binance Futures Demo/Testnet สำเร็จ",
             "balance": round(account.balance, 2),
             "equity": round(account.equity, 2),
             "currency": account.currency,
         }
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
-        if status_code == 401:
-            message = "Binance ปฏิเสธ API Key/Secret ตรวจว่าเป็นคีย์ Testnet และมีสิทธิ์อ่าน Futures account"
+        exchange_code: int | None = None
+        try:
+            raw_code = exc.response.json().get("code")
+            exchange_code = int(raw_code) if raw_code is not None else None
+        except (ValueError, TypeError, AttributeError):
+            pass
+        if exchange_code == -2014:
+            message = "รูปแบบ API Key ไม่ถูกต้อง ตรวจว่าเป็น HMAC API Key จาก Binance Futures Demo API Management"
+        elif exchange_code == -2015:
+            message = "Binance ปฏิเสธ API Key ตรวจว่าคีย์มาจาก Futures Demo API Management, URL เป็น demo-fapi และคีย์ยังใช้งานได้"
+        elif exchange_code == -1022:
+            message = "ลายเซ็น API ไม่ถูกต้อง ตรวจ Secret และใช้ HMAC API Key สำหรับ Futures Demo"
+        elif exchange_code == -1021:
+            message = "เวลาเซิร์ฟเวอร์คลาดเคลื่อนเกินกำหนด ลองอีกครั้งหลังซิงก์เวลา"
+        elif status_code == 401:
+            message = "Binance ปฏิเสธ API Key/Secret ตรวจว่าคีย์เป็นของ Futures Demo/Testnet และมีสิทธิ์อ่าน Futures account"
         elif status_code == 403:
             message = "Binance ไม่อนุญาตคำขอ ตรวจสิทธิ์ Futures และ IP allowlist ของ API key"
         elif status_code == 400:
             message = "Binance ปฏิเสธคำขอ ตรวจ API Key/Secret และเวลาเครื่องของเซิร์ฟเวอร์"
         else:
             message = f"Binance Testnet ตอบกลับ HTTP {status_code} ลองอีกครั้งภายหลัง"
-        return {"ok": False, "message": message, "status_code": status_code}
+        result = {"ok": False, "message": message, "status_code": status_code}
+        if exchange_code is not None:
+            result["exchange_code"] = exchange_code
+        return result
     except Exception as exc:
         logger.warning("Binance Testnet API check failed (%s)", type(exc).__name__)
         return {
             "ok": False,
-            "message": "เชื่อมต่อ Binance Testnet ไม่สำเร็จ ตรวจ URL และการเชื่อมต่อเครือข่าย",
+            "message": "เชื่อมต่อ Binance Futures Demo/Testnet ไม่สำเร็จ ตรวจ URL และการเชื่อมต่อเครือข่าย",
         }
     finally:
         await gateway.disconnect()

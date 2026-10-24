@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
+from src.web import server as server_module
 from src.web.server import app
 
 
@@ -164,5 +166,68 @@ def test_api_simulate_trade(client):
     assert data["ticket"] is not None
     assert "sl" in data
     assert "tp" in data
+
+
+def test_binance_demo_credential_check_uses_current_endpoint(client, monkeypatch):
+    instances = []
+
+    class FakeGateway:
+        def __init__(self, **kwargs):
+            instances.append(kwargs)
+
+        async def test_testnet_account_access(self):
+            return SimpleNamespace(balance=5000.0, equity=5000.0, currency="USDT")
+
+        async def disconnect(self):
+            pass
+
+    monkeypatch.setattr(server_module, "BinanceGateway", FakeGateway)
+    response = client.post("/api/settings/binance/test", json={
+        "binance_mode": "testnet",
+        "binance_base_url": "https://demo-fapi.binance.com",
+        "binance_api_key": "demo-key-value",
+        "binance_api_secret": "demo-secret-value",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["balance"] == 5000.0
+    assert instances[0]["base_url"] == "https://demo-fapi.binance.com"
+    assert "demo-key-value" not in response.text
+    assert "demo-secret-value" not in response.text
+
+
+def test_binance_demo_credential_check_exposes_safe_exchange_code(client, monkeypatch):
+    class FakeGateway:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def test_testnet_account_access(self):
+            import httpx
+            response = httpx.Response(
+                401,
+                json={"code": -2015, "msg": "Invalid API-key, secret must not be exposed."},
+                request=httpx.Request("GET", "https://demo-fapi.binance.com/fapi/v2/account"),
+            )
+            raise httpx.HTTPStatusError("Unauthorized", request=response.request, response=response)
+
+        async def disconnect(self):
+            pass
+
+    monkeypatch.setattr(server_module, "BinanceGateway", FakeGateway)
+    response = client.post("/api/settings/binance/test", json={
+        "binance_mode": "testnet",
+        "binance_base_url": "https://demo-fapi.binance.com",
+        "binance_api_key": "demo-key-value",
+        "binance_api_secret": "demo-secret-value",
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert body["exchange_code"] == -2015
+    assert "Futures Demo API Management" in body["message"]
+    assert "Invalid API-key" not in response.text
+    assert "demo-secret-value" not in response.text
 
 

@@ -308,6 +308,7 @@ export async function testBinanceApi(settings: Pick<RuntimeSettings, 'binance_mo
   equity?: number;
   currency?: string;
   status_code?: number;
+  exchange_code?: number;
 }> {
   const res = await fetch(`${API_BASE}/settings/binance/test`, {
     method: 'POST',

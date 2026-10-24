@@ -183,7 +183,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                       <span className="text-[10px] bg-dark-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">3-7 วัน</span>
                     </div>
                     <p className="text-slate-400 text-xs leading-relaxed">
-                      สร้างบัญชีบน <b>testnet.binancefuture.com</b> (ได้รับเหรียญฟรี 15,000 USDT ในระบบจำลอง) นำ Testnet API Key มาใส่ในระบบ เพื่อทดสอบการส่งคำสั่งข้ามเครือข่ายและเช็คการวาง SL/TP บนกระดานจริง
+                      เข้า Binance Futures Demo แล้วสร้าง HMAC API Key ใน API Management จากนั้นตั้ง URL เป็น <b>https://demo-fapi.binance.com</b> และกดทดสอบ API ก่อนบันทึก ใช้เฉพาะเงินจำลองและไม่มีการส่งคำสั่งไปบัญชีจริง
                     </p>
                   </div>
                 </div>

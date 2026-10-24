@@ -189,13 +189,16 @@ DATABASE_URL_DEV=sqlite:///./dev.db
 
 # Binance USDT-M Futures
 BINANCE_MODE=paper              # paper / testnet / live (live disabled by design)
-BINANCE_BASE_URL=https://testnet.binancefuture.com
+BINANCE_BASE_URL=https://demo-fapi.binance.com
 BINANCE_API_KEY=
 BINANCE_API_SECRET=
 BINANCE_TIMEOUT=10
 BINANCE_SYMBOL=BTCUSDT
 BINANCE_USE_WEBSOCKET=false
 PAPER_INITIAL_BALANCE=100000
+
+# Binance Futures Demo API keys from Binance Demo Trading use demo-fapi.
+# Existing classic Futures Testnet keys may continue to use testnet.binancefuture.com.
 
 # Runtime execution mode
 # The dashboard can change this without an ENV edit or redeploy. The value is

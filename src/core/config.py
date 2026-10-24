@@ -103,7 +103,7 @@ class Settings(BaseSettings):
 
     # Binance USDT-M Futures; paper is the safe default.
     binance_mode: str = "paper"
-    binance_base_url: str = "https://testnet.binancefuture.com"
+    binance_base_url: str = "https://demo-fapi.binance.com"
     binance_api_key: str = ""
     binance_api_secret: str = ""
     binance_timeout: float = 10.0
@@ -174,7 +174,7 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
     # Construct settings
     s = Settings(
         binance_mode=os.getenv("BINANCE_MODE", "paper").lower(),
-        binance_base_url=os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com"),
+        binance_base_url=os.getenv("BINANCE_BASE_URL", "https://demo-fapi.binance.com"),
         binance_api_key=os.getenv("BINANCE_API_KEY", ""),
         binance_api_secret=os.getenv("BINANCE_API_SECRET", ""),
         binance_timeout=float(os.getenv("BINANCE_TIMEOUT", "10")),

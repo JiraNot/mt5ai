@@ -14,9 +14,49 @@ from src.core.types import Direction, OrderRequest
 
 def make_gateway(handler) -> BinanceGateway:
     return BinanceGateway(
-        base_url="https://binance.test",
+        base_url="https://demo-fapi.binance.com",
         transport=httpx.MockTransport(handler),
     )
+
+
+def enable_demo_mode(monkeypatch):
+    monkeypatch.setattr(
+        "src.market.binance_gateway.get_runtime_trading_mode",
+        lambda _default="paper": "demo",
+    )
+
+
+def demo_preflight_response(request: httpx.Request) -> httpx.Response | None:
+    """Respond to shared signed preflight calls without touching Binance."""
+    path = request.url.path
+    if path == "/fapi/v1/positionSide/dual":
+        return httpx.Response(200, json={"dualSidePosition": False})
+    if path == "/fapi/v1/order" and request.method == "GET":
+        return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
+    if path == "/fapi/v2/positionRisk":
+        return httpx.Response(200, json=[])
+    if path == "/fapi/v1/openAlgoOrders":
+        return httpx.Response(200, json=[])
+    if path == "/fapi/v1/marginType":
+        return httpx.Response(200, json={"symbol": "BTCUSDT", "marginType": "ISOLATED"})
+    if path == "/fapi/v1/leverage":
+        return httpx.Response(200, json={"symbol": "BTCUSDT", "leverage": 10})
+    if path == "/fapi/v1/exchangeInfo":
+        return httpx.Response(200, json={"symbols": [{
+            "symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC",
+            "quoteAsset": "USDT", "contractType": "PERPETUAL", "filters": [
+                {"filterType": "MARKET_LOT_SIZE", "minQty": "0.001", "maxQty": "1000", "stepSize": "0.001"},
+                {"filterType": "PRICE_FILTER", "tickSize": "0.1"},
+                {"filterType": "MIN_NOTIONAL", "notional": "5", "applyToMarket": True},
+            ],
+        }]})
+    if path == "/fapi/v1/ticker/bookTicker":
+        return httpx.Response(200, json={"bidPrice": "100", "askPrice": "100"})
+    if path == "/fapi/v2/account":
+        return httpx.Response(200, json={"availableBalance": "10000"})
+    if path == "/fapi/v1/time":
+        return httpx.Response(200, json={"serverTime": 0})
+    return None
 
 
 @pytest.mark.asyncio
@@ -74,7 +114,7 @@ async def test_order_execution_is_fail_closed():
     gateway = BinanceGateway()
     result = await gateway.send_order(None)  # type: ignore[arg-type]
     assert result.success is False
-    assert "testnet" in (result.error_message or "")
+    assert "PAPER" in (result.error_message or "")
 
 
 def test_binance_settings_are_env_overridable(monkeypatch):
@@ -121,6 +161,7 @@ def test_parse_kline_event_preserves_closed_flag():
 
 @pytest.mark.asyncio
 async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
+    enable_demo_mode(monkeypatch)
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
@@ -130,14 +171,14 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
         calls.append(request)
         if request.url.path == "/fapi/v1/ping":
             return httpx.Response(200, json={})
-        if request.url.path == "/fapi/v1/time":
-            return httpx.Response(200, json={"serverTime": 0})
-        assert request.url.path == "/fapi/v1/order"
-        if request.method == "GET":
-            return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
-        if len(calls) == 4:
+        common = demo_preflight_response(request)
+        if common is not None:
+            return common
+        if request.url.path == "/fapi/v1/order" and request.method == "POST":
             return httpx.Response(200, json={"orderId": 123, "status": "FILLED", "avgPrice": "100", "executedQty": "1"})
-        return httpx.Response(200, json={"orderId": 124 + len(calls), "status": "NEW"})
+        if request.url.path == "/fapi/v1/algoOrder":
+            return httpx.Response(200, json={"algoId": 124 + len(calls), "algoStatus": "NEW"})
+        raise AssertionError(f"Unexpected mocked request: {request.method} {request.url.path}")
 
     gateway = make_gateway(handler)
     assert await gateway.connect()
@@ -147,21 +188,24 @@ async def test_testnet_order_places_market_and_protective_orders(monkeypatch):
     ))
     assert result.success is True
     assert result.external_order_id == "123"
-    assert len(calls) == 6
+    assert len(calls) >= 12
     assert calls[1].url.path == "/fapi/v1/time"
-    assert calls[2].headers["X-MBX-APIKEY"] == "key"
-    assert calls[2].url.params["timestamp"]
-    assert calls[2].url.params["recvWindow"] == "5000"
-    assert len(calls[2].url.params["signature"]) == 64
-    assert calls[2].url.params["origClientOrderId"] == "candidate-1"
-    assert calls[3].url.params["type"] == "MARKET"
-    assert calls[4].url.params["type"] == "STOP_MARKET"
-    assert calls[5].url.params["type"] == "TAKE_PROFIT_MARKET"
+    signed = next(call for call in calls if call.url.path == "/fapi/v1/positionSide/dual")
+    assert signed.headers["X-MBX-APIKEY"] == "key"
+    assert signed.url.params["timestamp"]
+    assert signed.url.params["recvWindow"] == "5000"
+    assert len(signed.url.params["signature"]) == 64
+    market_order = next(call for call in calls if call.url.path == "/fapi/v1/order" and call.method == "POST")
+    assert market_order.url.params["type"] == "MARKET"
+    assert market_order.url.params["newClientOrderId"] == "candidate-1"
+    protective = [call for call in calls if call.url.path == "/fapi/v1/algoOrder"]
+    assert [call.url.params["type"] for call in protective] == ["STOP_MARKET", "TAKE_PROFIT_MARKET"]
     await gateway.disconnect()
 
 
 @pytest.mark.asyncio
 async def test_partial_primary_fill_returns_partial_status_and_filled_volume(monkeypatch):
+    enable_demo_mode(monkeypatch)
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
@@ -170,9 +214,10 @@ async def test_partial_primary_fill_returns_partial_status_and_filled_volume(mon
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/fapi/v1/ping":
             return httpx.Response(200, json={})
-        if request.url.path == "/fapi/v1/time":
-            return httpx.Response(200, json={"serverTime": 0})
-        if request.method == "GET":
+        common = demo_preflight_response(request)
+        if common is not None:
+            return common
+        if request.url.path == "/fapi/v1/order" and request.method == "GET":
             return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
         order_calls.append(request)
         if len(order_calls) == 1:
@@ -180,9 +225,11 @@ async def test_partial_primary_fill_returns_partial_status_and_filled_volume(mon
                 "orderId": 200, "status": "PARTIALLY_FILLED",
                 "avgPrice": "100", "executedQty": "0.4",
             })
-        return httpx.Response(200, json={"orderId": 200 + len(order_calls), "status": "NEW"})
+        if request.url.path == "/fapi/v1/algoOrder":
+            return httpx.Response(200, json={"algoId": 200 + len(order_calls), "algoStatus": "NEW"})
+        raise AssertionError(f"Unexpected mocked request: {request.method} {request.url.path}")
 
-    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    gateway = BinanceGateway(base_url="https://demo-fapi.binance.com", transport=httpx.MockTransport(handler))
     await gateway.connect()
     result = await gateway.send_order(OrderRequest(
         symbol="BTCUSDT", direction=Direction.BUY, volume=1, sl=99, tp=102,
@@ -198,6 +245,7 @@ async def test_partial_primary_fill_returns_partial_status_and_filled_volume(mon
 
 @pytest.mark.asyncio
 async def test_testnet_order_is_idempotent_across_gateway_restart(monkeypatch):
+    enable_demo_mode(monkeypatch)
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
@@ -213,33 +261,37 @@ async def test_testnet_order_is_idempotent_across_gateway_restart(monkeypatch):
         nonlocal installed
         if request.url.path == "/fapi/v1/ping":
             return httpx.Response(200, json={})
-        if request.url.path == "/fapi/v1/time":
-            return httpx.Response(200, json={"serverTime": 0})
-        assert request.url.path == "/fapi/v1/order"
-        client_id = request.url.params.get("origClientOrderId")
-        if request.method == "GET":
+        if request.url.path == "/fapi/v1/algoOrder" and request.method == "GET":
+            client_id = request.url.params.get("clientAlgoId")
+            return httpx.Response(200, json=protective.get(client_id, {}))
+        if request.url.path == "/fapi/v1/order" and request.method == "GET":
+            client_id = request.url.params.get("origClientOrderId")
             if installed and client_id == "restart-key":
                 return httpx.Response(200, json=primary)
-            if installed and client_id in protective:
-                return httpx.Response(200, json=protective[client_id])
             return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
+        common = demo_preflight_response(request)
+        if common is not None:
+            return common
+        assert request.url.path in {"/fapi/v1/order", "/fapi/v1/algoOrder"}
         post_calls.append(request)
-        if request.url.params["type"] == "MARKET":
+        if request.url.path == "/fapi/v1/order":
             installed = True
             return httpx.Response(200, json=primary)
         suffix = "restart-key-sl" if request.url.params["type"] == "STOP_MARKET" else "restart-key-tp"
-        return httpx.Response(200, json=protective[suffix])
+        response = {"algoId": protective[suffix]["orderId"], "algoStatus": "NEW", "clientAlgoId": suffix}
+        protective[suffix] = {**protective[suffix], **response}
+        return httpx.Response(200, json=response)
 
     request = OrderRequest(
         symbol="BTCUSDT", direction=Direction.BUY, volume=1, sl=99, tp=102,
         execution_key="restart-key", venue="binance",
     )
-    first = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    first = BinanceGateway(base_url="https://demo-fapi.binance.com", transport=httpx.MockTransport(handler))
     await first.connect()
     first_result = await first.send_order(request)
     await first.disconnect()
 
-    restarted = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    restarted = BinanceGateway(base_url="https://demo-fapi.binance.com", transport=httpx.MockTransport(handler))
     await restarted.connect()
     recovered = await restarted.send_order(request)
     assert first_result.success and recovered.success
@@ -252,6 +304,57 @@ async def test_testnet_order_is_idempotent_across_gateway_restart(monkeypatch):
 def test_gateway_selects_testnet_websocket_endpoint():
     gateway = BinanceGateway(base_url="https://testnet.binancefuture.com")
     assert gateway.websocket_base_url == "wss://fstream.binancefuture.com"
+
+
+def test_gateway_selects_current_futures_demo_endpoint():
+    gateway = BinanceGateway(base_url="https://demo-fapi.binance.com")
+    assert gateway.websocket_base_url == "wss://demo-fstream.binance.com"
+    assert gateway._uses_testnet_endpoint() is True
+
+
+@pytest.mark.asyncio
+async def test_demo_credential_check_reads_account_without_submitting_orders():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        assert request.url.path == "/fapi/v2/account"
+        assert request.method == "GET"
+        assert request.headers["X-MBX-APIKEY"] == "demo-key"
+        assert request.url.params["signature"]
+        return httpx.Response(200, json={
+            "totalWalletBalance": "5000", "totalMarginBalance": "5010",
+            "totalInitialMargin": "10", "availableBalance": "5000",
+            "totalUnrealizedProfit": "10",
+        })
+
+    gateway = BinanceGateway(
+        base_url="https://demo-fapi.binance.com",
+        transport=httpx.MockTransport(handler),
+        api_key="demo-key",
+        api_secret="demo-secret",
+    )
+    account = await gateway.test_testnet_account_access()
+    assert account.balance == 5000
+    assert account.equity == 5010
+    assert [request.method for request in calls] == ["GET", "GET", "GET"]
+    assert calls[-1].url.path == "/fapi/v2/account"
+    await gateway.disconnect()
+
+
+@pytest.mark.parametrize("url", [
+    "https://demo-fapi.binance.com.evil.example",
+    "https://demo-fapi.binance.com:444",
+    "https://demo-fapi.binance.com/other",
+    "http://demo-fapi.binance.com",
+])
+def test_gateway_rejects_noncanonical_demo_origins(url):
+    gateway = BinanceGateway(base_url=url)
+    assert gateway._uses_testnet_endpoint() is False
 
 
 def test_gateway_selects_mainnet_websocket_endpoint():
@@ -299,6 +402,7 @@ async def test_websocket_syncs_server_time_before_connect(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_position_risk_does_not_expose_liquidation_as_stop(monkeypatch):
+    enable_demo_mode(monkeypatch)
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "key")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "secret")
@@ -314,7 +418,7 @@ async def test_position_risk_does_not_expose_liquidation_as_stop(monkeypatch):
             "updateTime": "0", "positionSide": "BOTH",
         }])
 
-    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    gateway = BinanceGateway(base_url="https://demo-fapi.binance.com", transport=httpx.MockTransport(handler))
     await gateway.connect()
     positions = await gateway.get_positions("BTCUSDT")
     assert positions[0].sl == 0
@@ -355,6 +459,7 @@ async def test_symbol_deals_filter_to_recorded_order_and_map_partial_exit(monkey
 
 @pytest.mark.asyncio
 async def test_account_info_fallback_on_401_or_unconfigured(monkeypatch):
+    enable_demo_mode(monkeypatch)
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_mode", "testnet")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_key", "test_key")
     monkeypatch.setattr("src.market.binance_gateway.settings.binance_api_secret", "test_secret")
@@ -368,10 +473,8 @@ async def test_account_info_fallback_on_401_or_unconfigured(monkeypatch):
             return httpx.Response(401, json={"code": -2014, "msg": "API-key format invalid."})
         return httpx.Response(404, json={})
 
-    gateway = BinanceGateway(base_url="https://binance.test", transport=httpx.MockTransport(handler))
+    gateway = BinanceGateway(base_url="https://demo-fapi.binance.com", transport=httpx.MockTransport(handler))
     await gateway.connect()
-    account = await gateway.get_account_info()
-    assert account.balance == 100000.0
-    assert account.server == "paper"
-    assert "Paper Fallback" in account.name
+    with pytest.raises(httpx.HTTPStatusError):
+        await gateway.get_account_info()
     await gateway.disconnect()

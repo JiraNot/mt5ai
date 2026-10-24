@@ -29,6 +29,24 @@ from src.core.types import AccountInfo, Candle, Deal, Direction, OrderRequest, O
 logger = logging.getLogger(__name__)
 
 _INTERVALS = {"M1": "1m", "M5": "5m", "M15": "15m", "H1": "1h", "H4": "4h", "D1": "1d"}
+BINANCE_FUTURES_TESTNET_URLS = {
+    # Current Binance Futures Demo/Testnet REST and WebSocket endpoints.
+    "https://demo-fapi.binance.com": "wss://demo-fstream.binance.com",
+    # Keep existing classic Futures Testnet credentials/configurations working.
+    "https://testnet.binancefuture.com": "wss://fstream.binancefuture.com",
+}
+
+
+def is_binance_futures_testnet_url(value: str) -> bool:
+    """Accept only exact Binance Futures Demo/Testnet HTTPS origins."""
+    parsed = urlparse((value or "").strip().rstrip("/"))
+    canonical = f"{parsed.scheme}://{parsed.netloc}".lower()
+    return (
+        canonical in BINANCE_FUTURES_TESTNET_URLS
+        and parsed.path in ("", "/")
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 class BinanceConnectionError(FreebuffError):
@@ -76,15 +94,14 @@ class BinanceGateway:
     def websocket_base_url(self) -> str:
         """Return the official USDⓈ-M Futures WebSocket host for this venue."""
         effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
-        return (
-            "wss://fstream.binancefuture.com"
-            if "testnet.binancefuture.com" in effective_base
-            else "wss://fstream.binance.com"
+        normalized = effective_base.lower()
+        return BINANCE_FUTURES_TESTNET_URLS.get(
+            normalized, "wss://fstream.binance.com"
         )
 
     def _uses_testnet_endpoint(self) -> bool:
         effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
-        return urlparse(effective_base).hostname == "testnet.binancefuture.com"
+        return is_binance_futures_testnet_url(effective_base)
 
     async def connect(self) -> bool:
         effective = (self._configured_base_url or settings.binance_base_url).rstrip("/")
@@ -422,7 +439,7 @@ class BinanceGateway:
                 mode=TradingMode.PAPER,
             )
         if settings.binance_mode != "testnet" or not self._uses_testnet_endpoint():
-            raise BinanceConnectionError("Signed Binance account access is restricted to BINANCE_MODE=testnet")
+            raise BinanceConnectionError("Signed Binance account access is restricted to Binance Futures Demo/Testnet")
         row = await self._signed_request("GET", "/fapi/v2/account", {})
         return AccountInfo(
             login=0, name="Binance Futures Testnet", server="binance-testnet",
@@ -435,16 +452,16 @@ class BinanceGateway:
         )
 
     async def test_testnet_account_access(self) -> AccountInfo:
-        """Verify credentials with a read-only Testnet account request."""
+        """Verify credentials with a read-only Futures Demo/Testnet account request."""
         if not self._uses_testnet_endpoint():
-            raise BinanceConnectionError("Credential checks are restricted to Binance Futures Testnet")
+            raise BinanceConnectionError("Credential checks are restricted to Binance Futures Demo/Testnet")
         if not await self.connect():
-            raise BinanceConnectionError("Could not connect to Binance Futures Testnet")
+            raise BinanceConnectionError("Could not connect to Binance Futures Demo/Testnet")
         row = await self._signed_request("GET", "/fapi/v2/account", {})
         return AccountInfo(
             login=0,
-            name="Binance Futures Testnet",
-            server="binance-testnet",
+            name="Binance Futures Demo/Testnet",
+            server="binance-demo-testnet",
             balance=float(row.get("totalWalletBalance", 0)),
             equity=float(row.get("totalMarginBalance", 0)),
             margin=float(row.get("totalInitialMargin", 0)),
@@ -461,14 +478,14 @@ class BinanceGateway:
             return OrderResult(
                 success=False,
                 venue=self.venue,
-                error_message="Binance LIVE execution is disabled; use DEMO with Binance testnet safeguards",
+                error_message="Binance LIVE execution is disabled; use DEMO with Binance Demo/Testnet safeguards",
             )
         if trading_mode != "demo":
             return OrderResult(success=False, venue=self.venue, error_message="Broker execution is disabled in PAPER mode")
         if settings.binance_mode != "testnet":
-            return OrderResult(success=False, venue=self.venue, error_message="Binance execution requires BINANCE_MODE=testnet")
+            return OrderResult(success=False, venue=self.venue, error_message="Binance execution requires the configured Demo/Testnet mode")
         if not self._uses_testnet_endpoint():
-            return OrderResult(success=False, venue=self.venue, error_message="DEMO execution requires the Binance Futures Testnet endpoint")
+            return OrderResult(success=False, venue=self.venue, error_message="DEMO execution requires an approved Binance Futures Demo/Testnet endpoint")
         if not settings.binance_api_key or not settings.binance_api_secret:
             return OrderResult(success=False, venue=self.venue, error_message="Binance testnet credentials are not configured")
         if request.symbol.upper() not in settings.symbols:

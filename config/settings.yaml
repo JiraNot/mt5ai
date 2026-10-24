@@ -6,7 +6,7 @@ app:
 binance:
   mode: "paper"
   symbol: "BTCUSDT"
-  base_url: "https://testnet.binancefuture.com"
+  base_url: "https://demo-fapi.binance.com"
   timeout: 10.0
 
 symbols:

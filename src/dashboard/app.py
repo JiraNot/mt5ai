@@ -849,7 +849,7 @@ def render_market_chart_section(
 
 def check_binance_status() -> dict:
     """Check Binance public market-data connectivity without requiring credentials."""
-    base_url = os.getenv("BINANCE_BASE_URL", "https://testnet.binancefuture.com").rstrip("/")
+    base_url = os.getenv("BINANCE_BASE_URL", "https://demo-fapi.binance.com").rstrip("/")
     start_time = time.time()
     try:
         req = urllib.request.Request(

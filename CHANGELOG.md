@@ -2,6 +2,7 @@
 
 ## 2026-10-24 (DEMO Execution, Risk Thresholds & Tablet Header)
 
+- **Binance Futures Demo API Compatibility (`src/market/binance_gateway.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Use Binance's current `demo-fapi.binance.com` REST / `demo-fstream.binance.com` WebSocket endpoints for newly created Futures Demo keys; keep the classic Futures Testnet endpoint available. The read-only API check now reports safe Binance error codes and key guidance.
 - **Binance Testnet Credential Check (`src/market/binance_gateway.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Add a Settings button that checks entered or saved credentials using a read-only Testnet account request. Restrict the check to the Binance Futures Testnet host, return sanitized errors, and never submit an order.
 - **Tablet Header (`web/src/components/Header.tsx`)**: Use a content-driven two-row header below 2xl and hide inline balance/readiness details until the wide desktop breakpoint so the top controls fit tablet screens.
 - **Runtime Trading Settings (`src/core/runtime_settings.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Persist the visible entry-score and Volume/RSI controls. Entry score now drives candidate triage, the AI Council and Risk Engine confidence together; max-open positions now limits concurrent positions without changing the daily trade cap.

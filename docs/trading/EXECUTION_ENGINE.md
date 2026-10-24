@@ -99,11 +99,12 @@ execution:
 
 ## Binance Testnet DEMO Execution
 
-- DEMO must use `BINANCE_MODE=testnet` and the official `testnet.binancefuture.com` host. Missing or invalid credentials block execution and remain visible; DEMO must not silently switch to Paper.
+- DEMO must use `BINANCE_MODE=testnet` and an exact Binance Futures Demo/Testnet HTTPS origin. New Binance Futures Demo API keys use `https://demo-fapi.binance.com`; the classic `https://testnet.binancefuture.com` origin remains supported for existing Testnet accounts. Missing or invalid credentials block execution and remain visible; DEMO must not silently switch to Paper.
 - Reject unsupported symbols, Hedge Mode, untradable contracts, stale SL/TP brackets, and quantities outside exchange lot, tick, and minimum-notional filters before opening a position.
-- Set Isolated margin and configured leverage before entry, then cap quantity by both Risk Engine size and available Testnet margin.
+- Set Isolated margin and configured leverage before entry, then cap quantity by both Risk Engine size and available Demo/Testnet margin.
 - Market entry requests use `newOrderRespType=RESULT` so fill price and executed quantity are available for the journal.
 - Place `STOP_MARKET` and `TAKE_PROFIT_MARKET` close-position orders through `POST /fapi/v1/algoOrder`; `/fapi/v1/order` no longer accepts conditional protective orders.
 - If the server-side SL cannot be installed, submit a reduce-only market close immediately and surface an emergency error if that close also fails. A TP failure can proceed only when the server-side SL is active.
 - Reconcile active algo orders with positions. Position modification replaces protection by placing the replacement first, then canceling the old algo order. Close orders are reduce-only, report success only after the requested quantity is confirmed, and remove stale close-position algo orders after a full close.
-- This describes implementation only, not a successful exchange fill. DEMO acceptance still requires an observed Testnet entry with its broker-side SL.
+- REST requests use Binance's current Futures Demo REST endpoint `demo-fapi.binance.com` with its matching WebSocket endpoint `demo-fstream.binance.com`; classic Testnet uses its corresponding `binancefuture.com` endpoints.
+- This describes implementation only, not a successful exchange fill. DEMO acceptance still requires an observed Demo/Testnet entry with its broker-side SL.
