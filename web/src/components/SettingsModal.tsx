@@ -66,6 +66,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     entry_min_score: 70,
     binance_mode: 'paper',
     binance_base_url: 'https://demo-fapi.binance.com',
+    binance_demo_api_key: '',
+    binance_demo_api_secret: '',
+    binance_live_api_key: '',
+    binance_live_api_secret: '',
+    // Legacy aliases are returned for old clients but are never edited here.
     binance_api_key: '',
     binance_api_secret: '',
     ai_provider: 'codex',
@@ -83,7 +88,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     telegram_chat_id: '',
   });
 
-  const [showBinanceSecret, setShowBinanceSecret] = useState(false);
+  const [showDemoBinanceSecret, setShowDemoBinanceSecret] = useState(false);
+  const [showLiveBinanceSecret, setShowLiveBinanceSecret] = useState(false);
   const [showAIKey, setShowAIKey] = useState(false);
   const [showTelegramToken, setShowTelegramToken] = useState(false);
 
@@ -130,15 +136,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     }
   };
 
-  const handleTestBinance = async () => {
+  const handleTestBinance = async (environment: 'testnet' | 'live') => {
     setTestingBinance(true);
     setBinanceTestResult(null);
     try {
+      const demoUrl = formData.binance_mode === 'testnet'
+        ? formData.binance_base_url || 'https://demo-fapi.binance.com'
+        : 'https://demo-fapi.binance.com';
       const result = await testBinanceApi({
-        binance_mode: formData.binance_mode || 'paper',
-        binance_base_url: formData.binance_base_url || '',
-        binance_api_key: formData.binance_api_key || '',
-        binance_api_secret: formData.binance_api_secret || '',
+        binance_mode: environment,
+        binance_base_url: environment === 'live' ? 'https://fapi.binance.com' : demoUrl,
+        binance_demo_api_key: formData.binance_demo_api_key || '',
+        binance_demo_api_secret: formData.binance_demo_api_secret || '',
+        binance_live_api_key: formData.binance_live_api_key || '',
+        binance_live_api_secret: formData.binance_live_api_secret || '',
       });
       setBinanceTestResult(result);
     } catch (err: any) {
@@ -180,7 +191,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     setSaving(true);
     setToast(null);
     try {
-      const res = await saveSettings(formData);
+      const settingsToSave = { ...formData };
+      delete settingsToSave.binance_api_key;
+      delete settingsToSave.binance_api_secret;
+      const res = await saveSettings(settingsToSave);
       if (res.ok) {
         setToast({ type: 'success', message: 'บันทึกการตั้งค่าสำเร็จ! ข้อมูลถูกนำไปใช้ทันทีโดยไม่ต้องรีสตาร์ต' });
         setFormData(res.settings);
@@ -556,11 +570,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                 <div className="space-y-4">
                   <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-200/90 leading-relaxed">
                     💡 <strong>ปลอดภัย:</strong> คีย์และ Secret จะถูกเข้ารหัส Fernet ก่อนจัดเก็บ
-                    ไม่ถูกส่งกลับไปยังหน้าจอ และนำไปใช้งานทันทีโดยไม่ต้องแก้ไขไฟล์ <code className="bg-dark-900 px-1 py-0.5 rounded">.env</code>
+                    และแสดงแบบปกปิดในหน้าจอ ตั้งค่าได้โดยไม่ต้องแก้ไขไฟล์ <code className="bg-dark-900 px-1 py-0.5 rounded">.env</code>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">สภาพแวดล้อม Binance (Futures Demo/Testnet)</label>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">สภาพแวดล้อม Binance Futures</label>
                     <div className="grid grid-cols-3 gap-2">
                       {(['paper', 'testnet', 'live'] as const).map((bm) => (
                         <button
@@ -588,7 +602,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Binance Futures Base URL</label>
-                    <p className="text-[10px] text-slate-500 mb-1">คีย์ Futures Demo รุ่นปัจจุบันใช้ demo-fapi.binance.com; กดปุ่ม DEMO / TESTNET เพื่อเลือก URL นี้</p>
+                    <p className="text-[10px] text-slate-500 mb-1">URL นี้ใช้กับ environment ของ runtime; ปุ่มทดสอบในแต่ละกลุ่มใช้ URL ของตัวเองและไม่เปลี่ยน environment นี้</p>
                     <input
                       type="text"
                       value={formData.binance_base_url || ''}
@@ -600,55 +614,113 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Binance API Key</label>
-                    <input
-                      type="text"
-                      value={formData.binance_api_key || ''}
-                      onChange={(e) => {
-                        setFormData({ ...formData, binance_api_key: e.target.value });
-                        setBinanceTestResult(null);
-                      }}
-                      className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
-                      placeholder="ใส่ API Key จาก Binance (ถ้าเว้นไว้คงค่าเดิม)"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Binance API Secret</label>
-                    <div className="relative">
+                  <div className="p-3 bg-dark-950/60 border border-dark-800 rounded-xl space-y-3">
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">API Key สำหรับ Demo / Testnet</div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">ใช้คีย์จาก Binance Futures Demo API Management หรือ Futures Testnet</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Demo / Testnet API Key</label>
                       <input
-                        type={showBinanceSecret ? 'text' : 'password'}
-                        value={formData.binance_api_secret || ''}
+                        type="text"
+                        value={formData.binance_demo_api_key || ''}
                         onChange={(e) => {
-                          setFormData({ ...formData, binance_api_secret: e.target.value });
+                          setFormData({ ...formData, binance_demo_api_key: e.target.value });
                           setBinanceTestResult(null);
                         }}
-                        className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold pr-10"
-                        placeholder="ใส่ API Secret จาก Binance (ถ้าเว้นไว้คงค่าเดิม)"
+                        className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
+                        placeholder="API Key ของ Demo / Testnet"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowBinanceSecret(!showBinanceSecret)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
-                      >
-                        {showBinanceSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
                     </div>
-                  </div>
-
-                  <div className="space-y-2 pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Demo / Testnet API Secret</label>
+                      <div className="relative">
+                        <input
+                          type={showDemoBinanceSecret ? 'text' : 'password'}
+                          value={formData.binance_demo_api_secret || ''}
+                          onChange={(e) => {
+                            setFormData({ ...formData, binance_demo_api_secret: e.target.value });
+                            setBinanceTestResult(null);
+                          }}
+                          className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold pr-10"
+                          placeholder="API Secret ของ Demo / Testnet"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowDemoBinanceSecret(!showDemoBinanceSecret)}
+                          className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                          aria-label={showDemoBinanceSecret ? 'ซ่อน Demo API Secret' : 'แสดง Demo API Secret'}
+                        >
+                          {showDemoBinanceSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={handleTestBinance}
-                      disabled={testingBinance || formData.binance_mode !== 'testnet'}
+                      onClick={() => handleTestBinance('testnet')}
+                      disabled={testingBinance}
                       className="px-4 py-2 rounded-xl border border-brand-gold/50 bg-brand-gold/10 hover:bg-brand-gold/20 text-xs font-bold text-brand-gold flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {testingBinance ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      <span>{testingBinance ? 'กำลังตรวจสอบ...' : 'ทดสอบ Binance API'}</span>
+                      <span>{testingBinance ? 'กำลังตรวจสอบ...' : 'ทดสอบ Demo / Testnet API'}</span>
                     </button>
+                  </div>
+
+                  <div className="p-3 bg-rose-500/5 border border-rose-500/20 rounded-xl space-y-3">
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">API Key สำหรับ Live</div>
+                      <p className="text-[10px] text-rose-300/80 mt-0.5">เก็บแยกจาก Demo; การทดสอบอ่านบัญชีอย่างเดียว และระบบยังปิดการส่งคำสั่งซื้อขาย Live</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Live API Key</label>
+                      <input
+                        type="text"
+                        value={formData.binance_live_api_key || ''}
+                        onChange={(e) => {
+                          setFormData({ ...formData, binance_live_api_key: e.target.value });
+                          setBinanceTestResult(null);
+                        }}
+                        className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-400"
+                        placeholder="API Key ของบัญชี Futures Live"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Live API Secret</label>
+                      <div className="relative">
+                        <input
+                          type={showLiveBinanceSecret ? 'text' : 'password'}
+                          value={formData.binance_live_api_secret || ''}
+                          onChange={(e) => {
+                            setFormData({ ...formData, binance_live_api_secret: e.target.value });
+                            setBinanceTestResult(null);
+                          }}
+                          className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-400 pr-10"
+                          placeholder="API Secret ของบัญชี Futures Live"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLiveBinanceSecret(!showLiveBinanceSecret)}
+                          className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                          aria-label={showLiveBinanceSecret ? 'ซ่อน Live API Secret' : 'แสดง Live API Secret'}
+                        >
+                          {showLiveBinanceSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTestBinance('live')}
+                      disabled={testingBinance}
+                      className="px-4 py-2 rounded-xl border border-rose-400/40 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-bold text-rose-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {testingBinance ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      <span>{testingBinance ? 'กำลังตรวจสอบ...' : 'ทดสอบ Live API (อ่านอย่างเดียว)'}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
                     <p className="text-[10px] text-slate-500">
-                      ทดสอบอ่านข้อมูลบัญชี Binance Futures Demo/Testnet เท่านั้น ไม่มีการส่งคำสั่งซื้อขาย
+                      ปุ่มทดสอบแต่ละชุดใช้คีย์และ URL ของสภาพแวดล้อมนั้นโดยตรง และอ่านข้อมูลบัญชีเท่านั้น ไม่มีการส่งคำสั่งซื้อขาย
                     </p>
                     {binanceTestResult && (
                       <div className={`flex items-start space-x-2 rounded-lg border px-3 py-2 text-xs ${

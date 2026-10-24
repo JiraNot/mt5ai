@@ -346,6 +346,52 @@ async def test_demo_credential_check_reads_account_without_submitting_orders():
     await gateway.disconnect()
 
 
+@pytest.mark.asyncio
+async def test_live_credential_check_reads_account_without_submitting_orders():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path == "/fapi/v1/ping":
+            return httpx.Response(200, json={})
+        if request.url.path == "/fapi/v1/time":
+            return httpx.Response(200, json={"serverTime": 0})
+        assert request.url.path == "/fapi/v2/account"
+        assert request.method == "GET"
+        assert request.headers["X-MBX-APIKEY"] == "live-key"
+        assert request.url.params["signature"]
+        return httpx.Response(200, json={
+            "totalWalletBalance": "125", "totalMarginBalance": "130",
+            "totalInitialMargin": "5", "availableBalance": "125",
+            "totalUnrealizedProfit": "5",
+        })
+
+    gateway = BinanceGateway(
+        base_url="https://fapi.binance.com",
+        transport=httpx.MockTransport(handler),
+        api_key="live-key",
+        api_secret="live-secret",
+    )
+    account = await gateway.test_live_account_access()
+    assert account.balance == 125
+    assert account.equity == 130
+    assert account.mode.value == "live"
+    assert [request.method for request in calls] == ["GET", "GET", "GET"]
+    assert calls[-1].url.path == "/fapi/v2/account"
+    await gateway.disconnect()
+
+
+@pytest.mark.parametrize("url", [
+    "https://fapi.binance.com.evil.example",
+    "https://fapi.binance.com:444",
+    "https://fapi.binance.com/other",
+    "http://fapi.binance.com",
+])
+def test_gateway_rejects_noncanonical_live_origins(url):
+    gateway = BinanceGateway(base_url=url)
+    assert gateway._uses_live_endpoint() is False
+
+
 @pytest.mark.parametrize("url", [
     "https://demo-fapi.binance.com.evil.example",
     "https://demo-fapi.binance.com:444",

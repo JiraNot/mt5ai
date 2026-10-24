@@ -35,6 +35,7 @@ BINANCE_FUTURES_TESTNET_URLS = {
     # Keep existing classic Futures Testnet credentials/configurations working.
     "https://testnet.binancefuture.com": "wss://fstream.binancefuture.com",
 }
+BINANCE_FUTURES_LIVE_URL = "https://fapi.binance.com"
 
 
 def is_binance_futures_testnet_url(value: str) -> bool:
@@ -43,6 +44,18 @@ def is_binance_futures_testnet_url(value: str) -> bool:
     canonical = f"{parsed.scheme}://{parsed.netloc}".lower()
     return (
         canonical in BINANCE_FUTURES_TESTNET_URLS
+        and parsed.path in ("", "/")
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def is_binance_futures_live_url(value: str) -> bool:
+    """Accept only Binance's exact USDⓈ-M Futures production HTTPS origin."""
+    parsed = urlparse((value or "").strip().rstrip("/"))
+    canonical = f"{parsed.scheme}://{parsed.netloc}".lower()
+    return (
+        canonical == BINANCE_FUTURES_LIVE_URL
         and parsed.path in ("", "/")
         and not parsed.query
         and not parsed.fragment
@@ -102,6 +115,10 @@ class BinanceGateway:
     def _uses_testnet_endpoint(self) -> bool:
         effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
         return is_binance_futures_testnet_url(effective_base)
+
+    def _uses_live_endpoint(self) -> bool:
+        effective_base = (self._configured_base_url or settings.binance_base_url).rstrip("/")
+        return is_binance_futures_live_url(effective_base)
 
     async def connect(self) -> bool:
         effective = (self._configured_base_url or settings.binance_base_url).rstrip("/")
@@ -470,6 +487,31 @@ class BinanceGateway:
             currency="USDT",
             leverage=0,
             mode=TradingMode.DEMO,
+        )
+
+    async def test_live_account_access(self) -> AccountInfo:
+        """Verify a production API key with a read-only account request only.
+
+        This method is for credential validation. Order submission and normal
+        signed account access remain disabled for LIVE in the execution path.
+        """
+        if not self._uses_live_endpoint():
+            raise BinanceConnectionError("Live credential checks require the exact Binance Futures production endpoint")
+        if not await self.connect():
+            raise BinanceConnectionError("Could not connect to Binance Futures production API")
+        row = await self._signed_request("GET", "/fapi/v2/account", {})
+        return AccountInfo(
+            login=0,
+            name="Binance Futures Live (read-only check)",
+            server="binance-futures-live",
+            balance=float(row.get("totalWalletBalance", 0)),
+            equity=float(row.get("totalMarginBalance", 0)),
+            margin=float(row.get("totalInitialMargin", 0)),
+            free_margin=float(row.get("availableBalance", 0)),
+            profit=float(row.get("totalUnrealizedProfit", 0)),
+            currency="USDT",
+            leverage=0,
+            mode=TradingMode.LIVE,
         )
 
     async def send_order(self, request: OrderRequest) -> OrderResult:

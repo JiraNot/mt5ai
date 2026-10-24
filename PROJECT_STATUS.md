@@ -105,7 +105,7 @@ DISABLED
 - [x] Docker & Coolify Auto-Deploy Hardening (docker-compose sync, resilient healthchecks, GitHub Actions webhook trigger)
 - [x] MobileIDE-inspired AI Login & Local Session Probing (`src/core/ai_auth_service.py`, `GET /api/ai/auth-status`, `POST /api/ai/test`): Quota-safe CLI status checking (Codex ChatGPT, Gemini Antigravity, OpenAI, OpenRouter) with real-time latency ping and 1-click Web Terminal login
 - [x] Institutional Pro Prop Desk & Telemetry Dashboard (`ProAnalyticsDashboard.tsx`, `src/analytics/pro_metrics_service.py`, `GET /api/analytics/pro-metrics`): SwingFrontRun-inspired high-density desk featuring Top Telemetry Ribbon (Regime, S/R Range, Spread, Latency, Macro News, Global Clocks), Executive 6 Financial Cards, Multi-Strategy LEGS Breakdown with Win/Loss 20-trade sparkline ticks, Daily P/L Calendar Heatmap (day-by-day tiles, weekly subtotals, Green Days count), Execution Quality & Slippage Analytics (Broker Grade A+, latency, slip vs edge ratio, hourly slip distribution), Dual-Line Equity & Gross Edge Curve SVG, and Live Circuit Breakers Safety Matrix. Seamless 1-click Header toggle between `📈 CHART` and `📊 PRO DESK`.
-- [x] 347 Tests passing (0 failures)
+- Test run: 373 passed; one full-suite failure remains in the unrelated position-size rounding assertion (`tests/integration/test_full_pipeline.py::TestFullPipelineHappyPath::test_position_sizing_math`, expected 0.17, got 0.16).
 - [x] Documentation structure complete
 - [x] ADR documents (5)
 - [x] Task files (13 phases)
@@ -139,6 +139,7 @@ DISABLED
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - The 2026-10-24 Testnet execution hardening is included in source; first automated Testnet fill and broker-side SL still need operational confirmation. LIVE remains disabled.
 - Binance Futures Demo API keys use Binance's current `demo-fapi.binance.com` endpoint; the classic `testnet.binancefuture.com` endpoint remains supported. The updated credential check and automated fill/protective-stop flow still need post-deploy confirmation.
+- Binance Futures Demo/Testnet and Live API credentials are stored separately; both credential checks are read-only, and LIVE order execution remains disabled.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data
@@ -168,7 +169,7 @@ Historical figures below predate the 2026-09-10 R:R correction and must be reval
 ```
 Source files: 52+
 Test files: 13
-Total tests: 330 (all passing)
+Total tests: 374 (373 passing, 1 unrelated position-size rounding failure)
 Documentation files: 40+
 Task files: 13
 ```

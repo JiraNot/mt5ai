@@ -108,3 +108,9 @@ execution:
 - Reconcile active algo orders with positions. Position modification replaces protection by placing the replacement first, then canceling the old algo order. Close orders are reduce-only, report success only after the requested quantity is confirmed, and remove stale close-position algo orders after a full close.
 - REST requests use Binance's current Futures Demo REST endpoint `demo-fapi.binance.com` with its matching WebSocket endpoint `demo-fstream.binance.com`; classic Testnet uses its corresponding `binancefuture.com` endpoints.
 - This describes implementation only, not a successful exchange fill. DEMO acceptance still requires an observed Demo/Testnet entry with its broker-side SL.
+
+## Separate Binance Credentials and LIVE Lock
+
+- Persist Demo/Testnet and Live API key/secret pairs as separate encrypted settings. Legacy `BINANCE_API_KEY` / `BINANCE_API_SECRET` values are treated as Demo/Testnet credentials only.
+- Settings may validate a Live key against the exact `https://fapi.binance.com` origin with a signed `GET /fapi/v2/account` request. This check is read-only and must not change the runtime environment or submit an order.
+- LIVE order execution remains disabled in the gateway. Credential validation does not arm LIVE; any future Live execution requires its separate safety gate and broker-side protective-stop support.

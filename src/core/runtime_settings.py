@@ -22,13 +22,17 @@ from cryptography.fernet import Fernet, InvalidToken
 logger = logging.getLogger(__name__)
 
 _SECRET_FIELDS = {
-    "binance_api_key",
-    "binance_api_secret",
+    "binance_demo_api_key",
+    "binance_demo_api_secret",
+    "binance_live_api_key",
+    "binance_live_api_secret",
     "openai_api_key",
     "gemini_api_key",
     "openrouter_api_key",
     "telegram_bot_token",
 }
+_LEGACY_BINANCE_SECRET_FIELDS = {"binance_api_key", "binance_api_secret"}
+_ALL_SECRET_FIELDS = _SECRET_FIELDS | _LEGACY_BINANCE_SECRET_FIELDS
 
 DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     # Trading & Execution
@@ -48,6 +52,11 @@ DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     # Binance Exchange
     "binance_mode": "paper",
     "binance_base_url": "https://demo-fapi.binance.com",
+    "binance_demo_api_key": "",
+    "binance_demo_api_secret": "",
+    "binance_live_api_key": "",
+    "binance_live_api_secret": "",
+    # Compatibility aliases for code and clients predating per-environment keys.
     "binance_api_key": "",
     "binance_api_secret": "",
     # AI Providers & Vision
@@ -101,7 +110,7 @@ def _read_raw_file() -> dict[str, Any]:
         # Decrypt secrets
         fernet = _fernet()
         secrets = data.get("_secrets", {})
-        for field_name in _SECRET_FIELDS:
+        for field_name in _ALL_SECRET_FIELDS:
             encrypted_val = secrets.get(field_name)
             if encrypted_val:
                 try:
@@ -127,6 +136,11 @@ def _write_raw_file(data: dict[str, Any]) -> None:
         if val and isinstance(val, str) and val.strip():
             encrypted_bytes = fernet.encrypt(val.strip().encode("utf-8"))
             secrets[field_name] = encrypted_bytes.decode("utf-8")
+    # Legacy fields are virtual aliases returned to older clients. Persist only
+    # the environment-specific credential pairs so Demo and Live cannot share
+    # an accidentally overwritten value.
+    payload.pop("binance_api_key", None)
+    payload.pop("binance_api_secret", None)
     payload["_secrets"] = secrets
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -189,8 +203,19 @@ def get_runtime_settings(mask_secrets: bool = True) -> dict[str, Any]:
 
     result["binance_mode"] = persisted.get("binance_mode", os.getenv("BINANCE_MODE", settings.binance_mode)).lower()
     result["binance_base_url"] = persisted.get("binance_base_url", os.getenv("BINANCE_BASE_URL", settings.binance_base_url))
-    result["binance_api_key"] = persisted.get("binance_api_key", os.getenv("BINANCE_API_KEY", settings.binance_api_key))
-    result["binance_api_secret"] = persisted.get("binance_api_secret", os.getenv("BINANCE_API_SECRET", settings.binance_api_secret))
+    result["binance_demo_api_key"] = persisted.get(
+        "binance_demo_api_key",
+        persisted.get("binance_api_key", os.getenv("BINANCE_DEMO_API_KEY") or os.getenv("BINANCE_API_KEY", "")),
+    )
+    result["binance_demo_api_secret"] = persisted.get(
+        "binance_demo_api_secret",
+        persisted.get("binance_api_secret", os.getenv("BINANCE_DEMO_API_SECRET") or os.getenv("BINANCE_API_SECRET", "")),
+    )
+    result["binance_live_api_key"] = persisted.get("binance_live_api_key", os.getenv("BINANCE_LIVE_API_KEY", ""))
+    result["binance_live_api_secret"] = persisted.get("binance_live_api_secret", os.getenv("BINANCE_LIVE_API_SECRET", ""))
+    active_key_prefix = "binance_live" if result["binance_mode"] == "live" else "binance_demo"
+    result["binance_api_key"] = result[f"{active_key_prefix}_api_key"]
+    result["binance_api_secret"] = result[f"{active_key_prefix}_api_secret"]
 
     result["ai_provider"] = persisted.get("ai_provider", "codex")
     result["openai_api_key"] = persisted.get("openai_api_key", os.getenv("OPENAI_API_KEY", ""))
@@ -209,7 +234,7 @@ def get_runtime_settings(mask_secrets: bool = True) -> dict[str, Any]:
     result["updated_at"] = persisted.get("updated_at")
 
     if mask_secrets:
-        for secret_key in _SECRET_FIELDS:
+        for secret_key in _ALL_SECRET_FIELDS:
             result[secret_key] = mask_secret(result.get(secret_key))
 
     return result
@@ -361,6 +386,18 @@ def save_runtime_settings(changes: dict[str, Any]) -> dict[str, Any]:
     if "telegram_chat_id" in changes:
         updated["telegram_chat_id"] = str(changes["telegram_chat_id"]).strip()
 
+    # Keep legacy requests working by routing their single credential pair to
+    # the environment selected in this update. Never copy Demo credentials to
+    # Live (or vice versa) when the environment changes.
+    legacy_target = "live" if updated.get("binance_mode") == "live" else "demo"
+    legacy_secret_map = {
+        "binance_api_key": f"binance_{legacy_target}_api_key",
+        "binance_api_secret": f"binance_{legacy_target}_api_secret",
+    }
+    for legacy_field, target_field in legacy_secret_map.items():
+        if legacy_field in changes and target_field not in changes:
+            changes = {**changes, target_field: changes[legacy_field]}
+
     # Handle secret fields: only update if provided and not masked
     for secret_key in _SECRET_FIELDS:
         if secret_key in changes:
@@ -391,10 +428,9 @@ def _sync_to_global_settings(cfg: dict[str, Any]) -> None:
             settings.binance_mode = cfg["binance_mode"]
         if "binance_base_url" in cfg:
             settings.binance_base_url = cfg["binance_base_url"]
-        if "binance_api_key" in cfg:
-            settings.binance_api_key = cfg["binance_api_key"]
-        if "binance_api_secret" in cfg:
-            settings.binance_api_secret = cfg["binance_api_secret"]
+        active_prefix = "binance_live" if cfg.get("binance_mode") == "live" else "binance_demo"
+        settings.binance_api_key = cfg.get(f"{active_prefix}_api_key", cfg.get("binance_api_key", ""))
+        settings.binance_api_secret = cfg.get(f"{active_prefix}_api_secret", cfg.get("binance_api_secret", ""))
         if "trading_mode" in cfg:
             settings.trading_mode = cfg["trading_mode"]
         if "primary_symbol" in cfg:

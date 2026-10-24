@@ -194,6 +194,11 @@ export interface RuntimeSettings {
   news_filter_enabled?: boolean;
   binance_mode: 'paper' | 'testnet' | 'live';
   binance_base_url: string;
+  binance_demo_api_key?: string;
+  binance_demo_api_secret?: string;
+  binance_live_api_key?: string;
+  binance_live_api_secret?: string;
+  /** Legacy active-environment aliases retained for older clients. */
   binance_api_key?: string;
   binance_api_secret?: string;
   ai_provider: 'codex' | 'openai' | 'gemini' | 'openrouter';
@@ -301,7 +306,9 @@ export async function saveSettings(settings: Partial<RuntimeSettings>): Promise<
   return res.json();
 }
 
-export async function testBinanceApi(settings: Pick<RuntimeSettings, 'binance_mode' | 'binance_base_url' | 'binance_api_key' | 'binance_api_secret'>): Promise<{
+export async function testBinanceApi(settings: Pick<RuntimeSettings, 'binance_mode' | 'binance_base_url'> & Partial<Pick<RuntimeSettings,
+  'binance_demo_api_key' | 'binance_demo_api_secret' | 'binance_live_api_key' | 'binance_live_api_secret'
+>>): Promise<{
   ok: boolean;
   message: string;
   balance?: number;

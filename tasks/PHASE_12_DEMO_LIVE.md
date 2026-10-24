@@ -36,6 +36,8 @@ Binance Testnet reconnect behavior validated ✓
 - [ ] Connect to demo account
 - [ ] Configure risk limits
 - [ ] Enable strategies
+- [x] Store Demo/Testnet and Live API credentials in separate encrypted fields
+- [x] Add read-only Live credential validation without enabling Live orders
 
 **Acceptance:**
 - Demo trading running

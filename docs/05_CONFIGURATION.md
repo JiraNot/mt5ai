@@ -190,8 +190,10 @@ DATABASE_URL_DEV=sqlite:///./dev.db
 # Binance USDT-M Futures
 BINANCE_MODE=paper              # paper / testnet / live (live disabled by design)
 BINANCE_BASE_URL=https://demo-fapi.binance.com
-BINANCE_API_KEY=
-BINANCE_API_SECRET=
+BINANCE_DEMO_API_KEY=
+BINANCE_DEMO_API_SECRET=
+BINANCE_LIVE_API_KEY=
+BINANCE_LIVE_API_SECRET=
 BINANCE_TIMEOUT=10
 BINANCE_SYMBOL=BTCUSDT
 BINANCE_USE_WEBSOCKET=false
@@ -199,6 +201,8 @@ PAPER_INITIAL_BALANCE=100000
 
 # Binance Futures Demo API keys from Binance Demo Trading use demo-fapi.
 # Existing classic Futures Testnet keys may continue to use testnet.binancefuture.com.
+# Legacy BINANCE_API_KEY / BINANCE_API_SECRET are accepted as Demo/Testnet keys.
+# Live credential checks use fapi.binance.com and are read-only; LIVE orders remain disabled.
 
 # Runtime execution mode
 # The dashboard can change this without an ENV edit or redeploy. The value is

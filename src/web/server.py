@@ -34,7 +34,11 @@ from src.core.runtime_control import (
 )
 from src.core.runtime_status import read_runtime_status, update_runtime_status
 from src.execution.paper_gateway import PaperGateway
-from src.market.binance_gateway import BinanceGateway, is_binance_futures_testnet_url
+from src.market.binance_gateway import (
+    BinanceGateway,
+    is_binance_futures_live_url,
+    is_binance_futures_testnet_url,
+)
 from src.market.crypto_screener import CryptoScreener
 from src.risk.promotion_gate import PromotionGate
 from src.storage.models import Trade, get_engine, get_session_factory
@@ -244,6 +248,11 @@ class SettingsUpdateRequest(BaseModel):
     news_filter_enabled: bool | None = None
     binance_mode: str | None = None
     binance_base_url: str | None = None
+    binance_demo_api_key: str | None = None
+    binance_demo_api_secret: str | None = None
+    binance_live_api_key: str | None = None
+    binance_live_api_secret: str | None = None
+    # Compatibility fields for older settings clients.
     binance_api_key: str | None = None
     binance_api_secret: str | None = None
     ai_provider: str | None = None
@@ -268,6 +277,11 @@ class AITestRequest(BaseModel):
 class BinanceTestRequest(BaseModel):
     binance_mode: str | None = None
     binance_base_url: str | None = None
+    binance_demo_api_key: str | None = None
+    binance_demo_api_secret: str | None = None
+    binance_live_api_key: str | None = None
+    binance_live_api_secret: str | None = None
+    # Compatibility fields for older settings clients.
     binance_api_key: str | None = None
     binance_api_secret: str | None = None
 
@@ -600,7 +614,7 @@ async def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
 
 @app.post("/api/settings/binance/test")
 async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
-    """Check Binance Futures Testnet credentials with a read-only account request."""
+    """Check selected Binance Futures environment with a read-only request."""
     from src.core.runtime_settings import get_runtime_settings, is_masked
 
     current = get_runtime_settings(mask_secrets=False)
@@ -611,17 +625,30 @@ async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
             return value
         return (stored or "").strip()
 
-    api_key = resolve_secret(req.binance_api_key, current.get("binance_api_key"))
-    api_secret = resolve_secret(req.binance_api_secret, current.get("binance_api_secret"))
-    if not api_key or not api_secret:
-        return {"ok": False, "message": "กรุณากรอก Binance API Key และ Secret ก่อนทดสอบ"}
+    mode = (req.binance_mode or current.get("binance_mode", "")).lower()
+    if mode == "testnet":
+        environment = "Demo/Testnet"
+        key_field, secret_field = "binance_demo_api_key", "binance_demo_api_secret"
+        provided_key = req.binance_demo_api_key if req.binance_demo_api_key is not None else req.binance_api_key
+        provided_secret = req.binance_demo_api_secret if req.binance_demo_api_secret is not None else req.binance_api_secret
+    elif mode == "live":
+        environment = "Live"
+        key_field, secret_field = "binance_live_api_key", "binance_live_api_secret"
+        provided_key = req.binance_live_api_key if req.binance_live_api_key is not None else req.binance_api_key
+        provided_secret = req.binance_live_api_secret if req.binance_live_api_secret is not None else req.binance_api_secret
+    else:
+        return {"ok": False, "message": "เลือก Binance environment เป็น DEMO/TESTNET หรือ LIVE ก่อนทดสอบ"}
 
-    if (req.binance_mode or current.get("binance_mode", "")).lower() != "testnet":
-        return {"ok": False, "message": "เลือก Binance environment เป็น DEMO/TESTNET ก่อนทดสอบ"}
+    api_key = resolve_secret(provided_key, current.get(key_field))
+    api_secret = resolve_secret(provided_secret, current.get(secret_field))
+    if not api_key or not api_secret:
+        return {"ok": False, "message": f"กรุณากรอก Binance Futures {environment} API Key และ Secret ก่อนทดสอบ"}
 
     base_url = (req.binance_base_url or current.get("binance_base_url") or "").strip().rstrip("/")
-    if not is_binance_futures_testnet_url(base_url):
-        return {"ok": False, "message": "ทดสอบได้เฉพาะ Binance Futures Demo/Testnet URL ที่รองรับเท่านั้น"}
+    if mode == "testnet" and not is_binance_futures_testnet_url(base_url):
+        return {"ok": False, "message": "ทดสอบ Demo/Testnet ได้เฉพาะ Binance Futures Demo/Testnet URL ที่รองรับเท่านั้น"}
+    if mode == "live" and not is_binance_futures_live_url(base_url):
+        return {"ok": False, "message": "ทดสอบ Live ได้เฉพาะ https://fapi.binance.com เท่านั้น"}
 
     gateway = BinanceGateway(
         base_url=base_url,
@@ -629,14 +656,25 @@ async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
         api_secret=api_secret,
     )
     try:
-        account = await gateway.test_testnet_account_access()
-        return {
+        account = (
+            await gateway.test_testnet_account_access()
+            if mode == "testnet"
+            else await gateway.test_live_account_access()
+        )
+        result = {
             "ok": True,
-            "message": "เชื่อมต่อ Binance Futures Demo/Testnet สำเร็จ",
-            "balance": round(account.balance, 2),
-            "equity": round(account.equity, 2),
-            "currency": account.currency,
+            "message": f"เชื่อมต่อ Binance Futures {environment} สำเร็จ (อ่านข้อมูลบัญชีเท่านั้น)",
         }
+        # Keep real-account financial data out of the API response. The Live
+        # check only needs to confirm the credential; Demo retains its balance
+        # display for the existing workflow.
+        if mode == "testnet":
+            result.update({
+                "balance": round(account.balance, 2),
+                "equity": round(account.equity, 2),
+                "currency": account.currency,
+            })
+        return result
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
         exchange_code: int | None = None
@@ -646,30 +684,31 @@ async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
         except (ValueError, TypeError, AttributeError):
             pass
         if exchange_code == -2014:
-            message = "รูปแบบ API Key ไม่ถูกต้อง ตรวจว่าเป็น HMAC API Key จาก Binance Futures Demo API Management"
+            message = f"รูปแบบ API Key ไม่ถูกต้อง ตรวจว่าเป็น HMAC API Key จาก Binance Futures {environment} API Management"
         elif exchange_code == -2015:
-            message = "Binance ปฏิเสธ API Key ตรวจว่าคีย์มาจาก Futures Demo API Management, URL เป็น demo-fapi และคีย์ยังใช้งานได้"
+            source = "Futures Demo API Management" if mode == "testnet" else "API Management ของบัญชี Live"
+            message = f"Binance ปฏิเสธ API Key ตรวจว่าคีย์มาจาก {source}, URL ตรงกับสภาพแวดล้อม และคีย์ยังใช้งานได้"
         elif exchange_code == -1022:
-            message = "ลายเซ็น API ไม่ถูกต้อง ตรวจ Secret และใช้ HMAC API Key สำหรับ Futures Demo"
+            message = f"ลายเซ็น API ไม่ถูกต้อง ตรวจ Secret และใช้ HMAC API Key สำหรับ Futures {environment}"
         elif exchange_code == -1021:
             message = "เวลาเซิร์ฟเวอร์คลาดเคลื่อนเกินกำหนด ลองอีกครั้งหลังซิงก์เวลา"
         elif status_code == 401:
-            message = "Binance ปฏิเสธ API Key/Secret ตรวจว่าคีย์เป็นของ Futures Demo/Testnet และมีสิทธิ์อ่าน Futures account"
+            message = f"Binance ปฏิเสธ API Key/Secret ตรวจว่าคีย์เป็นของ Futures {environment} และมีสิทธิ์อ่าน Futures account"
         elif status_code == 403:
             message = "Binance ไม่อนุญาตคำขอ ตรวจสิทธิ์ Futures และ IP allowlist ของ API key"
         elif status_code == 400:
             message = "Binance ปฏิเสธคำขอ ตรวจ API Key/Secret และเวลาเครื่องของเซิร์ฟเวอร์"
         else:
-            message = f"Binance Testnet ตอบกลับ HTTP {status_code} ลองอีกครั้งภายหลัง"
+            message = f"Binance Futures {environment} ตอบกลับ HTTP {status_code} ลองอีกครั้งภายหลัง"
         result = {"ok": False, "message": message, "status_code": status_code}
         if exchange_code is not None:
             result["exchange_code"] = exchange_code
         return result
     except Exception as exc:
-        logger.warning("Binance Testnet API check failed (%s)", type(exc).__name__)
+        logger.warning("Binance Futures %s API check failed (%s)", environment, type(exc).__name__)
         return {
             "ok": False,
-            "message": "เชื่อมต่อ Binance Futures Demo/Testnet ไม่สำเร็จ ตรวจ URL และการเชื่อมต่อเครือข่าย",
+            "message": f"เชื่อมต่อ Binance Futures {environment} ไม่สำเร็จ ตรวจ URL และการเชื่อมต่อเครือข่าย",
         }
     finally:
         await gateway.disconnect()

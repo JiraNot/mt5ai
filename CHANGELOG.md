@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-24 (Separate Binance Demo and Live Credentials)
+
+- **Environment-Specific Binance Credentials (`src/core/runtime_settings.py`, `web/src/components/SettingsModal.tsx`)**: Store Demo/Testnet and Live API key/secret pairs independently with encrypted persistence and masked responses. Existing single-pair credentials migrate to Demo/Testnet.
+- **Read-Only Live API Validation (`src/web/server.py`, `src/market/binance_gateway.py`)**: Validate Live keys against the exact `fapi.binance.com` origin using a signed account-read request only. Live order execution remains disabled.
+- **Configuration Compatibility (`src/core/config.py`, `.env.example`, `docker-compose.yml`)**: Add environment-specific Demo and Live variables while retaining legacy `BINANCE_API_KEY` / `BINANCE_API_SECRET` as Demo/Testnet aliases.
+- **Verification**: Added mocked tests for key separation, safe environment selection, host validation, and read-only account checks.
+
 ## 2026-10-24 (DEMO Execution, Risk Thresholds & Tablet Header)
 
 - **Binance Futures Demo API Compatibility (`src/market/binance_gateway.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Use Binance's current `demo-fapi.binance.com` REST / `demo-fstream.binance.com` WebSocket endpoints for newly created Futures Demo keys; keep the classic Futures Testnet endpoint available. The read-only API check now reports safe Binance error codes and key guidance.

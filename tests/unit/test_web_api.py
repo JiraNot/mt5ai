@@ -231,3 +231,88 @@ def test_binance_demo_credential_check_exposes_safe_exchange_code(client, monkey
     assert "demo-secret-value" not in response.text
 
 
+def test_binance_live_credential_check_uses_separate_live_key_read_only(client, monkeypatch):
+    instances = []
+
+    class FakeGateway:
+        def __init__(self, **kwargs):
+            instances.append(kwargs)
+
+        async def test_live_account_access(self):
+            return SimpleNamespace(balance=250.0, equity=252.0, currency="USDT")
+
+        async def disconnect(self):
+            pass
+
+    monkeypatch.setattr(server_module, "BinanceGateway", FakeGateway)
+    response = client.post("/api/settings/binance/test", json={
+        "binance_mode": "live",
+        "binance_base_url": "https://fapi.binance.com",
+        "binance_live_api_key": "live-key-value",
+        "binance_live_api_secret": "live-secret-value",
+        "binance_demo_api_key": "demo-key-value",
+        "binance_demo_api_secret": "demo-secret-value",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert "อ่านข้อมูลบัญชีเท่านั้น" in response.json()["message"]
+    assert "balance" not in response.json()
+    assert "equity" not in response.json()
+    assert instances[0] == {
+        "base_url": "https://fapi.binance.com",
+        "api_key": "live-key-value",
+        "api_secret": "live-secret-value",
+    }
+    assert "live-key-value" not in response.text
+    assert "live-secret-value" not in response.text
+    assert "demo-secret-value" not in response.text
+
+
+def test_live_credential_check_never_falls_back_to_demo_key(client, monkeypatch, tmp_path):
+    from src.core.runtime_settings import save_runtime_settings
+
+    monkeypatch.setenv("RUNTIME_SETTINGS_PATH", str(tmp_path / "runtime_settings.json"))
+    monkeypatch.setenv("RUNTIME_CONTROL_PATH", str(tmp_path / "runtime_control.json"))
+    monkeypatch.setenv("BINANCE_LIVE_API_KEY", "")
+    monkeypatch.setenv("BINANCE_LIVE_API_SECRET", "")
+    save_runtime_settings({
+        "binance_mode": "testnet",
+        "binance_demo_api_key": "demo-key-value",
+        "binance_demo_api_secret": "demo-secret-value",
+    })
+
+    class UnexpectedGateway:
+        def __init__(self, **_kwargs):
+            pytest.fail("a Live gateway must not be created with Demo credentials")
+
+    monkeypatch.setattr(server_module, "BinanceGateway", UnexpectedGateway)
+    response = client.post("/api/settings/binance/test", json={
+        "binance_mode": "live",
+        "binance_base_url": "https://fapi.binance.com",
+        "binance_demo_api_key": "demo-key-value",
+        "binance_demo_api_secret": "demo-secret-value",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert "Live API Key" in response.json()["message"]
+
+
+def test_live_credential_check_rejects_unapproved_host_before_request(client, monkeypatch):
+    class UnexpectedGateway:
+        def __init__(self, **_kwargs):
+            pytest.fail("unapproved Binance host must be rejected before network access")
+
+    monkeypatch.setattr(server_module, "BinanceGateway", UnexpectedGateway)
+    response = client.post("/api/settings/binance/test", json={
+        "binance_mode": "live",
+        "binance_base_url": "https://fapi.binance.com.evil.example",
+        "binance_live_api_key": "live-key-value",
+        "binance_live_api_secret": "live-secret-value",
+    })
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert "เฉพาะ https://fapi.binance.com" in response.json()["message"]
+
+

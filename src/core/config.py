@@ -172,11 +172,18 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
         db_url = db_url.replace("sqlite+aiosqlite:///app/", "sqlite+aiosqlite:////app/", 1)
 
     # Construct settings
+    configured_binance_mode = os.getenv("BINANCE_MODE", "paper").lower()
+    configured_demo_api_key = os.getenv("BINANCE_DEMO_API_KEY") or os.getenv("BINANCE_API_KEY", "")
+    configured_demo_api_secret = os.getenv("BINANCE_DEMO_API_SECRET") or os.getenv("BINANCE_API_SECRET", "")
+    configured_live_api_key = os.getenv("BINANCE_LIVE_API_KEY", "")
+    configured_live_api_secret = os.getenv("BINANCE_LIVE_API_SECRET", "")
+    configured_api_key = configured_live_api_key if configured_binance_mode == "live" else configured_demo_api_key
+    configured_api_secret = configured_live_api_secret if configured_binance_mode == "live" else configured_demo_api_secret
     s = Settings(
-        binance_mode=os.getenv("BINANCE_MODE", "paper").lower(),
+        binance_mode=configured_binance_mode,
         binance_base_url=os.getenv("BINANCE_BASE_URL", "https://demo-fapi.binance.com"),
-        binance_api_key=os.getenv("BINANCE_API_KEY", ""),
-        binance_api_secret=os.getenv("BINANCE_API_SECRET", ""),
+        binance_api_key=configured_api_key,
+        binance_api_secret=configured_api_secret,
         binance_timeout=float(os.getenv("BINANCE_TIMEOUT", "10")),
         binance_symbol=os.getenv("BINANCE_SYMBOL", "BTCUSDT").upper(),
         binance_use_websocket=os.getenv("BINANCE_USE_WEBSOCKET", "false").lower() in {"1", "true", "yes"},
@@ -202,10 +209,22 @@ def load_settings(config_dir: str | Path = "config") -> Settings:
                 s.binance_mode = str(persisted["binance_mode"]).lower()
             if "binance_base_url" in persisted:
                 s.binance_base_url = str(persisted["binance_base_url"])
-            if "binance_api_key" in persisted:
-                s.binance_api_key = str(persisted["binance_api_key"])
-            if "binance_api_secret" in persisted:
-                s.binance_api_secret = str(persisted["binance_api_secret"])
+            demo_api_key = str(persisted.get(
+                "binance_demo_api_key",
+                persisted.get("binance_api_key", configured_demo_api_key),
+            ))
+            demo_api_secret = str(persisted.get(
+                "binance_demo_api_secret",
+                persisted.get("binance_api_secret", configured_demo_api_secret),
+            ))
+            live_api_key = str(persisted.get("binance_live_api_key", configured_live_api_key))
+            live_api_secret = str(persisted.get("binance_live_api_secret", configured_live_api_secret))
+            if s.binance_mode == "live":
+                s.binance_api_key = live_api_key
+                s.binance_api_secret = live_api_secret
+            else:
+                s.binance_api_key = demo_api_key
+                s.binance_api_secret = demo_api_secret
             if "trading_mode" in persisted:
                 s.trading_mode = str(persisted["trading_mode"]).lower()
             if "primary_symbol" in persisted:
