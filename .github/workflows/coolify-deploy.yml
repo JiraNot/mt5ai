@@ -1,0 +1,37 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: coolify-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify deployment
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL || secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
+            echo "::error::Configure repository secret COOLIFY_WEBHOOK_URL (or COOLIFY_WEBHOOK) for the Coolify deployment webhook."
+            exit 1
+          fi
+
+          if [ -n "$COOLIFY_TOKEN" ]; then
+            curl --fail-with-body --silent --show-error --max-time 30 \
+              --request GET "$COOLIFY_WEBHOOK_URL" \
+              --header "Authorization: Bearer $COOLIFY_TOKEN" \
+              --output /dev/null
+          else
+            curl --fail-with-body --silent --show-error --max-time 30 \
+              --request GET "$COOLIFY_WEBHOOK_URL" \
+              --output /dev/null
+          fi
+
+          echo "Coolify accepted the deployment request."
