@@ -301,6 +301,22 @@ export async function saveSettings(settings: Partial<RuntimeSettings>): Promise<
   return res.json();
 }
 
+export async function testBinanceApi(settings: Pick<RuntimeSettings, 'binance_mode' | 'binance_base_url' | 'binance_api_key' | 'binance_api_secret'>): Promise<{
+  ok: boolean;
+  message: string;
+  balance?: number;
+  equity?: number;
+  currency?: string;
+  status_code?: number;
+}> {
+  const res = await fetch(`${API_BASE}/settings/binance/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  return res.json();
+}
+
 export async function fetchTradeMarkers(symbol: string): Promise<{ ok: boolean; symbol: string; markers: TradeMarkerItem[]; trades: TradeDetailItem[] }> {
   const res = await fetch(`${API_BASE}/trades/markers?symbol=${symbol}`);
   return res.json();

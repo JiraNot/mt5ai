@@ -20,6 +20,7 @@ DISABLED
 
 - [x] Core types, config, events, logging (Phase 00)
 - [x] Binance USDT-M gateway for market data and supported execution modes
+- [x] Binance Futures Testnet API credential check in Settings (read-only account request; no order submission)
 - [x] Paper Trading Full Loop & Runner (Phase 09: TASK 0901, 0902, 0903)
 - [x] Report Generator: Daily, Weekly, Strategy Comparison (Phase 09: TASK 0904)
 - [x] Market Data Engine (Phase 02)
@@ -137,6 +138,7 @@ DISABLED
 - Candidate triage records all strategy outputs above the observation floor, sends only immediate candidates to the AI Council, and exposes its policy/status through the local MCP server.
 - Binance restart reconciliation now uses the journaled symbol and opening order to isolate relevant `userTrades`; liquidation price is never exposed as a strategy stop.
 - The 2026-10-24 Testnet execution hardening is included in source; first automated Testnet fill and broker-side SL still need operational confirmation. LIVE remains disabled.
+- A read-only Binance Futures Testnet credential check has been added to Settings in source; UI/API validation is pending deployment. The first automated order and broker-side SL still need operational confirmation.
 - Partial fills from one Binance opening order are aggregated before outcome verification; separate opening orders remain rejected.
 - No real-time data feed
 - Breakout Retest strategy never triggers on real data

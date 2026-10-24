@@ -50,11 +50,17 @@ class BinanceGateway:
         base_url: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         timeout: float | None = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
     ) -> None:
         self._configured_base_url = base_url.rstrip("/") if base_url else None
         self._base_url = (base_url or settings.binance_base_url).rstrip("/")
         self._transport = transport
         self._timeout = timeout or settings.binance_timeout
+        # Optional per-instance credentials support a read-only credential
+        # check without changing the process-wide trading configuration.
+        self._api_key_override = api_key
+        self._api_secret_override = api_secret
         self._client: httpx.AsyncClient | None = None
         self._connected = False
         self._server_time_offset_ms = 0
@@ -135,7 +141,12 @@ class BinanceGateway:
         return self._server_time_offset_ms
 
     def _signed_params(self, params: dict[str, Any]) -> dict[str, Any]:
-        if not settings.binance_api_key or not settings.binance_api_secret:
+        api_secret = (
+            self._api_secret_override
+            if self._api_secret_override is not None
+            else settings.binance_api_secret
+        )
+        if not api_secret:
             raise BinanceConnectionError("Binance API credentials are not configured")
         signed = {
             **params,
@@ -144,15 +155,22 @@ class BinanceGateway:
         }
         query = str(httpx.QueryParams(signed))
         signed["signature"] = hmac.new(
-            settings.binance_api_secret.encode(), query.encode(), hashlib.sha256
+            api_secret.encode(), query.encode(), hashlib.sha256
         ).hexdigest()
         return signed
 
     async def _signed_request(self, method: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
         client = self._ensure_connected()
+        api_key = (
+            self._api_key_override
+            if self._api_key_override is not None
+            else settings.binance_api_key
+        )
+        if not api_key:
+            raise BinanceConnectionError("Binance API credentials are not configured")
         response = await client.request(
             method, path, params=self._signed_params(params),
-            headers={"X-MBX-APIKEY": settings.binance_api_key},
+            headers={"X-MBX-APIKEY": api_key},
         )
         response.raise_for_status()
         return response.json()
@@ -414,6 +432,27 @@ class BinanceGateway:
             free_margin=float(row.get("availableBalance", 0)),
             profit=float(row.get("totalUnrealizedProfit", 0)),
             currency="USDT", leverage=0, mode=TradingMode.DEMO,
+        )
+
+    async def test_testnet_account_access(self) -> AccountInfo:
+        """Verify credentials with a read-only Testnet account request."""
+        if not self._uses_testnet_endpoint():
+            raise BinanceConnectionError("Credential checks are restricted to Binance Futures Testnet")
+        if not await self.connect():
+            raise BinanceConnectionError("Could not connect to Binance Futures Testnet")
+        row = await self._signed_request("GET", "/fapi/v2/account", {})
+        return AccountInfo(
+            login=0,
+            name="Binance Futures Testnet",
+            server="binance-testnet",
+            balance=float(row.get("totalWalletBalance", 0)),
+            equity=float(row.get("totalMarginBalance", 0)),
+            margin=float(row.get("totalInitialMargin", 0)),
+            free_margin=float(row.get("availableBalance", 0)),
+            profit=float(row.get("totalUnrealizedProfit", 0)),
+            currency="USDT",
+            leverage=0,
+            mode=TradingMode.DEMO,
         )
 
     async def send_order(self, request: OrderRequest) -> OrderResult:

@@ -43,6 +43,7 @@
 - [x] แสดง worker, execution mode และผล pipeline ล่าสุดพร้อมเวลาตัดสินใจบน Pro Desk (2026-10-23)
 - [x] ให้ Settings API บันทึก entry score และ Volume/RSI toggles ที่ UI แสดง พร้อมผูกค่าเข้ากับ candidate triage และ strategy filters (2026-10-24)
 - [x] ปรับ header ให้ใช้ความสูงตามเนื้อหาจนถึง 2xl เพื่อไม่ให้เมนู 2 แถวล้นแท็บเล็ตแนวนอน (2026-10-24)
+- [ ] เพิ่มปุ่มทดสอบ Binance Futures Testnet API แบบอ่านข้อมูลบัญชีอย่างเดียว ไม่ส่งคำสั่งซื้อขาย (เพิ่มใน source 2026-10-24; รอตรวจหลัง deploy)
 
 **Acceptance:**
 - Dashboard accessible

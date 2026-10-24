@@ -14,6 +14,20 @@ GET  /api/status          - System status
 GET  /api/config          - Current config (safe fields only)
 ```
 
+### Settings
+
+```
+GET  /api/settings              - Current runtime settings with secrets masked
+POST /api/settings              - Persist runtime settings
+POST /api/settings/binance/test - Read-only Binance Futures Testnet account check
+```
+
+The Binance credential check accepts credentials entered in the settings form,
+or uses the saved credentials when the form values are blank or masked. It only
+allows `https://testnet.binancefuture.com` and reads `/fapi/v2/account`; it does
+not persist submitted credentials or place orders. Responses never include API
+keys, secrets, signatures, or raw exchange error bodies.
+
 ### Account
 
 ```

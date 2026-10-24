@@ -7,6 +7,7 @@ AI Council decisions, active position controls, and serves the React SPA fronten
 from __future__ import annotations
 
 import asyncio
+import httpx
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -262,6 +264,13 @@ class SettingsUpdateRequest(BaseModel):
 
 class AITestRequest(BaseModel):
     provider: str = "codex"
+
+
+class BinanceTestRequest(BaseModel):
+    binance_mode: str | None = None
+    binance_base_url: str | None = None
+    binance_api_key: str | None = None
+    binance_api_secret: str | None = None
 
 
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
@@ -588,6 +597,74 @@ async def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
     changes = req.model_dump(exclude_none=True)
     updated = save_runtime_settings(changes)
     return {"ok": True, "message": "Settings updated successfully", "settings": updated}
+
+
+@app.post("/api/settings/binance/test")
+async def test_binance_credentials(req: BinanceTestRequest) -> dict[str, Any]:
+    """Check Binance Futures Testnet credentials with a read-only account request."""
+    from src.core.runtime_settings import get_runtime_settings, is_masked
+
+    current = get_runtime_settings(mask_secrets=False)
+
+    def resolve_secret(provided: str | None, stored: str | None) -> str:
+        value = (provided or "").strip()
+        if value and not is_masked(value):
+            return value
+        return (stored or "").strip()
+
+    api_key = resolve_secret(req.binance_api_key, current.get("binance_api_key"))
+    api_secret = resolve_secret(req.binance_api_secret, current.get("binance_api_secret"))
+    if not api_key or not api_secret:
+        return {"ok": False, "message": "กรุณากรอก Binance API Key และ Secret ก่อนทดสอบ"}
+
+    if (req.binance_mode or current.get("binance_mode", "")).lower() != "testnet":
+        return {"ok": False, "message": "เลือก Binance environment เป็น TESTNET ก่อนทดสอบ"}
+
+    base_url = (req.binance_base_url or current.get("binance_base_url") or "").strip().rstrip("/")
+    parsed_url = urlparse(base_url)
+    if (
+        parsed_url.scheme != "https"
+        or parsed_url.hostname != "testnet.binancefuture.com"
+        or parsed_url.netloc != "testnet.binancefuture.com"
+        or parsed_url.path not in ("", "/")
+        or parsed_url.query
+        or parsed_url.fragment
+    ):
+        return {"ok": False, "message": "ทดสอบได้เฉพาะ Binance Futures Testnet เท่านั้น"}
+
+    gateway = BinanceGateway(
+        base_url=base_url,
+        api_key=api_key,
+        api_secret=api_secret,
+    )
+    try:
+        account = await gateway.test_testnet_account_access()
+        return {
+            "ok": True,
+            "message": "เชื่อมต่อ Binance Futures Testnet สำเร็จ",
+            "balance": round(account.balance, 2),
+            "equity": round(account.equity, 2),
+            "currency": account.currency,
+        }
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == 401:
+            message = "Binance ปฏิเสธ API Key/Secret ตรวจว่าเป็นคีย์ Testnet และมีสิทธิ์อ่าน Futures account"
+        elif status_code == 403:
+            message = "Binance ไม่อนุญาตคำขอ ตรวจสิทธิ์ Futures และ IP allowlist ของ API key"
+        elif status_code == 400:
+            message = "Binance ปฏิเสธคำขอ ตรวจ API Key/Secret และเวลาเครื่องของเซิร์ฟเวอร์"
+        else:
+            message = f"Binance Testnet ตอบกลับ HTTP {status_code} ลองอีกครั้งภายหลัง"
+        return {"ok": False, "message": message, "status_code": status_code}
+    except Exception as exc:
+        logger.warning("Binance Testnet API check failed (%s)", type(exc).__name__)
+        return {
+            "ok": False,
+            "message": "เชื่อมต่อ Binance Testnet ไม่สำเร็จ ตรวจ URL และการเชื่อมต่อเครือข่าย",
+        }
+    finally:
+        await gateway.disconnect()
 
 
 @app.get("/api/ai/auth-status")

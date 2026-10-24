@@ -2,6 +2,7 @@
 
 ## 2026-10-24 (DEMO Execution, Risk Thresholds & Tablet Header)
 
+- **Binance Testnet Credential Check (`src/market/binance_gateway.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Add a Settings button that checks entered or saved credentials using a read-only Testnet account request. Restrict the check to the Binance Futures Testnet host, return sanitized errors, and never submit an order.
 - **Tablet Header (`web/src/components/Header.tsx`)**: Use a content-driven two-row header below 2xl and hide inline balance/readiness details until the wide desktop breakpoint so the top controls fit tablet screens.
 - **Runtime Trading Settings (`src/core/runtime_settings.py`, `src/web/server.py`, `web/src/components/SettingsModal.tsx`)**: Persist the visible entry-score and Volume/RSI controls. Entry score now drives candidate triage, the AI Council and Risk Engine confidence together; max-open positions now limits concurrent positions without changing the daily trade cap.
 - **DEMO Candidate Flow (`src/app.py`, `src/ai/ai_council.py`, `src/core/runtime_control.py`)**: Prefer the configured primary/watchlist symbols that exist in `config/symbols.yaml`. In DEMO only, unavailable AI analysts may forward a qualifying rule candidate to Risk Engine; they cannot authorize an order or bypass risk checks. The per-candle immediate-review budget now covers all four strategy legs.

@@ -23,6 +23,7 @@ import {
   RuntimeSettings,
   fetchAIAuthStatus,
   testAIProvider,
+  testBinanceApi,
   AIAuthItem,
 } from '../services/api';
 
@@ -36,6 +37,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   const [activeTab, setActiveTab] = useState<'trading' | 'binance' | 'ai' | 'telegram'>('trading');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testingBinance, setTestingBinance] = useState(false);
+  const [binanceTestResult, setBinanceTestResult] = useState<{
+    ok: boolean;
+    message: string;
+    balance?: number;
+    currency?: string;
+  } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // AI Auth states (MobileIDE pattern)
@@ -118,6 +126,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
       }));
     } finally {
       setTestingProvider(null);
+    }
+  };
+
+  const handleTestBinance = async () => {
+    setTestingBinance(true);
+    setBinanceTestResult(null);
+    try {
+      const result = await testBinanceApi({
+        binance_mode: formData.binance_mode || 'paper',
+        binance_base_url: formData.binance_base_url || '',
+        binance_api_key: formData.binance_api_key || '',
+        binance_api_secret: formData.binance_api_secret || '',
+      });
+      setBinanceTestResult(result);
+    } catch (err: any) {
+      setBinanceTestResult({
+        ok: false,
+        message: err?.message || 'ตรวจสอบ Binance API ไม่สำเร็จ',
+      });
+    } finally {
+      setTestingBinance(false);
     }
   };
 
@@ -542,6 +571,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                                 ? 'https://fapi.binance.com'
                                 : 'https://testnet.binancefuture.com';
                             setFormData({ ...formData, binance_mode: bm, binance_base_url: url });
+                            setBinanceTestResult(null);
                           }}
                           className={`py-2 px-3 rounded-xl border text-xs font-bold uppercase transition-all ${
                             formData.binance_mode === bm
@@ -560,7 +590,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                     <input
                       type="text"
                       value={formData.binance_base_url || ''}
-                      onChange={(e) => setFormData({ ...formData, binance_base_url: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, binance_base_url: e.target.value });
+                        setBinanceTestResult(null);
+                      }}
                       className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
                     />
                   </div>
@@ -570,7 +603,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                     <input
                       type="text"
                       value={formData.binance_api_key || ''}
-                      onChange={(e) => setFormData({ ...formData, binance_api_key: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, binance_api_key: e.target.value });
+                        setBinanceTestResult(null);
+                      }}
                       className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold"
                       placeholder="ใส่ API Key จาก Binance (ถ้าเว้นไว้คงค่าเดิม)"
                     />
@@ -582,7 +618,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                       <input
                         type={showBinanceSecret ? 'text' : 'password'}
                         value={formData.binance_api_secret || ''}
-                        onChange={(e) => setFormData({ ...formData, binance_api_secret: e.target.value })}
+                        onChange={(e) => {
+                          setFormData({ ...formData, binance_api_secret: e.target.value });
+                          setBinanceTestResult(null);
+                        }}
                         className="w-full bg-dark-950 border border-dark-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-gold pr-10"
                         placeholder="ใส่ API Secret จาก Binance (ถ้าเว้นไว้คงค่าเดิม)"
                       />
@@ -594,6 +633,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                         {showBinanceSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleTestBinance}
+                      disabled={testingBinance || formData.binance_mode !== 'testnet'}
+                      className="px-4 py-2 rounded-xl border border-brand-gold/50 bg-brand-gold/10 hover:bg-brand-gold/20 text-xs font-bold text-brand-gold flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {testingBinance ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      <span>{testingBinance ? 'กำลังตรวจสอบ...' : 'ทดสอบ Binance API'}</span>
+                    </button>
+                    <p className="text-[10px] text-slate-500">
+                      ทดสอบอ่านข้อมูลบัญชี Binance Futures Testnet เท่านั้น ไม่มีการส่งคำสั่งซื้อขาย
+                    </p>
+                    {binanceTestResult && (
+                      <div className={`flex items-start space-x-2 rounded-lg border px-3 py-2 text-xs ${
+                        binanceTestResult.ok
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                      }`}>
+                        {binanceTestResult.ok
+                          ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                          : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                        <span>
+                          {binanceTestResult.message}
+                          {binanceTestResult.ok && typeof binanceTestResult.balance === 'number'
+                            ? ` • Balance: ${binanceTestResult.balance.toFixed(2)} ${binanceTestResult.currency || 'USDT'}`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
