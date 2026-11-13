@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.core.config import settings
@@ -152,6 +152,7 @@ class TradingPlatform:
         # Database
         self._trade_learner: TradeLearner | None = None
         self._last_evaluated_bar: dict[str, datetime] = {}
+        self._ai_reviews_by_bar: dict[datetime, int] = {}
         self._db_session = None
         self._session_factory = None
 
@@ -442,7 +443,19 @@ class TradingPlatform:
                     symbol=",".join(target_symbols), mode=current_trading_mode().upper(),
                 )
 
-                for symbol in target_symbols:
+                cycle_symbols = target_symbols
+                if len(target_symbols) > 1:
+                    reference_candles = self._data_feed.get_cached_candles("M5", target_symbols[0])
+                    if reference_candles:
+                        bar_time = reference_candles[-1].timestamp
+                        if bar_time.tzinfo is None:
+                            bar_time = bar_time.replace(tzinfo=timezone.utc)
+                        else:
+                            bar_time = bar_time.astimezone(timezone.utc)
+                        rotation = int(bar_time.timestamp() // 300) % len(target_symbols)
+                        cycle_symbols = target_symbols[rotation:] + target_symbols[:rotation]
+
+                for symbol in cycle_symbols:
                     try:
                         tick = await self._gateway.get_current_price(symbol)
                         monitor = self._get_spread_monitor(symbol)
@@ -547,23 +560,37 @@ class TradingPlatform:
 
         update_runtime_status(candidate_count=len(candidates))
 
-        # Run cheap local triage for every candidate. Only the configured
-        # number of immediate candidates may continue to the AI Council;
-        # observe/batch candidates are still recorded for research.
-        max_immediate = get_candidate_policy()["max_immediate_per_bar"]
-        immediate_seen = 0
+        # Run cheap local triage for every candidate. The global M5 review
+        # budget is claimed after scoring so it covers every active symbol.
         for candidate in candidates:
-            allow_immediate = immediate_seen < max_immediate
             update_runtime_status(
                 last_candidate=f"{candidate.strategy_id}:{candidate.direction.value}",
                 last_candidate_symbol=candidate.symbol,
             )
             await self._process_candidate(
                 candidate, ctx, current_price, spread, session,
-                allow_immediate=allow_immediate,
             )
-            if candidate.metadata.get("triage_priority") == "immediate":
-                immediate_seen += 1
+
+    def _claim_ai_review_slot(self, ctx: MultiTimeframeContext) -> bool:
+        """Allow at most the configured number of AI reviews per closed M5 bar globally."""
+        candle = ctx.primary_candle
+        if candle is None:
+            return False
+        timestamp = candle.timestamp
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        else:
+            timestamp = timestamp.astimezone(timezone.utc)
+        bar_key = timestamp.replace(minute=(timestamp.minute // 5) * 5, second=0, microsecond=0)
+        cutoff = bar_key - timedelta(hours=6)
+        self._ai_reviews_by_bar = {
+            key: count for key, count in self._ai_reviews_by_bar.items() if key >= cutoff
+        }
+        count = self._ai_reviews_by_bar.get(bar_key, 0)
+        if count >= get_candidate_policy()["max_immediate_per_bar"]:
+            return False
+        self._ai_reviews_by_bar[bar_key] = count + 1
+        return True
 
     async def _process_candidate(
         self,
@@ -572,7 +599,6 @@ class TradingPlatform:
         current_price: float,
         spread: float,
         session: str,
-        allow_immediate: bool = True,
     ) -> None:
         """Process a single candidate through AI → Risk → Execute."""
 
@@ -629,18 +655,27 @@ class TradingPlatform:
                 )
             return
 
-        if not allow_immediate:
+        from src.core.runtime_settings import get_runtime_settings
+        council_threshold = int(
+            get_runtime_settings(mask_secrets=False).get(
+                "entry_min_score", self._ai_council.min_rule_score
+            )
+        )
+        if (
+            candidate.rule_score >= council_threshold
+            and not self._claim_ai_review_slot(ctx)
+        ):
             update_runtime_status(
                 last_decision="AI_SKIP",
-                last_reason="Immediate AI review budget reached for this candle",
+                last_reason="Global AI review budget reached for this M5 candle",
             )
             if self._setup_logger:
                 await self._setup_logger.log_skipped(
                     candidate,
-                    reason="Immediate AI review budget reached for this candle",
+                    reason="Global AI review budget reached for this M5 candle",
                 )
             logger.info(
-                "AI SKIP: %s score=%s — immediate review budget reached",
+                "AI SKIP: %s score=%s — global M5 review budget reached",
                 candidate.strategy_id, ai_decision.combined_score,
             )
             return

@@ -216,13 +216,23 @@ TRADING_MODE=PAPER
 # The dashboard persists encrypted settings under /app/data/provider_settings.json.
 # DASHBOARD_PASSWORD must be a strong deployment secret because it protects the
 # dashboard and encrypts provider settings at rest.
+OPENROUTER_DAILY_BUDGET_USD=0.50  # pause new OpenRouter calls after this UTC-day spend
 ```
 
 Provider configuration supports:
 
-- Codex `auth.json` login, plus an optional OpenAI API fallback/model
+- Codex `auth.json` login for the Bear Analyst; paid OpenAI API fallback is disabled
 - Gemini API key and Antigravity CLI command
 - OpenRouter API key, endpoint, application metadata, and model choice
+
+OpenRouter spend is metered from each response and stored in the persistent data
+volume. By default, new requests pause after $0.50 of recorded spend per UTC day;
+the final request may cross the limit. If the provider omits cost data or a
+request times out with an uncertain result, OpenRouter pauses for the rest of
+that UTC day. Configure `OPENROUTER_DAILY_BUDGET_USD` to change the limit.
+The Bear Analyst does not fall back to paid API providers when Codex is
+unavailable; PAPER uses the deterministic local heuristic, while other modes
+fail closed.
 
 The worker reloads provider configuration on the next AI evaluation. The
 OpenRouter model selector still persists its non-secret selection at

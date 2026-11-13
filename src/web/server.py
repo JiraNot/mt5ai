@@ -722,6 +722,13 @@ async def get_ai_auth_status(refresh: bool = False) -> dict[str, Any]:
     return await ai_auth_service.inspect(force=refresh)
 
 
+@app.get("/api/ai/usage")
+async def get_ai_usage_status() -> dict[str, Any]:
+    """Return local OpenRouter spend metering for the current UTC day."""
+    from src.ai.openrouter_budget import get_openrouter_usage_status
+    return get_openrouter_usage_status()
+
+
 @app.post("/api/ai/test")
 @app.post("/api/settings/providers/{provider}/test")
 async def test_ai_provider_endpoint(

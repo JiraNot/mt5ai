@@ -6,7 +6,7 @@ mkdir -p /app/data /app/models
 python -m src.app &
 worker_pid=$!
 
-PORT=8501 python -m src.web.server &
+ENABLE_TRADING_WORKER=false PORT=8501 python -m src.web.server &
 dashboard_pid=$!
 
 python -m src.dashboard.terminal_server &

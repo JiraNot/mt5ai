@@ -15,7 +15,7 @@ DEFAULT_CANDIDATE_POLICY = {
     "observe_min_score": 0,
     "batch_min_score": 55,
     "immediate_min_score": 70,
-    "max_immediate_per_bar": 4,
+    "max_immediate_per_bar": 1,
     "summary_window": 25,
 }
 
@@ -125,7 +125,7 @@ def get_candidate_policy() -> dict[str, int]:
     policy["observe_min_score"] = max(0, min(100, policy["observe_min_score"]))
     policy["batch_min_score"] = max(policy["observe_min_score"], min(100, policy["batch_min_score"]))
     policy["immediate_min_score"] = max(policy["batch_min_score"], min(100, policy["immediate_min_score"]))
-    policy["max_immediate_per_bar"] = max(0, min(10, policy["max_immediate_per_bar"]))
+    policy["max_immediate_per_bar"] = max(0, min(1, policy["max_immediate_per_bar"]))
     policy["summary_window"] = max(5, min(500, policy["summary_window"]))
     return policy
 
@@ -145,8 +145,8 @@ def set_candidate_policy(**changes: int) -> dict[str, int]:
     immediate = candidate_policy["immediate_min_score"]
     if not 0 <= observe <= batch <= immediate <= 100:
         raise ValueError("Candidate thresholds must satisfy 0 <= observe <= batch <= immediate <= 100")
-    if not 0 <= candidate_policy["max_immediate_per_bar"] <= 10:
-        raise ValueError("max_immediate_per_bar must be between 0 and 10")
+    if not 0 <= candidate_policy["max_immediate_per_bar"] <= 1:
+        raise ValueError("max_immediate_per_bar must be 0 or 1")
     if not 5 <= candidate_policy["summary_window"] <= 500:
         raise ValueError("summary_window must be between 5 and 500")
     _update(candidate_policy=candidate_policy, updated_at=datetime.now(timezone.utc).isoformat())

@@ -25,6 +25,8 @@ import {
   testAIProvider,
   testBinanceApi,
   AIAuthItem,
+  OpenRouterUsageStatus,
+  fetchOpenRouterUsage,
 } from '../services/api';
 
 interface SettingsModalProps {
@@ -52,6 +54,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   const [checkingAuth, setCheckingAuth] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string; latency_ms: number; status: string }>>({});
+  const [openRouterUsage, setOpenRouterUsage] = useState<OpenRouterUsageStatus | null>(null);
+  const [loadingOpenRouterUsage, setLoadingOpenRouterUsage] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<RuntimeSettings>>({
@@ -104,6 +108,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
       console.warn('AI Auth inspection error:', err);
     } finally {
       setCheckingAuth(false);
+    }
+  };
+
+  const refreshOpenRouterUsage = async () => {
+    setLoadingOpenRouterUsage(true);
+    try {
+      setOpenRouterUsage(await fetchOpenRouterUsage());
+    } catch (err) {
+      console.warn('OpenRouter usage inspection error:', err);
+    } finally {
+      setLoadingOpenRouterUsage(false);
     }
   };
 
@@ -182,8 +197,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   useEffect(() => {
     if (isOpen && activeTab === 'ai') {
       refreshAuth(true);
+      refreshOpenRouterUsage();
     }
-  }, [activeTab]);
+  }, [activeTab, isOpen]);
 
   if (!isOpen) return null;
 
@@ -904,6 +920,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                         );
                       })}
                     </div>
+                  </div>
+
+                  <div className="p-3 bg-dark-950/70 border border-cyan-500/20 rounded-xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-slate-200">OpenRouter ใช้วันนี้ (UTC)</div>
+                        <div className="mt-1 text-[11px] text-slate-400">
+                          {openRouterUsage
+                            ? `$${openRouterUsage.spent_usd.toFixed(4)} / $${openRouterUsage.budget_usd.toFixed(2)} · ${openRouterUsage.requests} requests · ${(openRouterUsage.prompt_tokens + openRouterUsage.completion_tokens).toLocaleString()} tokens`
+                            : loadingOpenRouterUsage ? 'กำลังโหลด usage…' : 'ยังอ่าน usage ไม่ได้'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={refreshOpenRouterUsage}
+                        disabled={loadingOpenRouterUsage}
+                        className="px-2.5 py-1 text-[10px] font-semibold text-cyan-300 bg-dark-900 border border-cyan-500/20 rounded-lg disabled:opacity-50"
+                      >
+                        {loadingOpenRouterUsage ? 'กำลังอ่าน…' : 'รีเฟรช'}
+                      </button>
+                    </div>
+                    {openRouterUsage?.blocked && (
+                      <div className="mt-2 text-[11px] text-amber-300">
+                        พักการเรียก OpenRouter วันนี้: {openRouterUsage.block_reason || 'ถึงงบรายวันแล้ว'}
+                      </div>
+                    )}
                   </div>
 
                   {/* Active AI Provider Switcher */}

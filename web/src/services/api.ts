@@ -372,6 +372,24 @@ export async function fetchAIAuthStatus(refresh = false): Promise<AIAuthResponse
   return res.json();
 }
 
+export interface OpenRouterUsageStatus {
+  date_utc: string;
+  spent_usd: number;
+  budget_usd: number;
+  remaining_usd: number;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  blocked: boolean;
+  block_reason?: string | null;
+}
+
+export async function fetchOpenRouterUsage(): Promise<OpenRouterUsageStatus> {
+  const res = await fetch(`${API_BASE}/ai/usage`);
+  if (!res.ok) throw new Error(`OpenRouter usage request failed (${res.status})`);
+  return res.json();
+}
+
 export async function testAIProvider(provider: string): Promise<AITestResponse> {
   const res = await fetch(`${API_BASE}/ai/test`, {
     method: 'POST',

@@ -104,6 +104,7 @@ DISABLED
 - [x] Multimodal AI Vision Provider selector & customizable approval threshold
 - [x] Docker & Coolify Auto-Deploy Hardening (docker-compose sync, resilient healthchecks, GitHub Actions webhook trigger)
 - [x] MobileIDE-inspired AI Login & Local Session Probing (`src/core/ai_auth_service.py`, `GET /api/ai/auth-status`, `POST /api/ai/test`): Quota-safe CLI status checking (Codex ChatGPT, Gemini Antigravity, OpenAI, OpenRouter) with real-time latency ping and 1-click Web Terminal login
+- [x] OpenRouter spend guard: one LLM candidate review per closed M5 candle across symbols, one billable OpenRouter inference per Council review, and a persistent default $0.50 UTC-day budget with usage shown in web settings
 - [x] Institutional Pro Prop Desk & Telemetry Dashboard (`ProAnalyticsDashboard.tsx`, `src/analytics/pro_metrics_service.py`, `GET /api/analytics/pro-metrics`): SwingFrontRun-inspired high-density desk featuring Top Telemetry Ribbon (Regime, S/R Range, Spread, Latency, Macro News, Global Clocks), Executive 6 Financial Cards, Multi-Strategy LEGS Breakdown with Win/Loss 20-trade sparkline ticks, Daily P/L Calendar Heatmap (day-by-day tiles, weekly subtotals, Green Days count), Execution Quality & Slippage Analytics (Broker Grade A+, latency, slip vs edge ratio, hourly slip distribution), Dual-Line Equity & Gross Edge Curve SVG, and Live Circuit Breakers Safety Matrix. Seamless 1-click Header toggle between `📈 CHART` and `📊 PRO DESK`.
 - Test run: 373 passed; one full-suite failure remains in the unrelated position-size rounding assertion (`tests/integration/test_full_pipeline.py::TestFullPipelineHappyPath::test_position_sizing_math`, expected 0.17, got 0.16).
 - [x] Documentation structure complete
@@ -203,7 +204,7 @@ tasks/                - 13 phase task files
 
 ## Last Updated
 
-2026-10-24
+2026-11-13
 
 
 ## AI audit remediation — 2026-09-10

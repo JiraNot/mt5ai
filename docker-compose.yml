@@ -29,6 +29,7 @@ services:
       - BINANCE_USE_WEBSOCKET=${BINANCE_USE_WEBSOCKET:-false}
       - PAPER_INITIAL_BALANCE=${PAPER_INITIAL_BALANCE:-100000}
       - TRADING_MODE=${TRADING_MODE:-PAPER}
+      - OPENROUTER_DAILY_BUDGET_USD=${OPENROUTER_DAILY_BUDGET_USD:-0.50}
       - DATABASE_URL=sqlite+aiosqlite:////app/data/freebuff.db
       - DATABASE_URL_SYNC=sqlite:////app/data/freebuff.db
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-freebuff2026}

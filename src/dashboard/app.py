@@ -54,6 +54,7 @@ from src.ai.openrouter_model_catalog import (
     group_models,
     save_selected_model,
 )
+from src.ai.openrouter_budget import get_openrouter_usage_status
 from src.dashboard.terminal_auth import dashboard_auth_token
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
@@ -1099,15 +1100,15 @@ def render_ai_provider_settings() -> None:
 
     with st.expander("ChatGPT / Codex (Bear Analyst)", expanded=not states["codex"]["configured"]):
         st.caption(f"Codex login: {'ตั้งค่าแล้ว' if states['codex']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['codex']['source']}")
-        st.caption(f"OpenAI API fallback: {'ตั้งค่าแล้ว' if states['openai']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['openai']['source']}")
+        st.caption("OpenAI API credentials are not used as an automatic fallback by the trading worker.")
         with st.form("codex_provider_settings"):
             codex_auth_json = st.text_input(
                 "วางเนื้อหา Codex auth.json เพื่อ login", type="password",
                 help="วางเฉพาะเมื่อเปลี่ยน session; ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
             )
             openai_api_key = st.text_input(
-                "OpenAI API key (fallback)", type="password",
-                help="ใช้เมื่อ Codex CLI login ใช้งานไม่ได้; ปล่อยว่างไว้เพื่อเก็บค่าเดิม",
+                "OpenAI API key (not used by trading worker)", type="password",
+                help="เก็บค่าไว้ได้ แต่ worker จะไม่เรียก API key นี้อัตโนมัติ",
             )
             openai_model = st.text_input("OpenAI model", value=values["openai"]["model"])
             if st.form_submit_button("บันทึก ChatGPT / Codex", type="primary"):
@@ -1143,6 +1144,13 @@ def render_ai_provider_settings() -> None:
 
     with st.expander("OpenRouter / DeepSeek (Bull Analyst)", expanded=not states["openrouter"]["configured"]):
         st.caption(f"OpenRouter API: {'ตั้งค่าแล้ว' if states['openrouter']['configured'] else 'ยังไม่ตั้งค่า'} · source: {states['openrouter']['source']}")
+        usage = get_openrouter_usage_status()
+        st.caption(
+            f"ยอดวันนี้ (UTC): ${usage['spent_usd']:.4f} / ${usage['budget_usd']:.2f} · "
+            f"{usage['requests']} requests · {usage['prompt_tokens'] + usage['completion_tokens']} tokens"
+        )
+        if usage["blocked"]:
+            st.warning(f"พัก OpenRouter วันนี้: {usage.get('block_reason') or 'ถึงงบรายวันแล้ว'}")
         with st.form("openrouter_provider_settings"):
             openrouter_api_key = st.text_input(
                 "OpenRouter API key", type="password",
@@ -1418,12 +1426,12 @@ def render_redesigned_dashboard(
 
     with tabs[3]:
         st.markdown("## Candidate inbox")
-        st.caption("Candidate ทุกระดับถูกเก็บไว้ แต่ AI จะถูกเรียกตาม priority เพื่อควบคุมค่าใช้จ่ายและลด noise")
+        st.caption("Candidate ทุกระดับยังเก็บไว้และคำนวณคะแนนในเครื่อง; เรียก LLM สูงสุด 1 candidate ต่อแท่ง M5 รวมทุก symbol")
         policy_cols = st.columns(5)
         policy_cols[0].metric("Observe floor", candidate_policy["observe_min_score"])
         policy_cols[1].metric("Batch from", candidate_policy["batch_min_score"])
         policy_cols[2].metric("Immediate from", candidate_policy["immediate_min_score"])
-        policy_cols[3].metric("AI/bar", candidate_policy["max_immediate_per_bar"])
+        policy_cols[3].metric("LLM/M5 global", candidate_policy["max_immediate_per_bar"])
         policy_cols[4].metric("Digest window", candidate_policy["summary_window"])
 
         if setups_df.empty:
@@ -1545,11 +1553,11 @@ def render_redesigned_dashboard(
                 st.success(f"Active mode: {trading_mode}")
 
             st.markdown("### AI candidate triage")
-            st.caption("ต่ำกว่านี้ยังเก็บข้อมูลได้ แต่ไม่เรียก AI ทันที")
+            st.caption("วิเคราะห์ในเครื่องทุก candidate; เรียก LLM สูงสุด 1 candidate ต่อแท่ง M5 รวมทุก symbol")
             observe_value = st.number_input("Observe floor", 0, 100, candidate_policy["observe_min_score"], key="policy_observe")
             batch_value = st.number_input("Batch review from", 0, 100, candidate_policy["batch_min_score"], key="policy_batch")
             immediate_value = st.number_input("Immediate AI from", 0, 100, candidate_policy["immediate_min_score"], key="policy_immediate")
-            max_ai_value = st.number_input("Max immediate AI reviews / candle", 0, 10, candidate_policy["max_immediate_per_bar"], key="policy_max_ai")
+            max_ai_value = st.number_input("Max LLM reviews / M5 candle (all symbols)", 0, 1, candidate_policy["max_immediate_per_bar"], key="policy_max_ai_per_m5_v2")
             window_value = st.number_input("Digest window", 5, 500, candidate_policy["summary_window"], key="policy_window")
             if st.button("Save candidate policy", type="primary", key="save_candidate_policy"):
                 try:

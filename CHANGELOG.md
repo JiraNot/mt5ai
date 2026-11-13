@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-13 (AI Spend Guard)
+
+- **Single Docker Trading Worker (`scripts/run_services.sh`)**: Keep the standalone worker supervised by the container and explicitly disable FastAPI's embedded worker in this startup path, preventing duplicate candidate evaluations.
+- **Bounded AI Review Volume (`src/app.py`, `src/core/runtime_control.py`, `src/dashboard/app.py`)**: Limit LLM review to one immediate candidate per closed M5 candle across all active symbols; reduce the persisted policy's effective ceiling to one.
+- **No Surprise Paid Fallback (`src/ai/gpt_evaluator.py`)**: When Codex is unavailable or rate-limited, use the deterministic Paper heuristic or fail closed in other modes instead of starting paid OpenAI/OpenRouter requests.
+- **OpenRouter Budget and Metering (`src/ai/openrouter_budget.py`, `src/ai/openrouter_evaluator.py`, `src/web/server.py`, `SettingsModal.tsx`)**: Record provider-reported tokens and cost in the persistent data volume, expose and display today's usage in the live web settings, and pause new requests at the default $0.50 UTC-day budget. Unknown request outcomes pause further usage for that day.
+- **Output Bound**: Reduce OpenRouter completion limit from 800 to 256 tokens per request.
+- **Verification**: Not run in this audit turn.
+
 ## 2026-10-24 (Separate Binance Demo and Live Credentials)
 
 - **Environment-Specific Binance Credentials (`src/core/runtime_settings.py`, `web/src/components/SettingsModal.tsx`)**: Store Demo/Testnet and Live API key/secret pairs independently with encrypted persistence and masked responses. Existing single-pair credentials migrate to Demo/Testnet.

@@ -47,6 +47,8 @@ models/*.pkl
 models/*.joblib
 dashboard.html
 candidate_triage.json
+openrouter_usage.json
+/openrouter_usage.*
 cli_login_audit.jsonl
 .mobileide/
 query_db.mjs

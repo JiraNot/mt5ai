@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
-from src.core.runtime_provider_settings import get_provider_settings, sync_codex_auth_file
+from src.core.runtime_provider_settings import sync_codex_auth_file
 
 logger = logging.getLogger(__name__)
 
@@ -130,77 +130,13 @@ class GPTEvaluator:
         else:
             codex_err_summary = "ไม่พบบิลด์ Codex CLI ในเครื่อง"
 
-        # 2. Fallback: OpenAI Direct API
-        openai_settings = get_provider_settings()["openai"]
-        api_key = openai_settings.get("api_key", "").strip()
-        if api_key:
-            try:
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=api_key)
-                model = openai_settings.get("model") or "gpt-4o"
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=800,
-                    temperature=0.3,
-                )
-                raw = response.choices[0].message.content or ""
-                logger.info("Bear Analyst evaluated via OpenAI API (%s)", model)
-                return self._parse_response(raw)
-            except Exception as exc:
-                logger.error("OpenAI API fallback error: %s", exc)
-
-        # 3. Fallback: OpenRouter (DeepSeek หรือโมเดลที่ตั้งไว้ใน Settings)
-        openrouter_settings = get_provider_settings()["openrouter"]
-        openrouter_key = openrouter_settings.get("api_key", "").strip()
-        if openrouter_key:
-            try:
-                import httpx
-                headers = {
-                    "Authorization": f"Bearer {openrouter_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": openrouter_settings.get("site_url", "https://trade.onetapweb.com"),
-                    "X-Title": openrouter_settings.get("app_name", "Freebuff AI Council"),
-                }
-                or_model = openrouter_settings.get("model") or "deepseek/deepseek-chat"
-                payload = {
-                    "model": or_model,
-                    "messages": [
-                        {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 800,
-                }
-                async with httpx.AsyncClient(timeout=45.0) as client:
-                    resp = await client.post(
-                        f"{openrouter_settings.get('base_url', 'https://openrouter.ai/api/v1').rstrip('/')}/chat/completions",
-                        headers=headers,
-                        json=payload,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    raw = data["choices"][0]["message"]["content"] or ""
-                    logger.info("Bear Analyst evaluated via OpenRouter (%s)", or_model)
-                    return self._parse_response(raw)
-            except Exception as exc:
-                logger.error("OpenRouter fallback error for Bear Analyst: %s", exc)
-
-        # 4. In Paper Mode, provide deterministic SMC Bear Analyst heuristic
+        # Paid API fallbacks are intentionally disabled: an expired Codex login
+        # must not silently start billable OpenAI/OpenRouter requests.
         from src.core.runtime_control import get_runtime_trading_mode
         if get_runtime_trading_mode() == "paper":
             return self._smc_bear_heuristic(setup_context)
 
-        # If all failed, provide a transparent and helpful explanation
-        if codex_err_summary and "โควตาเต็ม" in codex_err_summary:
-            return self._fallback_verdict(
-                f"{codex_err_summary} — แนะนำให้สลับใช้ OpenRouter / DeepSeek ในหน้า Settings เพื่อเทรดต่อได้ทันที"
-            )
-
-        return self._fallback_verdict(f"Codex CLI และ API Key ไม่พร้อมใช้งาน ({codex_err_summary})")
+        return self._fallback_verdict(f"Codex CLI unavailable; paid API fallbacks disabled ({codex_err_summary})")
 
     def _build_prompt(self, ctx: dict) -> str:
         symbol = ctx.get("symbol", "XAUUSD")

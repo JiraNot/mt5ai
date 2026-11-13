@@ -31,6 +31,14 @@ read-only; LIVE order execution remains disabled. Responses never include API
 keys, secrets, signatures, or raw exchange error bodies. Safe Binance error
 codes are returned separately to distinguish invalid keys, signatures, or clocks.
 
+### AI
+
+```
+GET /api/ai/auth-status - AI provider authentication status
+GET /api/ai/usage       - Current UTC-day OpenRouter spend, token counts, and budget status
+POST /api/ai/test       - Test provider connectivity
+```
+
 ### Account
 
 ```

@@ -109,3 +109,11 @@ AI ไม่ทำหน้าที่:
 - [x] Legacy memories excluded; no automatic per-trade score adjustment
 - [x] Regression tests for invalid approvals, Risk veto, restart and breakeven
 - [ ] Shadow comparison and counterfactual rejected-candidate outcomes
+
+## Cost controls — 2026-11-13
+
+- [x] Single worker in the supervised Docker startup path
+- [x] One immediate LLM review per closed M5 candle across all symbols
+- [x] Stop paid Bear Analyst API fallbacks when Codex is unavailable
+- [x] Persist OpenRouter token/cost usage and pause at the configured daily budget
+- [ ] Verify deployed usage and tune the daily budget from observed results
